@@ -18,13 +18,21 @@
 
 - nodejs 
 - npm 
-- open-jdk 
+- open-jdk
 
 ```
 sudo apt install npm
 sudo apt install nodejs
 sudo apt install openjdk-11-jdk-headless
 ```
-## Issues
+
+## Windows
+- [nodejs and npm](https://nodejs.org/en/download/)
+- [java development kit (jdk)](https://www.oracle.com/java/technologies/downloads/)
+
+**Imported:** Set path environment variable to nodejs, npm and jdk folders
+
+
+# Issues
 
 - If you run into any issues, make sure to raise an Issue.
