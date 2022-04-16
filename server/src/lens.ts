@@ -4,7 +4,6 @@ import * as server from './server'
 import { parse } from 'java-ast'
 import * as preprocessing from './preprocessing'
 import { ParseTree } from 'antlr4ts/tree/ParseTree'
-import * as pstandard from './grammer/terms/preprocessingsnippets'
 import * as javaSpecific from './grammer/terms/javaspecific'
 import { ClassDeclarationContext, VariableDeclaratorIdContext, MethodDeclarationContext } from 'java-ast/dist/parser/JavaParser';
 
@@ -15,12 +14,7 @@ let _lensDeclarationCount = 0
 
 export function scheduleLookUpLens(_codeLensParams: CodeLensParams): CodeLens[] | null{
 
-	let adjustOffset = 0
-	if(preprocessing.defaultBehaviourEnable){
-		adjustOffset = pstandard.reduceLineDefaultBehaviour
-	} else if(preprocessing.methodBehaviourEnable){
-		adjustOffset = pstandard.reduceLineMethodBehaviour
-	}
+	let adjustOffset = preprocessing.getLineOffset()
 
 	parser.tokenArray.forEach(function(token){
 		if(token[1] instanceof ClassDeclarationContext) {

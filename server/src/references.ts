@@ -1,7 +1,6 @@
 import { Location, ReferenceParams } from 'vscode-languageserver'
 import * as server from './server'
 import * as preprocessing from './preprocessing'
-import * as pstandard from './grammer/terms/preprocessingsnippets'
 import * as parser from './parser'
 import * as sketch from './sketch'
 
@@ -12,12 +11,7 @@ export function scheduleLookUpReference(_referenceParams: ReferenceParams): Loca
 	let currentLine = splitDefine[_referenceParams.position.line]
 	let currentReferenceMap = parser.lineMap(currentLine)
 
-	let adjustOffset = 0
-	if(preprocessing.defaultBehaviourEnable){
-		adjustOffset = pstandard.reduceLineDefaultBehaviour
-	} else if(preprocessing.methodBehaviourEnable){
-		adjustOffset = pstandard.reduceLineMethodBehaviour
-	}
+	let adjustOffset = preprocessing.getLineOffset()
 
 	let multipleTokenOccurenceLocations: Location[] = new Array()
 	let _multipleTokenCount = 0
