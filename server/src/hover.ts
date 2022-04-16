@@ -2,13 +2,9 @@ import * as lsp from 'vscode-languageserver'
 import * as server from './server'
 const fs = require('fs');
 import { Hover, MarkedString } from 'vscode-languageserver';
-import { parse } from 'java-ast'
-import { ParseTree } from 'antlr4ts/tree/ParseTree'
+import * as parser from './parser'
 import { errorNodeLine } from './diagnostics'
 import * as log from './scripts/syslogs'
-
-let tempAST: [ParseTree][] = new Array();
-let _tempCounter = -1
 
 // This contains Insights for keywords - used in `Hover for Insights`
 export let insightMap: [string,string][] = new Array();
@@ -70,17 +66,8 @@ function scheduleHover(textDocument: lsp.TextDocument, params: lsp.TextDocumentP
 		let text = textDocument.getText();
 		let splitHover = text.split(`\n`)
 		let currentLine = splitHover[params.position.line]
-		let tempTokens = parse(currentLine)
 		let hover : Hover | null = null
-		let hoverMap: [string, number, number][] = new Array()
-		let _hoverCount = 0
-		for(let i = 0; i < tempTokens.childCount; i++){
-			tempASTExtract(tempTokens.children![i])
-		}
-		tempAST.forEach(function(word){
-			hoverMap[_hoverCount] = [word[0].text, currentLine.indexOf(word[0].text), currentLine.indexOf(word[0].text) + word[0].text.length]
-			_hoverCount += 1
-		})
+		let hoverMap = parser.lineMap(currentLine)
 
 		hoverMap.forEach(function(word){
 			// params.position.character -> can be of any character, even a character within a word
@@ -104,22 +91,8 @@ function scheduleHover(textDocument: lsp.TextDocument, params: lsp.TextDocumentP
 				})
 			}
 		})
-		clearTempAST()
 		return hover
 	} else {
 		return null
 	}
-}
-
-function tempASTExtract(gotOne: ParseTree){
-	_tempCounter += 1
-	tempAST[_tempCounter] = [gotOne]
-	for(let j=0;j<gotOne.childCount;j++){
-		tempASTExtract(gotOne.getChild(j))
-	}
-}
-
-function clearTempAST(){
-	tempAST = []
-	_tempCounter = 0
 }
