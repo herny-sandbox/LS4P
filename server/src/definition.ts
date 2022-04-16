@@ -1,7 +1,6 @@
 import * as server from './server'
 import * as log from './scripts/syslogs'
 import * as preprocessing from './preprocessing'
-import * as pstandard from './grammer/terms/preprocessingsnippets'
 import { Definition } from 'vscode-languageserver'
 import * as parser from './parser'
 import * as javaSpecific from './grammer/terms/javaspecific'
@@ -18,12 +17,7 @@ export function scheduleLookUpDefinition(receivedUri: string, lineNumber: number
 	let currentLine = splitDefine[lineNumber]
 	let currentDefineMap = parser.lineMap(currentLine)
 
-	let adjustOffset = 0
-	if(preprocessing.defaultBehaviourEnable){
-		adjustOffset = pstandard.reduceLineDefaultBehaviour
-	} else if(preprocessing.methodBehaviourEnable){
-		adjustOffset = pstandard.reduceLineMethodBehaviour
-	}
+	let adjustOffset = preprocessing.getLineOffset()
 
 	parser.tokenArray.forEach(function(token){
 		if(token[1] instanceof ClassDeclarationContext){
