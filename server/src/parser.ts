@@ -66,6 +66,42 @@ export function parseAST(processedText: string, textDocument: TextDocument) {
 	log.writeLog("Parse Tree construction Successfully")
 }
 
+/**
+ * Parses a line to extract each word and 
+ * its start- and endPos within the parsed line
+ * 
+ * @param line Line to be mapped
+ * @returns Array of words with start- and endPos
+ */
+export function lineMap(line: string) : [word: string, startPos: number, endPos: number][]{
+	let currentTempAST: [ParseTree][] = new Array()
+	let tempCounter = -1
+
+	//Extract tokens
+	let currentTokens = parse(line)
+	for (let i = 0; i < currentTokens.childCount; i++) {
+		currentLineASTExtract(currentTokens.children![i])
+	}
+
+	let map : [string, number, number][] = new Array()
+	let mapCount = 0
+	//Cook map
+	currentTempAST.forEach(function(word) {
+		map[mapCount] = [word[0].text, line.indexOf(word[0].text), line.indexOf(word[0].text) + word[0].text.length]
+		mapCount += 1
+	})
+
+	return map
+
+	function currentLineASTExtract(gotOne: ParseTree){
+		tempCounter += 1
+		currentTempAST[tempCounter] = [gotOne]
+		for(let j=0;j<gotOne.childCount;j++){
+			currentLineASTExtract(gotOne.getChild(j))
+		}
+	}
+}
+
 function extractTokens(gotOne: ParseTree){
 	for(let j = 0; j < gotOne.childCount; j++){
 		if(gotOne.getChild(j).childCount == 0){
