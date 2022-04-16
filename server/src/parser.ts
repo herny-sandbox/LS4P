@@ -71,9 +71,9 @@ export function parseAST(processedText: string, textDocument: TextDocument) {
  * its start- and endPos within the parsed line
  * 
  * @param line Line to be mapped
- * @returns Array of words with start- and endPos
+ * @returns [word, startPos, endPos][]
  */
-export function lineMap(line: string) : [word: string, startPos: number, endPos: number][]{
+export function lineMap(line: string) : [string, number, number][]{
 	let currentTempAST: [ParseTree][] = new Array()
 	let tempCounter = -1
 
