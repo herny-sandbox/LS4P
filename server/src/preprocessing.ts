@@ -92,6 +92,22 @@ export async function performPreProcessing(textDocument: lsp.TextDocument): Prom
 	console.log("PreProcessing complete.!")
 }
 
+/**
+ * When creating the code for compilation lines are added,
+ * this function returns the amount of lines added
+ * @returns number of lines to offset
+ */
+export function getLineOffset() : number {
+	let adjustOffset = 0
+	if(defaultBehaviourEnable){
+		adjustOffset = pStandards.reduceLineDefaultBehaviour
+	} else if(methodBehaviourEnable){
+		adjustOffset = pStandards.reduceLineMethodBehaviour
+	}
+
+	return adjustOffset
+}
+
 function extractTokens(gotOne: ParseTree){
 	for(let j = 0; j < gotOne.childCount; j++){
 		if(gotOne.getChild(j).childCount == 0){
