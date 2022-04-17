@@ -35,16 +35,19 @@ export function scheduleLookUpReference(_referenceParams: ReferenceParams): Loca
 						let docName =  sketch.transformMap.get(lineNumberJavaFile)!.fileName
 						docUri = sketch.uri+docName
 					}
+
+					let charOffset = preprocessing.getCharacterOffset(lineNumberJavaFile, token[0].payload._line)
+
 					multipleTokenOccurenceLocations[_multipleTokenCount] = {
 						uri: docUri,
 						range: {
 							start: {
 								line: refLine-1,
-								character: token[0].payload._charPositionInLine
+								character: token[0].payload._charPositionInLine - charOffset
 							},
 							end: {
 								line: refLine-1,
-								character: token[0].payload._charPositionInLine + word[0].length
+								character: token[0].payload._charPositionInLine + word[0].length - charOffset
 							}
 						}
 					}

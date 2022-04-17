@@ -23,15 +23,18 @@ export let multiLineCommentComponents = [
 	/\*\//g
 ]
 
+let unProcessedText : string = ''
+let processedText: String = ''
+
 export async function performPreProcessing(textDocument: lsp.TextDocument): Promise<void>{
 	if (!sketch.initialized) {
 		sketch.initialize(textDocument);
 	}
 
 	sketch.updateContent(textDocument)
-	let unProcessedText = sketch.getContent()
+	unProcessedText = sketch.getContent()
 
-	let processedText: String
+	
 	let unProcessedMethodName: RegExpExecArray | null
 	// Super set that contains all the methods in the workspace
 	let unProcessedMethodNameArray: RegExpExecArray[] = []
@@ -93,9 +96,10 @@ export async function performPreProcessing(textDocument: lsp.TextDocument): Prom
 }
 
 /**
- * When creating the code for compilation lines are added,
- * this function returns the amount of lines added
- * @returns number of lines to offset
+ * This methode returns the ammount of lines that where added during preprocessing. 
+ * In preprocessing adds lines to the code to be able to compile it. 
+ * The ammount of lines that where added can change depending on the unprocessed code.
+ * @returns number of lines added during preprocessing
  */
 export function getLineOffset() : number {
 	let adjustOffset = 0
@@ -106,6 +110,35 @@ export function getLineOffset() : number {
 	}
 
 	return adjustOffset
+}
+
+/**
+ * Calculates the difference between two line lengths in the processedText and unprocessedText. 
+ * Preprocessing could add acces modifiers to the code. Which changes the position of some symbols.
+ * This creates a problem when needing the correct character position of a symbol for features where
+ * the position is relevant like rename.
+ * 
+ * @param unProcessedLineNumber The unprocessed text line number to use.
+ * @param processedLineNumber The processed text line number to use.
+ * @returns The amount of characters to offset
+ */
+export function getCharacterOffset(unProcessedLineNumber: number, processedLineNumber: number): number {
+	let offset: number = 0;
+	let processedTextSplit = processedText.split(/\r\n|\n/)
+	let unProcessedTextSplit = unProcessedText.split(/\r\n|\n/)
+
+	//Arrays start at 0, lineNumbers at 1. So offset
+	unProcessedLineNumber -= 1
+	processedLineNumber -= 1
+
+	let processedLine = processedTextSplit[processedLineNumber]
+	let unProcessedLine = unProcessedTextSplit[unProcessedLineNumber]
+
+	offset = processedLine.length - unProcessedLine.length
+	if (offset < 0) {
+		offset = 0
+	}
+	return offset
 }
 
 function extractTokens(gotOne: ParseTree){
