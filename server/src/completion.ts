@@ -40,7 +40,7 @@ for(let _counter: number = 0; _counter < 6; _counter++){
 	try {  
 		let data = fs.readFileSync(extractionModules[_counter], 'utf-8')
 		let tempSplit = data.split('\n')
-		let tempCheck: String[] = []
+		let tempCheck: string[] = []
 		let _innerCounter = 0
 		tempSplit.forEach(function(className: any){
 			if(!className.includes('$') && className.includes('.class')){
@@ -56,7 +56,7 @@ initAllCompletionClasses()
 
 function initAllCompletionClasses(){
 	extractionModuleType.forEach(function(value){
-		classMap.get(value).forEach((element: String) => {
+		classMap.get(value).forEach((element: string) => {
 			completeClassMap.set(element, PCompletionMethods(reader.read(`${__dirname}/processing/extractor/processing/${value}/${element}`)))
 		})
 	})
@@ -94,7 +94,7 @@ function PCompletionMethods(classType: any): lsp.CompletionItem[] {
 		// const signatureInConstantPool = classType.constant_pool[method.descriptor_index];
 
 		const name = String.fromCharCode.apply(null, nameInConstantPool.bytes);
-		// const signature = String.fromCharCode.apply(null, signatureInConstantPool.bytes)
+		// const signature = string.fromCharCode.apply(null, signatureInConstantPool.bytes)
 
 		// To avoid duplicate results
 		methodSet.add(name)
@@ -105,7 +105,7 @@ function PCompletionMethods(classType: any): lsp.CompletionItem[] {
 		// const signatureInConstantPool = classType.constant_pool[method.descriptor_index];
 
 		const name = String.fromCharCode.apply(null, nameInConstantPool.bytes);
-		// const signature = String.fromCharCode.apply(null, signatureInConstantPool.bytes)
+		// const signature = string.fromCharCode.apply(null, signatureInConstantPool.bytes)
 
 		// To avoid duplicate results
 		fieldSet.add(name)

@@ -19,9 +19,9 @@ const fs = require('fs');
 // Error Node contents
 // Array because there can be multiple error nodes
 // Defaults to "NO"
-let errorNodeContents: String[] = []
+let errorNodeContents: string[] = []
 export let errorNodeLine: number[] = []
-let errorNodeReasons: String[] = []
+let errorNodeReasons: string[] = []
 let errorNodeCount = 0
 let totalErrorCount = 0
 
@@ -100,7 +100,7 @@ function setErrorNodeBackToDefault(){
 	totalErrorCount = 0
 }
 
-export function cookCompilationDiagnostics(processedText: string, pwd: String){
+export function cookCompilationDiagnostics(processedText: string, pwd: string){
 	// If one error is fixed it's not popped from stack - check
 	try {  
 		let data = fs.readFileSync(`${__dirname}/compile/error.txt`, 'utf-8')
@@ -119,7 +119,7 @@ export function cookCompilationDiagnostics(processedText: string, pwd: String){
 			let tempo2ErrorCount = tempoErrorCount.split(" ")
 			totalErrorCount = +tempo2ErrorCount[0]
 			
-			tempSplit.forEach(function(line:String, index: number){
+			tempSplit.forEach(function(line:string, index: number){
 				if(line.includes(`${pwd}`)){
 					let innerSplit = line.split(":")
 
@@ -165,7 +165,7 @@ export function cookCompilationDiagnostics(processedText: string, pwd: String){
 
 // Depricated Diagnostics Reports - Replaced with compilation reports
 export function cookDiagnosticsReport(processedText: string){
-	let classNameTemp: String = ""
+	let classNameTemp: string = ""
 	parser.wholeAST.forEach(function(node, index){
 		if(node[0] instanceof ClassDeclarationContext){
 			// Find class Name

@@ -37,13 +37,13 @@ export let settingsContext = ""
 export let isSettingsRequired = false
 let settingsSet = new Set()
 
-export function setDefaultClassName(className : String){
+export function setDefaultClassName(className : string){
 	defaultClassName = className as string
 }
 
 // Similar to : https://github.com/processing/processing/blob/37108add372272d7b1fc23d2500dce911c4d1098/java/src/processing/mode/java/preproc/PdePreprocessor.java#L1149
 // Mode.STATIC
-export function setupBehaviour(unProcessedTest: String): String {
+export function setupBehaviour(unProcessedTest: string): string {
 	let processedText = `
 ${dynamicImports}
 public class ${defaultClassName} extends ${defaultLib}{
@@ -58,7 +58,7 @@ ${preprocessingFooter()}
 }
 
 // Mode.ACTIVE
-export function methodBehaviour(unProcessedTest: String): String {
+export function methodBehaviour(unProcessedTest: string): string {
 	let processedText = `
 ${dynamicImports}
 public class ${defaultClassName} extends ${defaultLib}{
@@ -72,7 +72,7 @@ ${preprocessingFooter()}
 
 // Handle size(), fullScreen(), smooth() & noSmooth()
 // Takes in Unprocessed Text and returns UnProcessed Text with the `settings` lines stripped out
-export function settingsRenderPipeline(unProcessedTest: String): String {
+export function settingsRenderPipeline(unProcessedTest: string): string {
 	let recordLine = unProcessedTest.split(`\n`)
 	let newUnProcessedText = ``
 	// Fixes method scoping for methods unassigned access specifiers
@@ -110,7 +110,7 @@ export function settingsRenderPipeline(unProcessedTest: String): String {
 	return newUnProcessedText
 }
 
-export function mapperPipeline(newUnProcessedText: String): string{
+export function mapperPipeline(newUnProcessedText: string): string{
 	let localUnProcessedText = newUnProcessedText.replace(/([0-9]+\.[0-9]+)/g,'$1f')
 	conversionTuples.forEach(function(tuple){
 		localUnProcessedText = localUnProcessedText.replace(tuple[0],tuple[1])
@@ -126,12 +126,12 @@ export function disableSettingsBeforeParse() {
 }
 
 // TODO - appends a new line for every character change after settings is initiated - fix it
-function moveToSettings(line: String) {
+function moveToSettings(line: string) {
 	isSettingsRequired = true
 	settingsSet.add(line);
 }
 
-function cookSettingsContext(unProcessedTest: String){
+function cookSettingsContext(unProcessedTest: string){
 	settingsContext = ``
 	settingsSet.forEach(function(setting : any){
 		if(unProcessedTest.includes(setting)){
@@ -140,8 +140,8 @@ function cookSettingsContext(unProcessedTest: String){
 	})
 }
 
-function settingsPreprocessing(): String{
-	let generateSettings: String = ""
+function settingsPreprocessing(): string{
+	let generateSettings: string = ""
 	if(isSettingsRequired){
 		generateSettings = `
 public void settings(){
@@ -154,9 +154,9 @@ ${settingsContext}
 	return generateSettings
 }
 
-function preprocessingFooter(): String{
-	let generatedFooter: String = `
-public static void main(String[] args) {
+function preprocessingFooter(): string{
+	let generatedFooter: string = `
+public static void main(string[] args) {
 PApplet.main("${defaultClassName}");
 }`
 	return generatedFooter

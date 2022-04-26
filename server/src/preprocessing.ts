@@ -24,7 +24,7 @@ export let multiLineCommentComponents = [
 ]
 
 let unProcessedText : string = ''
-let processedText: String = ''
+let processedText: string = ''
 
 export async function performPreProcessing(textDocument: lsp.TextDocument): Promise<void>{
 	if (!sketch.initialized) {
@@ -40,7 +40,7 @@ export async function performPreProcessing(textDocument: lsp.TextDocument): Prom
 	let unProcessedMethodNameArray: RegExpExecArray[] = []
 	let _unProcessedMethodNameArrayCounter = 0
 	// Sub set that contains method names only inside local class declarations in the workspace
-	let unProcessedClassMethodNames : String[] = []
+	let unProcessedClassMethodNames : string[] = []
 	let _unProcessedClassMethodCounter = 0
 
 	// let fileName = textDocument.uri.split('/')
