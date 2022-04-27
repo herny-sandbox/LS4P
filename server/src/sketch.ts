@@ -1,4 +1,6 @@
 import * as lsp from 'vscode-languageserver'
+import * as preprocessor from './preprocessing'
+import * as parser from './parser'
 import * as log from './scripts/syslogs'
 
 const fs = require('fs')
@@ -10,6 +12,9 @@ export let uri : string = ''
 export let name : string = '';
 export let contents  = new Map<string, string>()
 export let initialized = false;
+
+let unProcessedCode : string = ''
+let processedCode: string = ''
 
 /** 
  * Map which maps the line in the java file to the line in the .pde file (tab). 
@@ -65,6 +70,17 @@ export function initialize(textDocument: lsp.TextDocument) {
 	
 	initialized = true
 	return true
+}
+
+export function build(textDocument: lsp.TextDocument){
+	if (!initialized) {
+		initialize(textDocument);
+	}
+
+	updateContent(textDocument)
+	unProcessedCode = getContent()
+	processedCode = preprocessor.performPreProcessing(unProcessedCode)
+	parser.parseAST(processedCode, textDocument)
 }
 
 /**

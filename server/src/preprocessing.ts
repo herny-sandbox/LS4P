@@ -26,15 +26,9 @@ export let multiLineCommentComponents = [
 let unProcessedText : string = ''
 let processedText: string = ''
 
-export async function performPreProcessing(textDocument: lsp.TextDocument): Promise<void>{
-	if (!sketch.initialized) {
-		sketch.initialize(textDocument);
-	}
-
-	sketch.updateContent(textDocument)
-	unProcessedText = sketch.getContent()
-
+export  function performPreProcessing(unProcessedCode: string): string{
 	
+	unProcessedText = unProcessedCode //TO DO: Remove
 	let unProcessedMethodName: RegExpExecArray | null
 	// Super set that contains all the methods in the workspace
 	let unProcessedMethodNameArray: RegExpExecArray[] = []
@@ -51,8 +45,7 @@ export async function performPreProcessing(textDocument: lsp.TextDocument): Prom
 	// case 2 -> class and a method inside it with a method in the plain sketch
 	// This is done by constructing parse tree even before preprocessing to find whether the method is inside a class or not
 
-	let unProcessedWorkSpaceChildren = parse(unProcessedText)
-
+	let unProcessedWorkSpaceChildren = parse(unProcessedCode)
 	unProcessedTokenArray = []
 	_unProcessedTokenCounter = -1
 
@@ -69,7 +62,7 @@ export async function performPreProcessing(textDocument: lsp.TextDocument): Prom
  
 	pStandards.disableSettingsBeforeParse()
 
-	let settingsPipelineResult = pStandards.settingsRenderPipeline(unProcessedText)
+	let settingsPipelineResult = pStandards.settingsRenderPipeline(unProcessedCode)
 
 	let unProcessedLineSplit = settingsPipelineResult.split(`\n`)
 	unProcessedLineSplit.forEach(function(line){
@@ -80,19 +73,19 @@ export async function performPreProcessing(textDocument: lsp.TextDocument): Prom
 	})
 
 	let higherOrderMethods = unProcessedMethodNameArray.filter(item => unProcessedClassMethodNames.indexOf(item[1]) < 0);
-
+	let processedCode : string;
 	if(higherOrderMethods.length > 0) {
-		processedText = pStandards.methodBehaviour(pStandards.settingsRenderPipeline(unProcessedText))
+		processedCode = pStandards.methodBehaviour(pStandards.settingsRenderPipeline(unProcessedCode))
 		setBehaviours(false,true)
 		log.writeLog(`[[BEHAVIOUR]] - Method Behaviour`)
 	} else {
-		processedText = pStandards.setupBehaviour(pStandards.settingsRenderPipeline(unProcessedText))
+		processedCode = pStandards.setupBehaviour(pStandards.settingsRenderPipeline(unProcessedCode))
 		setBehaviours(true,false)
 		log.writeLog(`[[BEHAVIOUR]] - SetupDraw Behaviour`)
 	}
-
-	parser.parseAST(processedText as string, textDocument)
 	console.log("PreProcessing complete.!")
+	processedText = processedCode //TO DO: Remove
+	return processedCode
 }
 
 /**

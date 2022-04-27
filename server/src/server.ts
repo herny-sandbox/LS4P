@@ -126,7 +126,7 @@ export let latestChangesInTextDoc: TextDocument
 documents.onDidOpen(event => {
 	log.writeLog(`File Open / Tab switching event occured`)
 	latestChangesInTextDoc = event.document
-	preprocessing.performPreProcessing(event.document)
+	sketch.build(event.document)
 	diagnostics.checkForRealtimeDiagnostics(event.document)
 });
 
@@ -150,7 +150,7 @@ async function initPreProcessDiagnostics() {
 	bufferInProgress = true
 	await sleep(300);
 	log.writeLog(`Inside -> Content change event occured`)
-	preprocessing.performPreProcessing(latestChangesInTextDoc)
+	sketch.build(latestChangesInTextDoc)
 	diagnostics.checkForRealtimeDiagnostics(latestChangesInTextDoc)
 	bufferInProgress = false
 }
