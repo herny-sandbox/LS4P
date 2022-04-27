@@ -2,9 +2,12 @@ import * as lsp from 'vscode-languageserver'
 import * as preprocessor from './preprocessing'
 import * as parser from './parser'
 import * as log from './scripts/syslogs'
+import * as pStandards from './grammer/terms/preprocessingsnippets'
+import * as diagnostics from './diagnostics'
 
 const fs = require('fs')
 const pathM = require('path')
+const childProcess = require('child_process');
 
 
 export let path : string = ''
@@ -81,6 +84,17 @@ export function build(textDocument: lsp.TextDocument){
 	unProcessedCode = getContent()
 	processedCode = preprocessor.performPreProcessing(unProcessedCode)
 	parser.parseAST(processedCode, textDocument)
+	compile(processedCode)
+
+	// Wrote methods to handle Error in the Error Stream
+	// diagnostics.cookDiagnosticsReport(processedText)
+	let pwd
+	if (process.platform === 'win32') {
+		pwd =`${__dirname}\\compile\\${pStandards.defaultClassName}.java`
+	}else {
+		pwd = `${__dirname}/compile/${pStandards.defaultClassName}.java`
+	}
+	diagnostics.cookCompilationDiagnostics(pwd)
 }
 
 /**
@@ -132,6 +146,26 @@ export function getContent() : string{
 	}
 
 	return content
+}
+
+function compile(processedCode: string){
+	// mkdir /out/compile
+	// make sure to set .classpath for Processing core as environment variable
+	// This suites for raw java case - should handle for default and setupDraw case
+	try{
+		fs.writeFileSync(__dirname+"/compile/"+pStandards.defaultClassName+".java", processedCode)
+		log.writeLog(`Java File creation successful`)
+	} catch(e) {
+		log.writeLog(`[[ERR]] - Error in Java File Creation`)
+	}
+
+	try{
+		childProcess.execSync(`javac -classpath ${__dirname.substring(0,__dirname.length-11)}/pcore/ ${__dirname}/compile/${pStandards.defaultClassName}.java -Xlint:none -Xstdout ${__dirname}/compile/error.txt`,
+			{ stdio:[ 'inherit', 'pipe', 'pipe' ], windowsHide : true})
+		log.writeLog(`Java File compilation successful`)
+	} catch(e) {
+		log.writeLog(`[[ERR]] - Error in Java File Compilation`)
+	}
 }
 
 /**

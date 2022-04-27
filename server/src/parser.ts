@@ -33,36 +33,6 @@ export function parseAST(processedText: string, textDocument: TextDocument) {
 	}
 
 	console.log("Break point here to obtain AST")
-
-	// mkdir /out/compile
-	// make sure to set .classpath for Processing core as environment variable
-	// This suites for raw java case - should handle for default and setupDraw case
-	try{
-		fs.writeFileSync(__dirname+"/compile/"+pStandards.defaultClassName+".java", processedText)
-		log.writeLog(`Java File creation successful`)
-	} catch(e) {
-		log.writeLog(`[[ERR]] - Error in Java File Creation`)
-	}
-
-	try{
-		childProcess.execSync(`javac -classpath ${__dirname.substring(0,__dirname.length-11)}/pcore/ ${__dirname}/compile/${pStandards.defaultClassName}.java -Xlint:none -Xstdout ${__dirname}/compile/error.txt`,
-			{ stdio:[ 'inherit', 'pipe', 'pipe' ], windowsHide : true})
-		log.writeLog(`Java File compilation successful`)
-	} catch(e) {
-		log.writeLog(`[[ERR]] - Error in Java File Compilation`)
-	}
-
-	// Wrote methods to handle Error in the Error Stream
-	// diagnostics.cookDiagnosticsReport(processedText)
-	let pwd
-	if (process.platform === 'win32') {
-		pwd =`${__dirname}\\compile\\${pStandards.defaultClassName}.java`
-	}else {
-		pwd = `${__dirname}/compile/${pStandards.defaultClassName}.java`
-	}
-	diagnostics.cookCompilationDiagnostics(pwd)
-
-
 	log.writeLog("Parse Tree construction Successfully")
 }
 
