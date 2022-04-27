@@ -25,7 +25,7 @@ export let errorNodeLine: number[] = []
 export let errorNodeReasons: string[] = []
 let errorNodeCount = 0
 
-export let tokenArray: [ParseTree, ParseTree][] = new Array();
+let tokenArray: [ParseTree, ParseTree][];
 
 /** 
  * Map which maps the line in the java file to the line in the .pde file (tab). 
@@ -220,6 +220,10 @@ export function getCharacterOffset(unProcessedLineNumber: number, processedLineN
 		offset = 0
 	}
 	return offset
+}
+
+export function getTokenArray() : [ParseTree, ParseTree][]{
+	return tokenArray;
 }
 
 /**

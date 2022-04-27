@@ -220,10 +220,12 @@ export function decideCompletionMethods(_textDocumentParams: CompletionParams, l
 	let _avoidCounter: number = 0
 	let _classNameCounter: number = 0
 
+	let tokenArray = sketch.getTokenArray();
+
 	// line starts from `0`
 	let currentLineInWorkSpace = _textDocumentParams.position.line
 
-	sketch.tokenArray.forEach(function(node, index){
+	tokenArray.forEach(function(node, index){
 
 		if(node[1] instanceof BlockContext && node[0].text == `{`) {
 			lineStartMethodBody[_methodCounter] = node[1]._start.line
@@ -238,9 +240,9 @@ export function decideCompletionMethods(_textDocumentParams: CompletionParams, l
 
 	})
 
-	sketch.tokenArray.forEach(function(node, index){
-		if(node[1] instanceof ClassOrInterfaceTypeContext && sketch.tokenArray[index+1][1] instanceof VariableDeclaratorIdContext){
-			model.variableDeclarationContext[_classNameCounter] = [node[0], sketch.tokenArray[index+1][1]]
+	tokenArray.forEach(function(node, index){
+		if(node[1] instanceof ClassOrInterfaceTypeContext && tokenArray[index+1][1] instanceof VariableDeclaratorIdContext){
+			model.variableDeclarationContext[_classNameCounter] = [node[0], tokenArray[index+1][1]]
 			_classNameCounter += 1
 		}
 	})
@@ -293,7 +295,7 @@ export function decideCompletionMethods(_textDocumentParams: CompletionParams, l
 						resultantCompletionItem = completeCustomMap.get(`${value[0].text}.class`)
 						if(resultantCompletionItem == undefined){
 							// Handle for locally declared classes
-							astUtils.constructClassParams(sketch.tokenArray)
+							astUtils.constructClassParams(tokenArray)
 							let tempCompletionList: lsp.CompletionItem[] = []
 							let _tempCounter = 0
 							astUtils.fieldAndClass.forEach(function(fieldName,index){

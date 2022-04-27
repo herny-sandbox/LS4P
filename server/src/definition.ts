@@ -16,10 +16,10 @@ export function scheduleLookUpDefinition(receivedUri: string, lineNumber: number
 	let splitDefine = currentContent.split(`\n`)
 	let currentLine = splitDefine[lineNumber]
 	let currentDefineMap = sketch.lineMap(currentLine)
-
 	let adjustOffset = sketch.getLineOffset()
+	let tokenArray = sketch.getTokenArray();
 
-	sketch.tokenArray.forEach(function(token){
+	tokenArray.forEach(function(token){
 		if(token[1] instanceof ClassDeclarationContext){
 			if(!(javaSpecific.TOP_LEVEL_KEYWORDS.indexOf(token[0].text) > -1)){
 				foundDeclaration[_foundDeclarationCount] = [`class`, token[0].text, token[0].payload._line, token[0].payload._charPositionInLine]

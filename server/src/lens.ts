@@ -15,9 +15,10 @@ let _lensDeclarationCount = 0
 
 export function scheduleLookUpLens(_codeLensParams: CodeLensParams): CodeLens[] | null{
 
+	let tokenArray = sketch.getTokenArray();
 	let adjustOffset = sketch.getLineOffset()
 
-	sketch.tokenArray.forEach(function(token){
+	tokenArray.forEach(function(token){
 		if(token[1] instanceof ClassDeclarationContext) {
 			if(!(javaSpecific.TOP_LEVEL_KEYWORDS.indexOf(token[0].text) > -1)){
 				lensDeclaration[_lensDeclarationCount] = [`class`, token[0].text, token[0].payload._line-(adjustOffset+1), token[0].payload._charPositionInLine]
@@ -80,7 +81,8 @@ export function scheduleLookUpLens(_codeLensParams: CodeLensParams): CodeLens[] 
 
 function findReferenceNumber(tokenName: string): number{
 	let referenceCount = 0
-	sketch.tokenArray.forEach(function(innerToken){
+	let tokenArray = sketch.getTokenArray();
+	tokenArray.forEach(function(innerToken){
 		if(innerToken[0].text == tokenName){
 			referenceCount += 1
 		}
