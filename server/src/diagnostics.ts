@@ -26,11 +26,14 @@ export async function checkForRealtimeDiagnostics(processedTextDocument: TextDoc
 
 	//Create a diagnostic report per .pde file (tab)
 	let fileDiagnostics = new Map<string,  Diagnostic[]>()
-	sketch.contents.forEach(function(value, key : string){
-		let emptyDiag : Diagnostic[] = []
+	let fileNames = sketch.getFileNames();
+	if(fileNames) {
+		fileNames.forEach(function(key : string){
+			let emptyDiag : Diagnostic[] = []
 
-		fileDiagnostics.set(key, emptyDiag)
-	})
+			fileDiagnostics.set(key, emptyDiag)
+		})
+	}
 	
 	sketch.errorNodeLine.forEach(function(javaErrorLine, index){
 		// Get the real error line number

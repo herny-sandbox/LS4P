@@ -14,7 +14,7 @@ const childProcess = require('child_process');
 export let path : string = ''
 export let uri : string = ''
 export let name : string = '';
-export let contents  = new Map<string, string>()
+let contents  = new Map<string, string>()
 export let initialized = false;
 
 let unProcessedCode : string = ''
@@ -154,6 +154,26 @@ export function getContent() : string{
 	}
 
 	return content
+}
+
+/**
+ * Provides all the names of the files used by the sketch
+ * 
+ * @returns sketch file names
+ */
+ export function getFileNames() : string[] | undefined{
+
+	if (!initialized) {
+		return
+	}
+
+	let fileNames : string[] = new Array
+
+	for (let [fileName, fileContents] of contents) {
+		fileNames.push(fileName)
+	}
+
+	return fileNames
 }
 
 /**
