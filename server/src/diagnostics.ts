@@ -161,51 +161,6 @@ export function cookCompilationDiagnostics(pwd: string){
 		log.writeLog(`[[ERR]] - Problem with cooking diagnostics`)
 	}
 }
-
-
-// Depricated Diagnostics Reports - Replaced with compilation reports
-export function cookDiagnosticsReport(processedText: string){
-	let classNameTemp: string = ""
-	parser.wholeAST.forEach(function(node, index){
-		if(node[0] instanceof ClassDeclarationContext){
-			// Find class Name
-			classNameTemp = node[0].getChild(1).text
-		}
-		if(node[0] instanceof ErrorNode){
-			if(node[0].text == `<missing \';\'>`){
-				if(node[1]!.text.substring(0,node[1]!.text.length-13).endsWith(')')){
-					// Method calls
-					errorNodeContents[errorNodeCount] = node[1]!.text.substring(0,node[1]!.text.length-13)
-				} else {
-					// Others
-					if(node[1]!.getChild(node[1]!.childCount-2) instanceof TerminalNode){
-						// If the preceeding child is a Terminal Node
-						errorNodeContents[errorNodeCount] = node[1]!.getChild(node[1]!.childCount-2).text
-					} else {
-						// If the preceeding child is a non-terminal Node
-						let intermediateParseTree: ParseTree = node[1]!.getChild(node[1]!.childCount-2)
-						// Iterate until you find one
-						while(!(intermediateParseTree instanceof TerminalNode)){
-							intermediateParseTree = intermediateParseTree.getChild(intermediateParseTree.childCount-1)
-						}
-						errorNodeContents[errorNodeCount] = intermediateParseTree.text
-					}
-				}
-				errorNodeReasons[errorNodeCount] = "Missing ;"
-			} else {
-				// Other Reasons
-				errorNodeContents[errorNodeCount] = node[0].text
-				errorNodeReasons[errorNodeCount] = "???"
-			}
-			errorNodeCount+=1
-		}
-		if(node[0] instanceof TerminalNode && node[1] instanceof ConstructorDeclarationContext){
-			// Constructot label mismatch
-			if(classNameTemp != node[0].text && classNameTemp != ""){
-				errorNodeContents[errorNodeCount] = node[0].text
-				errorNodeReasons[errorNodeCount] = "Constructor Label Mismatch"
-				errorNodeCount+=1
-			}
 		}
 	})
 	// Delete current Error if the Error Node is resolved
