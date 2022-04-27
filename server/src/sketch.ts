@@ -13,7 +13,7 @@ const childProcess = require('child_process');
 
 let sketchInfo : Info;
 let contents  = new Map<string, string>()
-export let initialized = false;
+let initialized = false;
 
 let unProcessedCode : string = ''
 let processedCode: string = ''
@@ -25,7 +25,7 @@ let tokenArray: [ParseTree, ParseTree][];
  * Index is the java file number.
  * The interface holds the line number and name of the .pde file (tab).
 */
-export let transformMap = new Map<number, IOriginalTab>()
+let transformMap = new Map<number, IOriginalTab>()
 
 export interface IOriginalTab {
 	lineNumber: number;
@@ -241,6 +241,10 @@ export function getTokenArray() : [ParseTree, ParseTree][]{
 
 export function getCompileErrors() : CompileError[]{
 	return CompileErrors
+}
+
+export function getTransformationMap() : Map<number, IOriginalTab>{
+	return transformMap
 }
 
 /**

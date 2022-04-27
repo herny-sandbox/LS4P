@@ -40,9 +40,10 @@ export async function checkForRealtimeDiagnostics(processedTextDocument: TextDoc
 		let errorMessage = compileError.message
 
 		// Get the real error line number
-		if (sketch.transformMap.get(errorLineNumber)) {
-			errorLine = sketch.transformMap.get(errorLineNumber)!.lineNumber
-			errorDocName =  sketch.transformMap.get(errorLineNumber)!.fileName
+		let transformMap = sketch.getTransformationMap()
+		if (transformMap.get(errorLineNumber)) {
+			errorLine = transformMap.get(errorLineNumber)!.lineNumber
+			errorDocName =  transformMap.get(errorLineNumber)!.fileName
 			errorDocUri = sketch.getInfo().uri+errorDocName
 		}
 

@@ -30,9 +30,10 @@ export function scheduleLookUpReference(_referenceParams: ReferenceParams): Loca
 					let lineNumberJavaFile = token[0].payload._line-adjustOffset
 					let refLine : number = 0;
 					let docUri : string = '';
-					if (sketch.transformMap.get(lineNumberJavaFile)) {
-						refLine = sketch.transformMap.get(lineNumberJavaFile)!.lineNumber
-						let docName =  sketch.transformMap.get(lineNumberJavaFile)!.fileName
+					let transformMap = sketch.getTransformationMap()
+					if (transformMap.get(lineNumberJavaFile)) {
+						refLine = transformMap.get(lineNumberJavaFile)!.lineNumber
+						let docName =  transformMap.get(lineNumberJavaFile)!.fileName
 						docUri = sketch.getInfo().uri+docName
 					}
 
