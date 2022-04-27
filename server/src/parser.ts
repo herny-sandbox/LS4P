@@ -8,16 +8,14 @@ const childProcess = require('child_process');
 const fs = require('fs')
 
 // Tuple -> current Node, Parent Node
-export let tokenArray: [ParseTree, ParseTree][] = new Array();
-let _tokenCounter = -1
 
 // Currently constructed AST after the last character change
 export let ast: any
 
-export function parseAST(processedText: string, textDocument: TextDocument) {
+export function parseAST(processedText: string, textDocument: TextDocument) : [ParseTree, ParseTree][] {
 	ast = parse(processedText)
-	tokenArray = []
-	_tokenCounter = -1
+	let tokenArray: [ParseTree, ParseTree][] = new Array();
+	let _tokenCounter = -1
 	
 	for(let i = 0; i < ast.childCount; i++){
 		extractTokens(ast.children![i])
@@ -25,6 +23,17 @@ export function parseAST(processedText: string, textDocument: TextDocument) {
 
 	console.log("Break point here to obtain AST")
 	log.writeLog("Parse Tree construction Successfully")
+	return tokenArray
+	
+	function extractTokens(gotOne: ParseTree){
+		for(let j = 0; j < gotOne.childCount; j++){
+			if(gotOne.getChild(j).childCount == 0){
+				_tokenCounter +=1
+				tokenArray[_tokenCounter] = [gotOne.getChild(j),gotOne]
+			}
+			extractTokens(gotOne.getChild(j))
+		}
+	}
 }
 
 /**
@@ -60,15 +69,5 @@ export function lineMap(line: string) : [string, number, number][]{
 		for(let j=0;j<gotOne.childCount;j++){
 			currentLineASTExtract(gotOne.getChild(j))
 		}
-	}
-}
-
-function extractTokens(gotOne: ParseTree){
-	for(let j = 0; j < gotOne.childCount; j++){
-		if(gotOne.getChild(j).childCount == 0){
-			_tokenCounter +=1
-			tokenArray[_tokenCounter] = [gotOne.getChild(j),gotOne]
-		}
-		extractTokens(gotOne.getChild(j))
 	}
 }

@@ -9,7 +9,7 @@ export function scheduleLookUpReference(_referenceParams: ReferenceParams): Loca
 	let currentContent = server.latestChangesInTextDoc.getText()
 	let splitDefine = currentContent.split(`\n`)
 	let currentLine = splitDefine[_referenceParams.position.line]
-	let currentReferenceMap = parser.lineMap(currentLine)
+	let currentReferenceMap = sketch.lineMap(currentLine)
 
 	let adjustOffset = sketch.getLineOffset()
 
@@ -25,7 +25,7 @@ export function scheduleLookUpReference(_referenceParams: ReferenceParams): Loca
 	currentReferenceMap.forEach(function(word){
 		// params.position.character -> can be of any character, even a character within a word
 		if((word[1] <= _referenceParams.position.character) && (_referenceParams.position.character <= word[2])){
-			parser.tokenArray.forEach(function(token){
+			sketch.tokenArray.forEach(function(token){
 				if(token[0].text == word[0]){
 					let lineNumberJavaFile = token[0].payload._line-adjustOffset
 					let refLine : number = 0;

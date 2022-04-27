@@ -3,6 +3,7 @@ import * as preprocessor from './preprocessing'
 import * as parser from './parser'
 import * as log from './scripts/syslogs'
 import * as pStandards from './grammer/terms/preprocessingsnippets'
+import { ParseTree } from 'antlr4ts/tree/ParseTree'
 import * as diagnostics from './diagnostics'
 
 const fs = require('fs')
@@ -23,6 +24,8 @@ export let errorNodeContents: string[] = []
 export let errorNodeLine: number[] = []
 export let errorNodeReasons: string[] = []
 let errorNodeCount = 0
+
+export let tokenArray: [ParseTree, ParseTree][] = new Array();
 
 /** 
  * Map which maps the line in the java file to the line in the .pde file (tab). 
@@ -88,7 +91,7 @@ export function build(textDocument: lsp.TextDocument){
 	updateContent(textDocument)
 	unProcessedCode = getContent()
 	processedCode = preprocessor.performPreProcessing(unProcessedCode)
-	parser.parseAST(processedCode, textDocument)
+	tokenArray = parser.parseAST(processedCode, textDocument)
 	compile(processedCode)
 
 	// Wrote methods to handle Error in the Error Stream
@@ -198,6 +201,17 @@ export function getCharacterOffset(unProcessedLineNumber: number, processedLineN
 	}
 	return offset
 }
+
+/**
+ * Parses a line to extract each word and 
+ * its start- and endPos within the parsed line
+ * 
+ * @param line Line to be mapped
+ * @returns [word, startPos, endPos][]
+ */
+ export function lineMap(line: string) : [string, number, number][]{
+	return parser.lineMap(line)
+ }
 
 function compile(processedCode: string){
 	// mkdir /out/compile

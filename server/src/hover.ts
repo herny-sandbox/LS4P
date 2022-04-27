@@ -3,7 +3,7 @@ import * as server from './server'
 const fs = require('fs');
 import { Hover, MarkedString } from 'vscode-languageserver';
 import * as parser from './parser'
-import { errorNodeLine } from './sketch'
+import * as sketch from './sketch'
 import * as log from './scripts/syslogs'
 
 // This contains Insights for keywords - used in `Hover for Insights`
@@ -48,10 +48,10 @@ export async function checkforHoverContents(textDocument: lsp.TextDocument): Pro
 	server.connection.onHover(
 		(params: lsp.TextDocumentPositionParams): lsp.Hover | null => {
 			let hoverResult: lsp.Hover | null = null
-			if(errorNodeLine.length == 0){
+			if(sketch.errorNodeLine.length == 0){
 				hoverResult = scheduleHover(textDocument, params)
 			} else {
-				errorNodeLine.forEach(function(errorLine){
+				sketch.errorNodeLine.forEach(function(errorLine){
 					hoverResult = scheduleHover(textDocument, params, errorLine)
 				})
 			}
@@ -67,7 +67,7 @@ function scheduleHover(textDocument: lsp.TextDocument, params: lsp.TextDocumentP
 		let splitHover = text.split(`\n`)
 		let currentLine = splitHover[params.position.line]
 		let hover : Hover | null = null
-		let hoverMap = parser.lineMap(currentLine)
+		let hoverMap = sketch.lineMap(currentLine)
 
 		hoverMap.forEach(function(word){
 			// params.position.character -> can be of any character, even a character within a word
