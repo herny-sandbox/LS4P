@@ -60,7 +60,7 @@ export function parseAST(processedText: string, textDocument: TextDocument) {
 	}else {
 		pwd = `${__dirname}/compile/${pStandards.defaultClassName}.java`
 	}
-	diagnostics.cookCompilationDiagnostics(processedText, pwd)
+	diagnostics.cookCompilationDiagnostics(pwd)
 
 
 	log.writeLog("Parse Tree construction Successfully")
