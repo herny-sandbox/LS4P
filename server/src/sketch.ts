@@ -19,6 +19,11 @@ export let initialized = false;
 let unProcessedCode : string = ''
 let processedCode: string = ''
 
+export let errorNodeContents: string[] = []
+export let errorNodeLine: number[] = []
+export let errorNodeReasons: string[] = []
+let errorNodeCount = 0
+
 /** 
  * Map which maps the line in the java file to the line in the .pde file (tab). 
  * Index is the java file number.
@@ -94,7 +99,7 @@ export function build(textDocument: lsp.TextDocument){
 	}else {
 		pwd = `${__dirname}/compile/${pStandards.defaultClassName}.java`
 	}
-	diagnostics.cookCompilationDiagnostics(pwd)
+	cookCompilationDiagnostics(pwd)
 }
 
 /**
@@ -166,6 +171,71 @@ function compile(processedCode: string){
 	} catch(e) {
 		log.writeLog(`[[ERR]] - Error in Java File Compilation`)
 	}
+}
+
+function cookCompilationDiagnostics(pwd: string){
+	// If one error is fixed it's not popped from stack - check
+	try {  
+		let data = fs.readFileSync(`${__dirname}/compile/error.txt`, 'utf-8')
+		if(data == ''){
+			// No Error on Compilation
+			setErrorNodeBackToDefault()
+			log.writeLog(`No error on Compilation`)
+		} else if(data.split(`:`)[0] == `Note`){
+			// Compilation warning
+			setErrorNodeBackToDefault()
+			log.writeLog(`Compilation warning encountered`)
+		} else {
+			setErrorNodeBackToDefault()
+			let tempSplit = data.split('\n')
+			
+			tempSplit.forEach(function(line:string, index: number){
+				if(line.includes(`${pwd}`)){
+					let innerSplit = line.split(":")
+
+					// Windows paths have a colon after the drive letter
+					// Shifts the error colon by one in the array
+					let splitIndex
+					if(process.platform === 'win32') {
+						splitIndex = 2
+					}
+					else {
+						splitIndex = 1
+					}
+
+					// Handling line number based on current Behaviour - since preprocessing is done
+					if(preprocessor.defaultBehaviourEnable){
+						errorNodeLine[errorNodeCount] = +innerSplit[splitIndex] - pStandards.reduceLineDefaultBehaviour
+					} else if(preprocessor.methodBehaviourEnable){
+						errorNodeLine[errorNodeCount] = +innerSplit[splitIndex] - pStandards.reduceLineMethodBehaviour
+					}
+					let localIndex = index + 1
+					errorNodeReasons[errorNodeCount] = line.split("error:")[1]
+					while(true){
+						if(tempSplit[localIndex].includes(`${pwd}`) || 
+							tempSplit[localIndex].includes(`error`) ||
+							tempSplit[localIndex].includes(`errors`)) {
+							break
+						} else {
+							errorNodeReasons[errorNodeCount]  = `${errorNodeReasons[errorNodeCount]}\n ${tempSplit[localIndex]}`
+							localIndex+=1
+						}
+					}
+					errorNodeCount += 1
+				}
+			})
+			// Place a break point
+			log.writeLog(`[[ERR]] - Compiler throws errors check \`server\/out\/compile\/error\.txt\``)
+		}
+	} catch(e) {
+		log.writeLog(`[[ERR]] - Problem with cooking diagnostics`)
+	}
+}
+
+function setErrorNodeBackToDefault(){
+	errorNodeContents = []
+	errorNodeLine = []
+	errorNodeCount = 0	
 }
 
 /**

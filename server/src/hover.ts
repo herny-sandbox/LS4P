@@ -3,7 +3,7 @@ import * as server from './server'
 const fs = require('fs');
 import { Hover, MarkedString } from 'vscode-languageserver';
 import * as parser from './parser'
-import { errorNodeLine } from './diagnostics'
+import { errorNodeLine } from './sketch'
 import * as log from './scripts/syslogs'
 
 // This contains Insights for keywords - used in `Hover for Insights`
