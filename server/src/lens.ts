@@ -5,6 +5,7 @@ import { parse } from 'java-ast'
 import * as preprocessing from './preprocessing'
 import { ParseTree } from 'antlr4ts/tree/ParseTree'
 import * as javaSpecific from './grammer/terms/javaspecific'
+import * as sketch from './sketch'
 import { ClassDeclarationContext, VariableDeclaratorIdContext, MethodDeclarationContext } from 'java-ast/dist/parser/JavaParser';
 
 // [string,string,number,number] => [type, name, line number, character number]
@@ -14,7 +15,7 @@ let _lensDeclarationCount = 0
 
 export function scheduleLookUpLens(_codeLensParams: CodeLensParams): CodeLens[] | null{
 
-	let adjustOffset = preprocessing.getLineOffset()
+	let adjustOffset = sketch.getLineOffset()
 
 	parser.tokenArray.forEach(function(token){
 		if(token[1] instanceof ClassDeclarationContext) {

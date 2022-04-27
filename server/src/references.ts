@@ -11,7 +11,7 @@ export function scheduleLookUpReference(_referenceParams: ReferenceParams): Loca
 	let currentLine = splitDefine[_referenceParams.position.line]
 	let currentReferenceMap = parser.lineMap(currentLine)
 
-	let adjustOffset = preprocessing.getLineOffset()
+	let adjustOffset = sketch.getLineOffset()
 
 	let multipleTokenOccurenceLocations: Location[] = new Array()
 	let _multipleTokenCount = 0
@@ -36,7 +36,7 @@ export function scheduleLookUpReference(_referenceParams: ReferenceParams): Loca
 						docUri = sketch.uri+docName
 					}
 
-					let charOffset = preprocessing.getCharacterOffset(lineNumberJavaFile, token[0].payload._line)
+					let charOffset = sketch.getCharacterOffset(lineNumberJavaFile, token[0].payload._line)
 
 					multipleTokenOccurenceLocations[_multipleTokenCount] = {
 						uri: docUri,

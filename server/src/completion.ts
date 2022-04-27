@@ -7,6 +7,7 @@ import { ClassOrInterfaceTypeContext, VariableDeclaratorIdContext, BlockContext,
 import * as astUtils from './astutils'
 import * as model from './grammer/terms/model'
 import * as log from './scripts/syslogs'
+import * as sketch from './sketch'
 const fs = require('fs');
 const { JavaClassFileReader } = require('java-class-tools')
 
@@ -244,27 +245,16 @@ export function decideCompletionMethods(_textDocumentParams: CompletionParams, l
 		}
 	})
 
-	if(preprocessing.defaultBehaviourEnable){
-		lineStartMethodBody.forEach(function(value, index){
-			lineStartMethodBody[index] = value - pStandards.reduceLineDefaultBehaviour
-		})
-		lineEndMethodBody.forEach(function(value, index){
-			lineEndMethodBody[index] = value - pStandards.reduceLineDefaultBehaviour
-		})
-		avoidLineAuto.forEach(function(value, index){
-			avoidLineAuto[index] = value - pStandards.reduceLineDefaultBehaviour
-		})
-	} else if(preprocessing.methodBehaviourEnable){
-		lineStartMethodBody.forEach(function(value, index){
-			lineStartMethodBody[index] = value - pStandards.reduceLineMethodBehaviour
-		})
-		lineEndMethodBody.forEach(function(value, index){
-			lineEndMethodBody[index] = value - pStandards.reduceLineMethodBehaviour
-		})
-		avoidLineAuto.forEach(function(value,index){
-			avoidLineAuto[index] = value - pStandards.reduceLineMethodBehaviour
-		})
-	}
+	lineStartMethodBody.forEach(function(value, index){
+		lineStartMethodBody[index] = value - sketch.getLineOffset()
+	})
+	lineEndMethodBody.forEach(function(value, index){
+		lineEndMethodBody[index] = value - sketch.getLineOffset()
+	})
+	avoidLineAuto.forEach(function(value, index){
+		avoidLineAuto[index] = value - sketch.getLineOffset()
+	})
+
 
 	lineStartMethodBody.forEach(function(value, index){
 		if(value <= currentLineInWorkSpace && lineEndMethodBody[index] >= currentLineInWorkSpace){

@@ -88,52 +88,6 @@ export  function performPreProcessing(unProcessedCode: string): string{
 	return processedCode
 }
 
-/**
- * This methode returns the ammount of lines that where added during preprocessing. 
- * In preprocessing adds lines to the code to be able to compile it. 
- * The ammount of lines that where added can change depending on the unprocessed code.
- * @returns number of lines added during preprocessing
- */
-export function getLineOffset() : number {
-	let adjustOffset = 0
-	if(defaultBehaviourEnable){
-		adjustOffset = pStandards.reduceLineDefaultBehaviour
-	} else if(methodBehaviourEnable){
-		adjustOffset = pStandards.reduceLineMethodBehaviour
-	}
-
-	return adjustOffset
-}
-
-/**
- * Calculates the difference between two line lengths in the processedText and unprocessedText. 
- * Preprocessing could add acces modifiers to the code. Which changes the position of some symbols.
- * This creates a problem when needing the correct character position of a symbol for features where
- * the position is relevant like rename.
- * 
- * @param unProcessedLineNumber The unprocessed text line number to use.
- * @param processedLineNumber The processed text line number to use.
- * @returns The amount of characters to offset
- */
-export function getCharacterOffset(unProcessedLineNumber: number, processedLineNumber: number): number {
-	let offset: number = 0;
-	let processedTextSplit = processedText.split(/\r\n|\n/)
-	let unProcessedTextSplit = unProcessedText.split(/\r\n|\n/)
-
-	//Arrays start at 0, lineNumbers at 1. So offset
-	unProcessedLineNumber -= 1
-	processedLineNumber -= 1
-
-	let processedLine = processedTextSplit[processedLineNumber]
-	let unProcessedLine = unProcessedTextSplit[unProcessedLineNumber]
-
-	offset = processedLine.length - unProcessedLine.length
-	if (offset < 0) {
-		offset = 0
-	}
-	return offset
-}
-
 function extractTokens(gotOne: ParseTree){
 	for(let j = 0; j < gotOne.childCount; j++){
 		if(gotOne.getChild(j).childCount == 0){

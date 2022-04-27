@@ -17,7 +17,7 @@ export function scheduleLookUpDefinition(receivedUri: string, lineNumber: number
 	let currentLine = splitDefine[lineNumber]
 	let currentDefineMap = parser.lineMap(currentLine)
 
-	let adjustOffset = preprocessing.getLineOffset()
+	let adjustOffset = sketch.getLineOffset()
 
 	parser.tokenArray.forEach(function(token){
 		if(token[1] instanceof ClassDeclarationContext){
@@ -52,7 +52,7 @@ export function scheduleLookUpDefinition(receivedUri: string, lineNumber: number
 						docUri = sketch.uri+docName
 					}
 
-					let charOffset = preprocessing.getCharacterOffset(lineNumberJavaFile, delarationName[2])
+					let charOffset = sketch.getCharacterOffset(lineNumberJavaFile, delarationName[2])
 
 					finalDefinition = {
 						uri: docUri,
