@@ -35,11 +35,14 @@ export async function checkForRealtimeDiagnostics(processedTextDocument: TextDoc
 		})
 	}
 	
-	sketch.errorNodeLine.forEach(function(javaErrorLine, index){
+	sketch.getCompileErrors().forEach(function(compileError){
+		let errorLineNumber = compileError.lineNumber
+		let errorMessage = compileError.message
+
 		// Get the real error line number
-		if (sketch.transformMap.get(javaErrorLine)) {
-			errorLine = sketch.transformMap.get(javaErrorLine)!.lineNumber
-			errorDocName =  sketch.transformMap.get(javaErrorLine)!.fileName
+		if (sketch.transformMap.get(errorLineNumber)) {
+			errorLine = sketch.transformMap.get(errorLineNumber)!.lineNumber
+			errorDocName =  sketch.transformMap.get(errorLineNumber)!.fileName
 			errorDocUri = sketch.getInfo().uri+errorDocName
 		}
 
@@ -70,7 +73,7 @@ export async function checkForRealtimeDiagnostics(processedTextDocument: TextDoc
 							uri: errorDocUri,
 							range: Object.assign({}, diagnostic.range)
 						},
-						message: `${sketch.errorNodeReasons[index]}`
+						message: `${errorMessage}`
 					}
 				];
 			}

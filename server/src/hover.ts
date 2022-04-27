@@ -48,10 +48,11 @@ export async function checkforHoverContents(textDocument: lsp.TextDocument): Pro
 	server.connection.onHover(
 		(params: lsp.TextDocumentPositionParams): lsp.Hover | null => {
 			let hoverResult: lsp.Hover | null = null
-			if(sketch.errorNodeLine.length == 0){
+			if(sketch.getCompileErrors.length == 0){
 				hoverResult = scheduleHover(textDocument, params)
 			} else {
-				sketch.errorNodeLine.forEach(function(errorLine){
+				sketch.getCompileErrors().forEach(function(compileError){
+					let errorLine = compileError.lineNumber
 					hoverResult = scheduleHover(textDocument, params, errorLine)
 				})
 			}

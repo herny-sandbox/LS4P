@@ -17,12 +17,7 @@ export let initialized = false;
 
 let unProcessedCode : string = ''
 let processedCode: string = ''
-
-export let errorNodeContents: string[] = []
-export let errorNodeLine: number[] = []
-export let errorNodeReasons: string[] = []
-let errorNodeCount = 0
-
+let CompileErrors: CompileError[]
 let tokenArray: [ParseTree, ParseTree][];
 
 /** 
@@ -42,6 +37,12 @@ export interface Info{
 	uri : string,
 	name : string,
 }
+
+export interface CompileError{
+	lineNumber: number,
+	message: string
+}
+
 /**
  * Initializes a sketch. 
  * Determens the sketch folder based on the parameter
@@ -238,6 +239,10 @@ export function getTokenArray() : [ParseTree, ParseTree][]{
 	return tokenArray;
 }
 
+export function getCompileErrors() : CompileError[]{
+	return CompileErrors
+}
+
 /**
  * Parses a line to extract each word and 
  * its start- and endPos within the parsed line
@@ -275,14 +280,12 @@ function cookCompilationDiagnostics(pwd: string){
 		let data = fs.readFileSync(`${__dirname}/compile/error.txt`, 'utf-8')
 		if(data == ''){
 			// No Error on Compilation
-			setErrorNodeBackToDefault()
 			log.writeLog(`No error on Compilation`)
 		} else if(data.split(`:`)[0] == `Note`){
 			// Compilation warning
-			setErrorNodeBackToDefault()
 			log.writeLog(`Compilation warning encountered`)
 		} else {
-			setErrorNodeBackToDefault()
+			CompileErrors = new Array()
 			let tempSplit = data.split('\n')
 			
 			tempSplit.forEach(function(line:string, index: number){
@@ -300,24 +303,21 @@ function cookCompilationDiagnostics(pwd: string){
 					}
 
 					// Handling line number based on current Behaviour - since preprocessing is done
-					if(preprocessor.defaultBehaviourEnable){
-						errorNodeLine[errorNodeCount] = +innerSplit[splitIndex] - pStandards.reduceLineDefaultBehaviour
-					} else if(preprocessor.methodBehaviourEnable){
-						errorNodeLine[errorNodeCount] = +innerSplit[splitIndex] - pStandards.reduceLineMethodBehaviour
-					}
+					let errorLineNumber = +innerSplit[splitIndex] - getLineOffset()
+
 					let localIndex = index + 1
-					errorNodeReasons[errorNodeCount] = line.split("error:")[1]
+					let errorMessage = line.split("error:")[1]
 					while(true){
 						if(tempSplit[localIndex].includes(`${pwd}`) || 
 							tempSplit[localIndex].includes(`error`) ||
 							tempSplit[localIndex].includes(`errors`)) {
 							break
 						} else {
-							errorNodeReasons[errorNodeCount]  = `${errorNodeReasons[errorNodeCount]}\n ${tempSplit[localIndex]}`
+							errorMessage += `\n ${tempSplit[localIndex]}`
 							localIndex+=1
 						}
 					}
-					errorNodeCount += 1
+					CompileErrors.push({lineNumber : errorLineNumber, message: errorMessage})
 				}
 			})
 			// Place a break point
@@ -326,12 +326,6 @@ function cookCompilationDiagnostics(pwd: string){
 	} catch(e) {
 		log.writeLog(`[[ERR]] - Problem with cooking diagnostics`)
 	}
-}
-
-function setErrorNodeBackToDefault(){
-	errorNodeContents = []
-	errorNodeLine = []
-	errorNodeCount = 0	
 }
 
 /**
