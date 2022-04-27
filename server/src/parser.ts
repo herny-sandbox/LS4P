@@ -11,11 +11,6 @@ const fs = require('fs')
 export let tokenArray: [ParseTree, ParseTree][] = new Array();
 let _tokenCounter = -1
 
-// Tuple -> Current Node, Parent Node
-// Helps in traversing up the tree
-export let wholeAST: [ParseTree, ParseTree | undefined][] = new Array();
-let _wholeCounter = -1
-
 // Currently constructed AST after the last character change
 export let ast: any
 
@@ -23,13 +18,9 @@ export function parseAST(processedText: string, textDocument: TextDocument) {
 	ast = parse(processedText)
 	tokenArray = []
 	_tokenCounter = -1
-	wholeAST = []
-	_wholeCounter = -1
+	
 	for(let i = 0; i < ast.childCount; i++){
 		extractTokens(ast.children![i])
-	}
-	for(let i = 0; i < ast.childCount; i++){
-		wholeASTExtract(ast.children![i])
 	}
 
 	console.log("Break point here to obtain AST")
@@ -79,14 +70,5 @@ function extractTokens(gotOne: ParseTree){
 			tokenArray[_tokenCounter] = [gotOne.getChild(j),gotOne]
 		}
 		extractTokens(gotOne.getChild(j))
-	}
-}
-
-// top -> bottom ; left -> right
-function wholeASTExtract(gotOne: ParseTree){
-	_wholeCounter += 1
-	wholeAST[_wholeCounter] = [gotOne,gotOne.parent]
-	for(let j=0;j<gotOne.childCount;j++){
-		wholeASTExtract(gotOne.getChild(j))
 	}
 }
