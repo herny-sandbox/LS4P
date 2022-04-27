@@ -40,7 +40,7 @@ export async function checkForRealtimeDiagnostics(processedTextDocument: TextDoc
 		if (sketch.transformMap.get(javaErrorLine)) {
 			errorLine = sketch.transformMap.get(javaErrorLine)!.lineNumber
 			errorDocName =  sketch.transformMap.get(javaErrorLine)!.fileName
-			errorDocUri = sketch.uri+errorDocName
+			errorDocUri = sketch.getInfo().uri+errorDocName
 		}
 
 		let diagnostics = fileDiagnostics.get(errorDocName);
@@ -81,7 +81,7 @@ export async function checkForRealtimeDiagnostics(processedTextDocument: TextDoc
 
 	//Send all diagnostic reports to the client
 	for (let [file, diagnostics] of fileDiagnostics)  {
-		let fileUri = sketch.uri+file
+		let fileUri = sketch.getInfo().uri+file
 		server.connection.sendDiagnostics({uri: fileUri, diagnostics})
 	}
 	

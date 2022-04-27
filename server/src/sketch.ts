@@ -11,9 +11,7 @@ const pathM = require('path')
 const childProcess = require('child_process');
 
 
-export let path : string = ''
-export let uri : string = ''
-export let name : string = '';
+let sketchInfo : Info;
 let contents  = new Map<string, string>()
 export let initialized = false;
 
@@ -39,6 +37,11 @@ export interface IOriginalTab {
 	fileName: string;
 }
 
+export interface Info{
+	path : string,
+	uri : string,
+	name : string,
+}
 /**
  * Initializes a sketch. 
  * Determens the sketch folder based on the parameter
@@ -48,13 +51,18 @@ export interface IOriginalTab {
  */
 export function initialize(textDocument: lsp.TextDocument) {
 	
-	uri = pathM.dirname(textDocument.uri)+'/'
-	path = getPathFromUri(uri)
-	name = pathM.basename(path)
+	let uri = pathM.dirname(textDocument.uri)+'/'
+	let path = getPathFromUri(uri)
+	let name = pathM.basename(path)
+	sketchInfo = { 
+		uri : uri,
+		path : path,
+		name : name
+	}
 
 	try {
-		let mainFileName = name+'.pde'
-		let mainFileContents = fs.readFileSync(path+mainFileName, 'utf-8')
+		let mainFileName = sketchInfo.name+'.pde'
+		let mainFileContents = fs.readFileSync(sketchInfo.path+mainFileName, 'utf-8')
 
 		contents.set(mainFileName, mainFileContents)
 	}
@@ -65,10 +73,10 @@ export function initialize(textDocument: lsp.TextDocument) {
 	}
 
 	try{
-		let fileNames = fs.readdirSync(path)
+		let fileNames = fs.readdirSync(sketchInfo.path)
 		fileNames.forEach((fileName : string) =>{
-			if (fileName.endsWith('.pde') && !fileName.includes(name)){
-				let tabContents = fs.readFileSync(path+fileName, 'utf-8')
+			if (fileName.endsWith('.pde') && !fileName.includes(sketchInfo.name)){
+				let tabContents = fs.readFileSync(sketchInfo.path+fileName, 'utf-8')
 				contents.set(fileName, tabContents)
 			}
 		});
@@ -133,6 +141,10 @@ export function updateContent(changedDocument: lsp.TextDocument) {
 	}
 
 	return true
+}
+
+export function getInfo() : Info {
+	return sketchInfo;
 }
 
 /**
@@ -380,7 +392,7 @@ export function addTab(uri: string) {
 	if (initialized) {
 		let fileName = pathM.basename(uri)
 		if (fileName.endsWith('.pde')) {
-			let tabContents = fs.readdirSync(path+fileName, 'utf-8')
+			let tabContents = fs.readdirSync(sketchInfo.path+fileName, 'utf-8')
 			contents.set(fileName, tabContents)
 		}
 	}

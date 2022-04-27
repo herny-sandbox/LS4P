@@ -49,7 +49,7 @@ export function scheduleLookUpDefinition(receivedUri: string, lineNumber: number
 					if (sketch.transformMap.get(lineNumberJavaFile)) {
 						diffLine = sketch.transformMap.get(lineNumberJavaFile)!.lineNumber
 						let docName =  sketch.transformMap.get(lineNumberJavaFile)!.fileName
-						docUri = sketch.uri+docName
+						docUri = sketch.getInfo().uri+docName
 					}
 
 					let charOffset = sketch.getCharacterOffset(lineNumberJavaFile, delarationName[2])
