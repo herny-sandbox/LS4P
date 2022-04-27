@@ -7,13 +7,8 @@ import * as log from './scripts/syslogs'
 const childProcess = require('child_process');
 const fs = require('fs')
 
-// Tuple -> current Node, Parent Node
-
-// Currently constructed AST after the last character change
-export let ast: any
-
 export function parseAST(processedText: string, textDocument: TextDocument) : [ParseTree, ParseTree][] {
-	ast = parse(processedText)
+	let ast = parse(processedText)
 	let tokenArray: [ParseTree, ParseTree][] = new Array();
 	let _tokenCounter = -1
 	
@@ -24,7 +19,7 @@ export function parseAST(processedText: string, textDocument: TextDocument) : [P
 	console.log("Break point here to obtain AST")
 	log.writeLog("Parse Tree construction Successfully")
 	return tokenArray
-	
+
 	function extractTokens(gotOne: ParseTree){
 		for(let j = 0; j < gotOne.childCount; j++){
 			if(gotOne.getChild(j).childCount == 0){

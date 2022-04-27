@@ -197,9 +197,10 @@ export function getContent() : string{
  */
  export function getLineOffset() : number {
 	let adjustOffset = 0
-	if(preprocessor.defaultBehaviourEnable){
+	let behaviourType = preprocessor.getBehavoirType()
+	if(behaviourType.defaultEnabled){
 		adjustOffset = pStandards.reduceLineDefaultBehaviour
-	} else if(preprocessor.methodBehaviourEnable){
+	} else if(behaviourType.methodEnabled){
 		adjustOffset = pStandards.reduceLineMethodBehaviour
 	}
 

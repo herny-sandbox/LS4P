@@ -15,11 +15,8 @@ import java.io.*\;
 import java.lang.*\;
 `
 
-// let settingsLineCounter = 0
-
-// TODO - Fix line count offset when settings is added - since some lines will be removed from the workspace code and will be moved to settings
-export let reduceLineDefaultBehaviour = 14 
-export let reduceLineMethodBehaviour = 13 
+export const reduceLineDefaultBehaviour = 14 
+export const reduceLineMethodBehaviour = 13 
 
 // remove generated code from token stack
 export let removeGeneratedToken = [
@@ -28,13 +25,20 @@ export let removeGeneratedToken = [
 	`args`
 ]
 
-let sizePattern = /(size)\([ ]*[0-9]+[ ]*\,[ ]*[0-9]+[ ]*\,*[ ]*[A-Z 0-9]{0,}[ ]*\)\;/
-let fullScreenPattern = /(fullScreen)\([ ]*[A-Z 0-9]{0,}[ ]*\,*[ ]*[0-9]*[ ]*\)\;/
-let smoothPattern = /(smooth)\([ ]*[0-9]+[ ]*\)\;/
-let noSmoothPatterns = /(noSmooth)\(\)\;/
+const sizePattern = /(size)\([ ]*[0-9]+[ ]*\,[ ]*[0-9]+[ ]*\,*[ ]*[A-Z 0-9]{0,}[ ]*\)\;/
+const fullScreenPattern = /(fullScreen)\([ ]*[A-Z 0-9]{0,}[ ]*\,*[ ]*[0-9]*[ ]*\)\;/
+const smoothPattern = /(smooth)\([ ]*[0-9]+[ ]*\)\;/
+const noSmoothPatterns = /(noSmooth)\(\)\;/
+const ifelsePattern = /[ ]*(else)[ ]*(if)[ ]*\(/g
+const singleLineComment = /\/\/(.)*/g
+const multiLineCommentComponents = [
+	/\/\*/g,
+	/\*\//g
+]
+export const methodPattern = /[\w\<\>\[\]]+\s+(\w+) *\([^\)]*\) *(\{)/g
 
-export let settingsContext = ""
-export let isSettingsRequired = false
+let settingsContext = ""
+let isSettingsRequired = false
 let settingsSet = new Set()
 
 export function setDefaultClassName(className : string){
@@ -77,18 +81,18 @@ export function settingsRenderPipeline(unProcessedTest: string): string {
 	let newUnProcessedText = ``
 	// Fixes method scoping for methods unassigned access specifiers
 	recordLine.forEach(function(line,index){
-		if(preprocessing.methodPattern.exec(line) && !(line.includes(`public`) || line.includes(`private`) || line.includes(`protected`) || preprocessing.ifelsePattern.exec(line))){
+		if(methodPattern.exec(line) && !(line.includes(`public`) || line.includes(`private`) || line.includes(`protected`) || ifelsePattern.exec(line))){
 			recordLine[index] = `public ${line.trimLeft()}`
 		}
 	})
 	let startEncountered = false
 	recordLine.forEach(function(line, index){
-		if(preprocessing.multiLineCommentComponents[0].exec(line)){
+		if(multiLineCommentComponents[0].exec(line)){
 			startEncountered = true
 		}
 		if(startEncountered) {
 			recordLine[index] = ``
-			if(preprocessing.multiLineCommentComponents[1].exec(line)){
+			if(multiLineCommentComponents[1].exec(line)){
 				startEncountered = false
 			}
 		}
@@ -115,7 +119,7 @@ export function mapperPipeline(newUnProcessedText: string): string{
 	conversionTuples.forEach(function(tuple){
 		localUnProcessedText = localUnProcessedText.replace(tuple[0],tuple[1])
 	})
-	localUnProcessedText = localUnProcessedText.replace(preprocessing.singleLineComment,``)
+	localUnProcessedText = localUnProcessedText.replace(singleLineComment,``)
 	// localUnProcessedText = localUnProcessedText.replace(/[\']{1}/g,"\\\'")
 	// localUnProcessedText = localUnProcessedText.replace(/[\"]{1}/g,"\\\"")
 	return localUnProcessedText

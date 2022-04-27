@@ -7,28 +7,16 @@ import { MethodDeclarationContext } from 'java-ast/dist/parser/JavaParser';
 import * as log from './scripts/syslogs'
 import * as sketch from './sketch'
 
-export let defaultBehaviourEnable = false
-export let methodBehaviourEnable = false
-
 let unProcessedTokenArray : [ParseTree, ParseTree][] = new Array();
 let _unProcessedTokenCounter = -1
-
-export let methodPattern = /[\w\<\>\[\]]+\s+(\w+) *\([^\)]*\) *(\{)/g
-export let modifiedMethodPatternStart = /[\w\<\>\[\]]+\s+(\w+) *\([^\)]*\)[ ]*/g
-export let modifiedMethodPatternEnd = /[ ]*(\{)[ ]*/g
-export let ifelsePattern = /[ ]*(else)[ ]*(if)[ ]*\(/g
-export let singleLineComment = /\/\/(.)*/g
-export let multiLineCommentComponents = [
-	/\/\*/g,
-	/\*\//g
-]
-
-let unProcessedText : string = ''
-let processedText: string = ''
+let behaviourType : Behaviour
+export interface Behaviour{
+	defaultEnabled : boolean,
+	methodEnabled: boolean
+}
 
 export  function performPreProcessing(unProcessedCode: string): string{
 	
-	unProcessedText = unProcessedCode //TO DO: Remove
 	let unProcessedMethodName: RegExpExecArray | null
 	// Super set that contains all the methods in the workspace
 	let unProcessedMethodNameArray: RegExpExecArray[] = []
@@ -66,7 +54,7 @@ export  function performPreProcessing(unProcessedCode: string): string{
 
 	let unProcessedLineSplit = settingsPipelineResult.split(`\n`)
 	unProcessedLineSplit.forEach(function(line){
-		if(unProcessedMethodName = methodPattern.exec(line)){
+		if(unProcessedMethodName = pStandards.methodPattern.exec(line)){
 			unProcessedMethodNameArray[_unProcessedMethodNameArrayCounter] = unProcessedMethodName
 			_unProcessedMethodNameArrayCounter += 1
 		}
@@ -84,8 +72,11 @@ export  function performPreProcessing(unProcessedCode: string): string{
 		log.writeLog(`[[BEHAVIOUR]] - SetupDraw Behaviour`)
 	}
 	console.log("PreProcessing complete.!")
-	processedText = processedCode //TO DO: Remove
 	return processedCode
+}
+
+export function getBehavoirType() : Behaviour {
+	return behaviourType
 }
 
 function extractTokens(gotOne: ParseTree){
@@ -99,6 +90,8 @@ function extractTokens(gotOne: ParseTree){
 }
 
 function setBehaviours(_b1:boolean,_b2: boolean){
-	defaultBehaviourEnable = _b1
-	methodBehaviourEnable = _b2
+	behaviourType = {
+		defaultEnabled : _b1,
+		methodEnabled : _b2
+	}
 }
