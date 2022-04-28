@@ -15,6 +15,7 @@ import {
 	ReferenceParams,
 	RenameParams,
 	WorkspaceEdit,
+	Hover,
 	FileChangeType
 } from 'vscode-languageserver';
 
@@ -138,7 +139,6 @@ documents.onDidChangeContent(change => {
 	latestChangesInTextDoc = change.document
 	if(!bufferInProgress)
 		initPreProcessDiagnostics()
-	hover.checkforHoverContents(change.document)
 });
 
 
@@ -222,6 +222,23 @@ connection.onCompletionResolve(
 		return item;
 	}
 );
+
+// Implementation for Hover request
+connection.onHover(
+	(params: TextDocumentPositionParams): Hover | null => {
+		let hoverResult: Hover | null = null
+		if(sketch.getCompileErrors.length == 0){
+			hoverResult = hover.scheduleHover(params)
+		} else {
+			sketch.getCompileErrors().forEach(function(compileError){
+				let errorLine = compileError.lineNumber
+				hoverResult = hover.scheduleHover(params, errorLine)
+			})
+		}
+		log.writeLog(`Hover Invoked`)
+		return hoverResult
+	}
+)
 
 documents.listen(connection);
 connection.listen();
