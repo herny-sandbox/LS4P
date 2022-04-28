@@ -1,11 +1,9 @@
-import * as server from './server'
-import * as log from './scripts/syslogs'
-import * as preprocessing from './preprocessing'
+import * as server from '../server'
+import * as sketch from '../sketch/sketch'
+import * as javaSpecific from '../grammer/terms/javaspecific'
 import { Definition } from 'vscode-languageserver'
-import * as parser from './parser'
-import * as javaSpecific from './grammer/terms/javaspecific'
 import { ClassDeclarationContext, VariableDeclaratorIdContext, MethodDeclarationContext } from 'java-ast/dist/parser/JavaParser';
-import * as sketch from './sketch'
+
 
 // [string,string,number,number] => [type, name, line number, character number]
 let foundDeclaration: [string,string,number,number][] = new Array();
@@ -15,11 +13,11 @@ export function scheduleLookUpDefinition(receivedUri: string, lineNumber: number
 	let currentContent = server.latestChangesInTextDoc.getText()
 	let splitDefine = currentContent.split(`\n`)
 	let currentLine = splitDefine[lineNumber]
-	let currentDefineMap = parser.lineMap(currentLine)
+	let currentDefineMap = sketch.lineMap(currentLine)
+	let adjustOffset = sketch.getLineOffset()
+	let tokenArray = sketch.getTokenArray();
 
-	let adjustOffset = preprocessing.getLineOffset()
-
-	parser.tokenArray.forEach(function(token){
+	tokenArray.forEach(function(token){
 		if(token[1] instanceof ClassDeclarationContext){
 			if(!(javaSpecific.TOP_LEVEL_KEYWORDS.indexOf(token[0].text) > -1)){
 				foundDeclaration[_foundDeclarationCount] = [`class`, token[0].text, token[0].payload._line, token[0].payload._charPositionInLine]
@@ -46,13 +44,14 @@ export function scheduleLookUpDefinition(receivedUri: string, lineNumber: number
 					let lineNumberJavaFile = delarationName[2]-adjustOffset;
 					let diffLine : number = 0;
 					let docUri : string = '';
-					if (sketch.transformMap.get(lineNumberJavaFile)) {
-						diffLine = sketch.transformMap.get(lineNumberJavaFile)!.lineNumber
-						let docName =  sketch.transformMap.get(lineNumberJavaFile)!.fileName
-						docUri = sketch.uri+docName
+					let transformMap = sketch.getTransformationMap()
+					if (transformMap.get(lineNumberJavaFile)) {
+						diffLine = transformMap.get(lineNumberJavaFile)!.lineNumber
+						let docName =  transformMap.get(lineNumberJavaFile)!.fileName
+						docUri = sketch.getInfo().uri+docName
 					}
 
-					let charOffset = preprocessing.getCharacterOffset(lineNumberJavaFile, delarationName[2])
+					let charOffset = sketch.getCharacterOffset(lineNumberJavaFile, delarationName[2])
 
 					finalDefinition = {
 						uri: docUri,

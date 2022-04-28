@@ -1,10 +1,10 @@
+import * as log from '../scripts/syslogs'
 import * as lsp from 'vscode-languageserver'
-import * as server from './server'
-const fs = require('fs');
+import * as server from '../server'
+import * as sketch from '../sketch/sketch'
 import { Hover, MarkedString } from 'vscode-languageserver';
-import * as parser from './parser'
-import { errorNodeLine } from './diagnostics'
-import * as log from './scripts/syslogs'
+
+const fs = require('fs');
 
 // This contains Insights for keywords - used in `Hover for Insights`
 export let insightMap: [string,string][] = new Array();
@@ -48,10 +48,11 @@ export async function checkforHoverContents(textDocument: lsp.TextDocument): Pro
 	server.connection.onHover(
 		(params: lsp.TextDocumentPositionParams): lsp.Hover | null => {
 			let hoverResult: lsp.Hover | null = null
-			if(errorNodeLine.length == 0){
+			if(sketch.getCompileErrors.length == 0){
 				hoverResult = scheduleHover(textDocument, params)
 			} else {
-				errorNodeLine.forEach(function(errorLine){
+				sketch.getCompileErrors().forEach(function(compileError){
+					let errorLine = compileError.lineNumber
 					hoverResult = scheduleHover(textDocument, params, errorLine)
 				})
 			}
@@ -67,7 +68,7 @@ function scheduleHover(textDocument: lsp.TextDocument, params: lsp.TextDocumentP
 		let splitHover = text.split(`\n`)
 		let currentLine = splitHover[params.position.line]
 		let hover : Hover | null = null
-		let hoverMap = parser.lineMap(currentLine)
+		let hoverMap = sketch.lineMap(currentLine)
 
 		hoverMap.forEach(function(word){
 			// params.position.character -> can be of any character, even a character within a word

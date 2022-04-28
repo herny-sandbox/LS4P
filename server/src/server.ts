@@ -18,18 +18,14 @@ import {
 	FileChangeType
 } from 'vscode-languageserver';
 
-import { interval, Observable, of, Subject } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
-
-import * as completion from './completion'
-import * as diagnostics from './diagnostics'
-import * as hover from './hover'
-import * as preprocessing from './preprocessing'
+import * as completion from './features/completion'
+import * as diagnostics from './features/diagnostics'
+import * as hover from './features/hover'
 import * as log from './scripts/syslogs'
-import * as definition from './definition'
-import * as lens from './lens'
-import * as reference from './references'
-import * as sketch from './sketch';
+import * as definition from './features/definition'
+import * as lens from './features/lens'
+import * as reference from './features/references'
+import * as sketch from './sketch/sketch';
 
 export let connection = createConnection(ProposedFeatures.all);
 
@@ -126,7 +122,7 @@ export let latestChangesInTextDoc: TextDocument
 documents.onDidOpen(event => {
 	log.writeLog(`File Open / Tab switching event occured`)
 	latestChangesInTextDoc = event.document
-	preprocessing.performPreProcessing(event.document)
+	sketch.build(event.document)
 	diagnostics.checkForRealtimeDiagnostics(event.document)
 });
 
@@ -150,7 +146,7 @@ async function initPreProcessDiagnostics() {
 	bufferInProgress = true
 	await sleep(300);
 	log.writeLog(`Inside -> Content change event occured`)
-	preprocessing.performPreProcessing(latestChangesInTextDoc)
+	sketch.build(latestChangesInTextDoc)
 	diagnostics.checkForRealtimeDiagnostics(latestChangesInTextDoc)
 	bufferInProgress = false
 }
