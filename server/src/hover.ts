@@ -42,30 +42,13 @@ try{
 	console.log(`Error fetching Insights`)
 }
 
-
-export async function checkforHoverContents(textDocument: lsp.TextDocument): Promise<void>{
-
-	server.connection.onHover(
-		(params: lsp.TextDocumentPositionParams): lsp.Hover | null => {
-			let hoverResult: lsp.Hover | null = null
-			if(sketch.getCompileErrors.length == 0){
-				hoverResult = scheduleHover(textDocument, params)
-			} else {
-				sketch.getCompileErrors().forEach(function(compileError){
-					let errorLine = compileError.lineNumber
-					hoverResult = scheduleHover(textDocument, params, errorLine)
-				})
-			}
-			log.writeLog(`Hover Invoked`)
-			return hoverResult
-		}
-	)
-}
-
-function scheduleHover(textDocument: lsp.TextDocument, params: lsp.TextDocumentPositionParams, errorLine: number = -10): lsp.Hover | null {
+export function scheduleHover(params: lsp.TextDocumentPositionParams, errorLine: number = -10): lsp.Hover | null {
 	if(errorLine - 1 != params.position.line){
-		let text = textDocument.getText();
-		let splitHover = text.split(`\n`)
+		let currentContent = sketch.getTabContent(params.textDocument.uri)
+		if (!currentContent) {
+			return null
+		}
+		let splitHover = currentContent.split(`\n`)
 		let currentLine = splitHover[params.position.line]
 		let hover : Hover | null = null
 		let hoverMap = sketch.lineMap(currentLine)

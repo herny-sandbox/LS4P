@@ -230,6 +230,28 @@ export function getContent() : string{
 }
 
 /**
+ * Provides the content of a single (.pde) file/tab
+ * 
+ * @param uri Uri to the file
+ * @returns tab content or undefined if no file is found
+ */
+export function getTabContent(uri : string) : string | undefined{
+	if (!initialized) {
+		return
+	}
+	let tabName = pathM.basename(uri)
+
+	for (let [fileName, fileContents] of contents) {
+		if (fileName == tabName) {
+			return fileContents
+		}
+	}
+
+	return
+
+}
+
+/**
  * This methode returns the ammount of lines that where added during preprocessing. 
  * In preprocessing adds lines to the code to be able to compile it. 
  * The ammount of lines that where added can change depending on the unprocessed code.

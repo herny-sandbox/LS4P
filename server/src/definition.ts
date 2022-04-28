@@ -10,7 +10,10 @@ let foundDeclaration: [string,string,number,number][] = new Array();
 let _foundDeclarationCount = 0
 
 export function scheduleLookUpDefinition(receivedUri: string, lineNumber: number, charNumber: number): Definition | null  {
-	let currentContent = server.latestChangesInTextDoc.getText()
+	let currentContent = sketch.getTabContent(receivedUri)
+	if (!currentContent) {
+		return null
+	}
 	let splitDefine = currentContent.split(`\n`)
 	let currentLine = splitDefine[lineNumber]
 	let currentDefineMap = sketch.lineMap(currentLine)
