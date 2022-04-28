@@ -1,5 +1,5 @@
-import * as sketch from './sketch'
-import * as javaSpecific from './grammer/terms/javaspecific'
+import * as sketch from '../sketch/sketch'
+import * as javaSpecific from '../grammer/terms/javaspecific'
 import { CodeLens, CodeLensParams } from 'vscode-languageserver'
 import { ClassDeclarationContext, VariableDeclaratorIdContext, MethodDeclarationContext } from 'java-ast/dist/parser/JavaParser';
 

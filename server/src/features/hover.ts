@@ -1,7 +1,7 @@
-import * as log from './scripts/syslogs'
+import * as log from '../scripts/syslogs'
 import * as lsp from 'vscode-languageserver'
-import * as server from './server'
-import * as sketch from './sketch'
+import * as server from '../server'
+import * as sketch from '../sketch/sketch'
 import { Hover, MarkedString } from 'vscode-languageserver';
 
 const fs = require('fs');

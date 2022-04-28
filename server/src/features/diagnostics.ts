@@ -1,5 +1,5 @@
-import * as server from './server'
-import * as sketch from './sketch';
+import * as server from '../server'
+import * as sketch from '../sketch/sketch';
 import {TextDocument, Diagnostic, DiagnosticSeverity,} from 'vscode-languageserver';
 
 const fs = require('fs');

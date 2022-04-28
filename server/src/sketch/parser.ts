@@ -1,4 +1,4 @@
-import * as log from './scripts/syslogs'
+import * as log from '../scripts/syslogs'
 import { parse } from 'java-ast'
 import { ParseTree } from 'antlr4ts/tree/ParseTree'
 

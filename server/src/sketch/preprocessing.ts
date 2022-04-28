@@ -1,5 +1,5 @@
-import * as log from './scripts/syslogs'
-import * as pStandards from './grammer/terms/preprocessingsnippets'
+import * as log from '../scripts/syslogs'
+import * as pStandards from '../grammer/terms/preprocessingsnippets'
 import { parse } from 'java-ast'
 import { ParseTree } from 'antlr4ts/tree/ParseTree'
 import { MethodDeclarationContext } from 'java-ast/dist/parser/JavaParser';

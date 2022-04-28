@@ -1,7 +1,7 @@
-import * as log from './scripts/syslogs'
+import * as log from '../scripts/syslogs'
 import * as lsp from 'vscode-languageserver'
 import * as parser from './parser'
-import * as pStandards from './grammer/terms/preprocessingsnippets'
+import * as pStandards from '../grammer/terms/preprocessingsnippets'
 import * as preprocessor from './preprocessing'
 import { ParseTree } from 'antlr4ts/tree/ParseTree'
 
