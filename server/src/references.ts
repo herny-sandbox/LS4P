@@ -4,7 +4,10 @@ import { Location, ReferenceParams } from 'vscode-languageserver'
 
 export function scheduleLookUpReference(_referenceParams: ReferenceParams): Location[] | null{
 	let resultant: Location[] | null
-	let currentContent = server.latestChangesInTextDoc.getText()
+	let currentContent = sketch.getTabContent(_referenceParams.textDocument.uri)
+	if (!currentContent) {
+		return null
+	}
 	let splitDefine = currentContent.split(`\n`)
 	let currentLine = splitDefine[_referenceParams.position.line]
 	let currentReferenceMap = sketch.lineMap(currentLine)
