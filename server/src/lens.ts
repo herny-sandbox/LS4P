@@ -1,11 +1,6 @@
-import { CodeLens, CodeLensParams } from 'vscode-languageserver'
-import * as parser from './parser'
-import * as server from './server'
-import { parse } from 'java-ast'
-import * as preprocessing from './preprocessing'
-import { ParseTree } from 'antlr4ts/tree/ParseTree'
-import * as javaSpecific from './grammer/terms/javaspecific'
 import * as sketch from './sketch'
+import * as javaSpecific from './grammer/terms/javaspecific'
+import { CodeLens, CodeLensParams } from 'vscode-languageserver'
 import { ClassDeclarationContext, VariableDeclaratorIdContext, MethodDeclarationContext } from 'java-ast/dist/parser/JavaParser';
 
 // [string,string,number,number] => [type, name, line number, character number]

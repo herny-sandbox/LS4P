@@ -18,13 +18,9 @@ import {
 	FileChangeType
 } from 'vscode-languageserver';
 
-import { interval, Observable, of, Subject } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
-
 import * as completion from './completion'
 import * as diagnostics from './diagnostics'
 import * as hover from './hover'
-import * as preprocessing from './preprocessing'
 import * as log from './scripts/syslogs'
 import * as definition from './definition'
 import * as lens from './lens'

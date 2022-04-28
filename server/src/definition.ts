@@ -1,11 +1,9 @@
 import * as server from './server'
-import * as log from './scripts/syslogs'
-import * as preprocessing from './preprocessing'
-import { Definition } from 'vscode-languageserver'
-import * as parser from './parser'
-import * as javaSpecific from './grammer/terms/javaspecific'
-import { ClassDeclarationContext, VariableDeclaratorIdContext, MethodDeclarationContext } from 'java-ast/dist/parser/JavaParser';
 import * as sketch from './sketch'
+import * as javaSpecific from './grammer/terms/javaspecific'
+import { Definition } from 'vscode-languageserver'
+import { ClassDeclarationContext, VariableDeclaratorIdContext, MethodDeclarationContext } from 'java-ast/dist/parser/JavaParser';
+
 
 // [string,string,number,number] => [type, name, line number, character number]
 let foundDeclaration: [string,string,number,number][] = new Array();

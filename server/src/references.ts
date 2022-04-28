@@ -1,8 +1,6 @@
-import { Location, ReferenceParams } from 'vscode-languageserver'
 import * as server from './server'
-import * as preprocessing from './preprocessing'
-import * as parser from './parser'
 import * as sketch from './sketch'
+import { Location, ReferenceParams } from 'vscode-languageserver'
 
 export function scheduleLookUpReference(_referenceParams: ReferenceParams): Location[] | null{
 	let resultant: Location[] | null

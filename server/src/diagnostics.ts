@@ -1,18 +1,6 @@
-import {
-	TextDocument,
-	Diagnostic,
-	DiagnosticSeverity,
-} from 'vscode-languageserver';
-import { TerminalNode } from 'antlr4ts/tree/TerminalNode';
-import { ConstructorDeclarationContext, ClassDeclarationContext } from 'java-ast/dist/parser/JavaParser';
-import { ErrorNode } from 'antlr4ts/tree/ErrorNode';
-import { ParseTree } from 'antlr4ts/tree/ParseTree'
 import * as server from './server'
-import * as parser from './parser'
-import * as preProcessingClass from './preprocessing'
-import * as pStandards from './grammer/terms/preprocessingsnippets'
-import * as log from './scripts/syslogs'
 import * as sketch from './sketch';
+import {TextDocument, Diagnostic, DiagnosticSeverity,} from 'vscode-languageserver';
 
 const fs = require('fs');
 

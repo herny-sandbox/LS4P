@@ -1,15 +1,13 @@
-import * as lsp from 'vscode-languageserver'
+import * as log from './scripts/syslogs'
 import * as pStandards from './grammer/terms/preprocessingsnippets'
-import * as parser from './parser'
 import { parse } from 'java-ast'
 import { ParseTree } from 'antlr4ts/tree/ParseTree'
 import { MethodDeclarationContext } from 'java-ast/dist/parser/JavaParser';
-import * as log from './scripts/syslogs'
-import * as sketch from './sketch'
 
 let unProcessedTokenArray : [ParseTree, ParseTree][] = new Array();
 let _unProcessedTokenCounter = -1
 let behaviourType : Behaviour
+
 export interface Behaviour{
 	defaultEnabled : boolean,
 	methodEnabled: boolean
@@ -75,6 +73,10 @@ export  function performPreProcessing(unProcessedCode: string): string{
 	return processedCode
 }
 
+/**
+ * Provides the current sketch behavoir type
+ * @returns Behavoir type
+ */
 export function getBehavoirType() : Behaviour {
 	return behaviourType
 }

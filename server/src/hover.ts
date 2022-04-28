@@ -1,10 +1,10 @@
+import * as log from './scripts/syslogs'
 import * as lsp from 'vscode-languageserver'
 import * as server from './server'
-const fs = require('fs');
-import { Hover, MarkedString } from 'vscode-languageserver';
-import * as parser from './parser'
 import * as sketch from './sketch'
-import * as log from './scripts/syslogs'
+import { Hover, MarkedString } from 'vscode-languageserver';
+
+const fs = require('fs');
 
 // This contains Insights for keywords - used in `Hover for Insights`
 export let insightMap: [string,string][] = new Array();

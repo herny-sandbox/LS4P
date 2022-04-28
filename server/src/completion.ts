@@ -1,13 +1,9 @@
-import * as lsp from 'vscode-languageserver';
-import { CompletionItemKind, CompletionParams, TextDocument } from 'vscode-languageserver';
-import * as preprocessing from './preprocessing'
-import * as pStandards from './grammer/terms/preprocessingsnippets'
-import * as parser from './parser';
-import { ClassOrInterfaceTypeContext, VariableDeclaratorIdContext, BlockContext, TypeTypeOrVoidContext, PrimitiveTypeContext} from 'java-ast/dist/parser/JavaParser';
-import * as astUtils from './astutils'
-import * as model from './grammer/terms/model'
 import * as log from './scripts/syslogs'
+import * as lsp from 'vscode-languageserver';
+import * as model from './grammer/terms/model'
 import * as sketch from './sketch'
+import * as astUtils from './astutils'
+import * as javaParser from 'java-ast/dist/parser/JavaParser';
 const fs = require('fs');
 const { JavaClassFileReader } = require('java-class-tools')
 
@@ -128,82 +124,82 @@ function PCompletionMethods(classType: any): lsp.CompletionItem[] {
 }
 
 export function findCompletionItemKind(value: number): lsp.CompletionItemKind{
-	let completionKind: lsp.CompletionItemKind = CompletionItemKind.Text
+	let completionKind: lsp.CompletionItemKind = lsp.CompletionItemKind.Text
 	switch (value) {
 		case 1:
-			completionKind = CompletionItemKind.Text
+			completionKind = lsp.CompletionItemKind.Text
 			break;
 		case 2:
-			completionKind = CompletionItemKind.Method
+			completionKind = lsp.CompletionItemKind.Method
 			break;
 		case 3:
-			completionKind = CompletionItemKind.Function
+			completionKind = lsp.CompletionItemKind.Function
 			break;
 		case 4:
-			completionKind = CompletionItemKind.Constructor
+			completionKind = lsp.CompletionItemKind.Constructor
 			break;
 		case 5:
-			completionKind = CompletionItemKind.Field
+			completionKind = lsp.CompletionItemKind.Field
 			break;
 		case 6:
-			completionKind = CompletionItemKind.Variable
+			completionKind = lsp.CompletionItemKind.Variable
 			break;
 		case 7:
-			completionKind = CompletionItemKind.Class
+			completionKind = lsp.CompletionItemKind.Class
 			break;
 		case 8:
-			completionKind = CompletionItemKind.Interface
+			completionKind = lsp.CompletionItemKind.Interface
 			break;
 		case 9:
-			completionKind = CompletionItemKind.Module
+			completionKind = lsp.CompletionItemKind.Module
 			break;
 		case 10:
-			completionKind = CompletionItemKind.Property
+			completionKind = lsp.CompletionItemKind.Property
 			break;
 		case 11:
-			completionKind = CompletionItemKind.Unit
+			completionKind = lsp.CompletionItemKind.Unit
 			break;
 		case 12:
-			completionKind = CompletionItemKind.Value
+			completionKind = lsp.CompletionItemKind.Value
 			break;
 		case 13:
-			completionKind = CompletionItemKind.Enum
+			completionKind = lsp.CompletionItemKind.Enum
 			break;
 		case 14:
-			completionKind = CompletionItemKind.Keyword
+			completionKind = lsp.CompletionItemKind.Keyword
 			break;
 		case 15:
-			completionKind = CompletionItemKind.Snippet
+			completionKind = lsp.CompletionItemKind.Snippet
 			break;
 		case 16:
-			completionKind = CompletionItemKind.Color
+			completionKind = lsp.CompletionItemKind.Color
 			break;
 		case 17:
-			completionKind = CompletionItemKind.File
+			completionKind = lsp.CompletionItemKind.File
 			break;
 		case 18:
-			completionKind = CompletionItemKind.Reference
+			completionKind = lsp.CompletionItemKind.Reference
 			break;
 		case 19:
-			completionKind = CompletionItemKind.Folder
+			completionKind = lsp.CompletionItemKind.Folder
 			break;
 		case 20:
-			completionKind = CompletionItemKind.EnumMember
+			completionKind = lsp.CompletionItemKind.EnumMember
 			break;
 		case 21:
-			completionKind = CompletionItemKind.Constant
+			completionKind = lsp.CompletionItemKind.Constant
 			break;
 		case 22:
-			completionKind = CompletionItemKind.Struct
+			completionKind = lsp.CompletionItemKind.Struct
 			break;
 		case 23:
-			completionKind = CompletionItemKind.Event
+			completionKind = lsp.CompletionItemKind.Event
 			break;
 		case 24:
-			completionKind = CompletionItemKind.Operator
+			completionKind = lsp.CompletionItemKind.Operator
 			break;
 		case 25:
-			completionKind = CompletionItemKind.TypeParameter
+			completionKind = lsp.CompletionItemKind.TypeParameter
 			break;
 		default:
 			break;
@@ -211,7 +207,7 @@ export function findCompletionItemKind(value: number): lsp.CompletionItemKind{
 	return completionKind
 }
 
-export function decideCompletionMethods(_textDocumentParams: CompletionParams, latestChanges: TextDocument): lsp.CompletionItem[] {
+export function decideCompletionMethods(_textDocumentParams: lsp.CompletionParams, latestChanges: lsp.TextDocument): lsp.CompletionItem[] {
 	let resultantCompletionItem: lsp.CompletionItem[] = []
 	let lineStartMethodBody: number[] = []
 	let lineEndMethodBody: number[] = []
@@ -227,13 +223,13 @@ export function decideCompletionMethods(_textDocumentParams: CompletionParams, l
 
 	tokenArray.forEach(function(node, index){
 
-		if(node[1] instanceof BlockContext && node[0].text == `{`) {
+		if(node[1] instanceof javaParser.BlockContext && node[0].text == `{`) {
 			lineStartMethodBody[_methodCounter] = node[1]._start.line
 			lineEndMethodBody[_methodCounter] = node[1]._stop!.line
 			_methodCounter += 1
 		}
 
-		if(node[1] instanceof TypeTypeOrVoidContext || node[1] instanceof PrimitiveTypeContext) {
+		if(node[1] instanceof javaParser.TypeTypeOrVoidContext || node[1] instanceof javaParser.PrimitiveTypeContext) {
 			avoidLineAuto[_avoidCounter] = node[1]._start.line
 			_avoidCounter += 1
 		}
@@ -241,7 +237,7 @@ export function decideCompletionMethods(_textDocumentParams: CompletionParams, l
 	})
 
 	tokenArray.forEach(function(node, index){
-		if(node[1] instanceof ClassOrInterfaceTypeContext && tokenArray[index+1][1] instanceof VariableDeclaratorIdContext){
+		if(node[1] instanceof javaParser.ClassOrInterfaceTypeContext && tokenArray[index+1][1] instanceof javaParser.VariableDeclaratorIdContext){
 			model.variableDeclarationContext[_classNameCounter] = [node[0], tokenArray[index+1][1]]
 			_classNameCounter += 1
 		}

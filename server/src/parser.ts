@@ -1,13 +1,17 @@
+import * as log from './scripts/syslogs'
 import { parse } from 'java-ast'
 import { ParseTree } from 'antlr4ts/tree/ParseTree'
-import * as diagnostics from './diagnostics';
-import { TextDocument } from 'vscode-languageserver';
-import * as pStandards from './grammer/terms/preprocessingsnippets'
-import * as log from './scripts/syslogs'
+
 const childProcess = require('child_process');
 const fs = require('fs')
 
-export function parseAST(processedText: string, textDocument: TextDocument) : [ParseTree, ParseTree][] {
+/**
+ * Parses code to create a AST
+ * 
+ * @param processedText code to generate a parsetree from
+ * @returns Parse tree
+ */
+export function parseAST(processedText: string) : [ParseTree, ParseTree][] {
 	let ast = parse(processedText)
 	let tokenArray: [ParseTree, ParseTree][] = new Array();
 	let _tokenCounter = -1
