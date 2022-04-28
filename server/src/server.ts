@@ -18,14 +18,14 @@ import {
 	FileChangeType
 } from 'vscode-languageserver';
 
-import * as completion from './features/completion'
-import * as diagnostics from './features/diagnostics'
-import * as hover from './features/hover'
+import * as completion from './completion'
+import * as diagnostics from './diagnostics'
+import * as hover from './hover'
 import * as log from './scripts/syslogs'
-import * as definition from './features/definition'
-import * as lens from './features/lens'
-import * as reference from './features/references'
-import * as sketch from './sketch/sketch';
+import * as definition from './definition'
+import * as lens from './lens'
+import * as reference from './references'
+import * as sketch from './sketch';
 
 export let connection = createConnection(ProposedFeatures.all);
 

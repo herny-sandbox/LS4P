@@ -1,8 +1,8 @@
-import * as log from '../scripts/syslogs'
+import * as log from './scripts/syslogs'
 import * as lsp from 'vscode-languageserver';
-import * as model from '../grammer/terms/model'
-import * as sketch from '../sketch/sketch'
-import * as astUtils from '../astutils'
+import * as model from './grammer/terms/model'
+import * as sketch from './sketch'
+import * as astUtils from './astutils'
 import * as javaParser from 'java-ast/dist/parser/JavaParser';
 const fs = require('fs');
 const { JavaClassFileReader } = require('java-class-tools')

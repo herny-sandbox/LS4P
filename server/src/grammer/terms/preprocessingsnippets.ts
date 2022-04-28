@@ -1,7 +1,7 @@
+import * as preprocessing from '../../preprocessing'
 export const classChecker = `class`
 export const newChecker = `new`
 export let defaultClassName = "ProcessingDefault"
-
 const defaultLib = `PApplet`
 // Dynamic Imports should take format - `import __.__.__;`
 const dynamicImports = `import processing.core.*\;

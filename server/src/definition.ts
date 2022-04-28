@@ -1,6 +1,6 @@
-import * as server from '../server'
-import * as sketch from '../sketch/sketch'
-import * as javaSpecific from '../grammer/terms/javaspecific'
+import * as server from './server'
+import * as sketch from './sketch'
+import * as javaSpecific from './grammer/terms/javaspecific'
 import { Definition } from 'vscode-languageserver'
 import { ClassDeclarationContext, VariableDeclaratorIdContext, MethodDeclarationContext } from 'java-ast/dist/parser/JavaParser';
 
