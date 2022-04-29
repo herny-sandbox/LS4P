@@ -160,7 +160,7 @@ ${settingsContext}
 
 function preprocessingFooter(): string{
 	let generatedFooter: string = `
-public static void main(string[] args) {
+public static void main(String[] args) {
 PApplet.main("${defaultClassName}");
 }`
 	return generatedFooter
