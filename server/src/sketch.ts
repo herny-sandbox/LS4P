@@ -15,7 +15,7 @@ let initialized = false;
 
 let unProcessedCode : string = ''
 let processedCode: string = ''
-let CompileErrors: CompileError[]
+let compileErrors: CompileError[]
 let tokenArray: [ParseTree, ParseTree][];
 
 /** 
@@ -312,7 +312,7 @@ export function getTokenArray() : [ParseTree, ParseTree][]{
  * @returns Array of all compile errors
  */
 export function getCompileErrors() : CompileError[]{
-	return CompileErrors
+	return compileErrors
 }
 
 /**
@@ -368,7 +368,7 @@ function compile(processedCode: string){
 function cookCompilationDiagnostics(pwd: string){
 	// If one error is fixed it's not popped from stack - check
 	try {  
-		CompileErrors = new Array()
+		compileErrors = new Array()
 		let data = fs.readFileSync(`${__dirname}/compile/error.txt`, 'utf-8')
 		if(data == ''){
 			// No Error on Compilation
@@ -408,7 +408,7 @@ function cookCompilationDiagnostics(pwd: string){
 							localIndex+=1
 						}
 					}
-					CompileErrors.push({lineNumber : errorLineNumber, message: errorMessage})
+					compileErrors.push({lineNumber : errorLineNumber, message: errorMessage})
 				}
 			})
 			// Place a break point
