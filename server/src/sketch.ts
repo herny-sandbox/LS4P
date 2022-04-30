@@ -368,6 +368,7 @@ function compile(processedCode: string){
 function cookCompilationDiagnostics(pwd: string){
 	// If one error is fixed it's not popped from stack - check
 	try {  
+		CompileErrors = new Array()
 		let data = fs.readFileSync(`${__dirname}/compile/error.txt`, 'utf-8')
 		if(data == ''){
 			// No Error on Compilation
@@ -376,7 +377,6 @@ function cookCompilationDiagnostics(pwd: string){
 			// Compilation warning
 			log.writeLog(`Compilation warning encountered`)
 		} else {
-			CompileErrors = new Array()
 			let tempSplit = data.split('\n')
 			
 			tempSplit.forEach(function(line:string, index: number){
