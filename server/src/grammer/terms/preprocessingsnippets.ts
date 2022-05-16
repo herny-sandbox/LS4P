@@ -9,14 +9,13 @@ import processing.awt.*\;
 import processing.data.*\;
 import processing.event.*\;
 import processing.opengl.*\;
-import processing.javafx.*\;
 import java.util.*\;
 import java.io.*\;
 import java.lang.*\;
 `
 
-export const reduceLineDefaultBehaviour = 14 
-export const reduceLineMethodBehaviour = 13 
+export const reduceLineDefaultBehaviour = 13
+export const reduceLineMethodBehaviour = 12
 
 // remove generated code from token stack
 export let removeGeneratedToken = [
