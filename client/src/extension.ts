@@ -45,13 +45,13 @@ export function activate(context: vscode.ExtensionContext) {
 
 	let clientPath = context.asAbsolutePath(path.join('client'))
 	let serverPath = context.asAbsolutePath(path.join('server'))
+	let jrePath = context.asAbsolutePath(path.join('jre', 'bin'))
 
 	let serverCompilePath = path.join(serverPath, 'out', 'compile')
 	let clientSketchPath = path.join(clientPath, 'out', 'class')
-	let processingCoreFile = path.join(serverPath, 'src', 'processing', 'jar', 'core.jar')
 
 	const sketchRunner = SketchRunner.getInstance();
-	sketchRunner.initilize(processingCoreFile, clientSketchPath, serverCompilePath)
+	sketchRunner.initilize(jrePath, clientSketchPath, serverCompilePath)
 
 	let sketchRunnerDisp = vscode.commands.registerCommand("extension.processing.runSketch", () => sketchRunner.runSketch())
 	let sketchStopperDisp = vscode.commands.registerCommand("extension.processing.stopSketch", () => sketchRunner.stopSketch())
