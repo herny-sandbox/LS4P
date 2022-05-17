@@ -69,7 +69,7 @@ export  function performPreProcessing(unProcessedCode: string): string{
 		setBehaviours(true,false)
 		log.write(`SetupDraw Behaviour`, log.severity.BEHAVOIR)
 	}
-	log.write("PreProcessing complete!", log.severity.INFO)
+	log.write("PreProcessing complete!", log.severity.SUCCES)
 	return processedCode
 }
 

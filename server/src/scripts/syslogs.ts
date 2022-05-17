@@ -3,8 +3,9 @@ const logPath = `${__dirname.substring(0, __dirname.length - 8)}/logs/syslogs.lo
 export enum severity {
 	NONE,
 	INFO,
-	EVENT,
 	BEHAVOIR,
+	EVENT,
+	SUCCES,
 	WARNING,
 	ERROR
 }
@@ -36,8 +37,14 @@ export async function write(message: string | unknown, logLevel : severity = sev
 	
 	exec(`echo ${logEntry} >> ${logPath}`)
 
-	if (logLevel > 4) {
+	if (logLevel == 3 || logLevel == 4 ) {
 		console.log(`${logEntry}`)
+	}
+	else if (logLevel == 5) {
+		console.warn(`${logEntry}`)
+	}
+	else if (logLevel == 6) {
+		console.error(`${logEntry}`)
 	}
 }
 
@@ -49,11 +56,14 @@ function severityToString(logLevel : severity) : string {
 		case severity.INFO:
 			return "INFO"
 
-		case severity.EVENT:
-			return "EVENT"
-
 		case severity.BEHAVOIR:
 			return "BEHAVOIR"
+		
+		case severity.EVENT:
+			return "EVENT"
+		
+		case severity.SUCCES:
+			return "SUCCES"
 
 		case severity.WARNING:
 			return "WARNING"

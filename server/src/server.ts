@@ -70,7 +70,7 @@ connection.onInitialize((params: InitializeParams) => {
 });
 
 connection.onInitialized(() => {
-	log.write(`Server initialized`, log.severity.INFO)
+	log.write(`Server initialized`, log.severity.SUCCES)
 	if (hasConfigurationCapability) {
 		connection.client.register(DidChangeConfigurationNotification.type, undefined);
 	}

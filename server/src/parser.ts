@@ -20,8 +20,7 @@ export function parseAST(processedText: string) : [ParseTree, ParseTree][] {
 		extractTokens(ast.children![i])
 	}
 
-	log.writeLog("Break point here to obtain AST")
-	log.writeLog("Parse Tree construction Successfully")
+	log.write("Parse Tree constructed", log.severity.SUCCES)
 	return tokenArray
 
 	function extractTokens(gotOne: ParseTree){

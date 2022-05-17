@@ -349,7 +349,7 @@ function compile(processedCode: string){
 	// This suites for raw java case - should handle for default and setupDraw case
 	try{
 		fs.writeFileSync(__dirname+"/compile/"+pStandards.defaultClassName+".java", processedCode)
-		log.write(`Java File creation successful`, log.severity.INFO)
+		log.write(`Java File created`, log.severity.SUCCES)
 	} catch(e) {
 		log.write(`Java File Creation failed`, log.severity.ERROR)
 		log.write(e, log.severity.ERROR)
@@ -358,7 +358,7 @@ function compile(processedCode: string){
 	try{
 		childProcess.execSync(`${jrePath}/java --module compilerModule/com.compiler ${__dirname}/compile/${pStandards.defaultClassName}.java > ${__dirname}/compile/error.txt`, 
 		{ stdio:[ 'inherit', 'pipe', 'pipe' ], windowsHide : true})
-		log.write(`Java File compilation successful`, log.severity.INFO)
+		log.write(`Java File compiled`, log.severity.SUCCES)
 	} catch(e) {
 		log.write(`Java file compilation failed`, log.severity.ERROR)
 		log.write(e, log.severity.ERROR)
