@@ -28,11 +28,11 @@ export class SketchRunner implements vscode.Disposable {
 
 	private static _sketchrunner: SketchRunner = null
 	private _child: ChildProcess;
+	private _jrePath: string;
 	private _workDir: string;
 	private _compilePath: string;
 	private _outputChannel: vscode.OutputChannel
 	private _bufferedOutputChannel: BufferedOutputChannel;
-	private _cpArg : string
 
 	/**
 	 * Setup the arguments for the childproces executing the sketch
@@ -41,19 +41,13 @@ export class SketchRunner implements vscode.Disposable {
 	 * @param clientSketchPath Client side path to the compiled version of the sketch
 	 * @param compilePath Server side path to the compiled version of the sketch
 	 */
-	public initilize(processingCoreFile: string, clientSketchPath: string, compilePath: string){
+	public initilize(jrePath: string, clientSketchPath: string, compilePath: string){
 		this._workDir = clientSketchPath
 		this._compilePath = compilePath
 		this._outputChannel = vscode.window.createOutputChannel(SketchRunner.NAME);
         this._bufferedOutputChannel = new BufferedOutputChannel(this._outputChannel.append, 300);
 
-		//The termination of the class path argument is OS dependend
-		if (process.platform === 'win32') {
-			this._cpArg = `${processingCoreFile};`
-		}	
-		else {
-			this._cpArg = `${processingCoreFile}:`
-		}
+		this._jrePath = jrePath
 	}
 
 	public get initialized(): boolean {
@@ -132,8 +126,8 @@ export class SketchRunner implements vscode.Disposable {
 
 			// Setting the cwd in the child-process directly prevents issues where
 			// the sketch and the client are not on the same drive.
-			this._child = spawn(`java`,
-				["-cp", `${this._cpArg}`, "ProcessingDefault"], {cwd: this._workDir})
+			this._child = spawn(`${this._jrePath}/java`,
+				["ProcessingDefault"], {cwd: this._workDir})
 	
 			this._child.on("error", (err) => {
 				reject(err)

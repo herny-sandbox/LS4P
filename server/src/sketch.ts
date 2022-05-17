@@ -17,6 +17,7 @@ let unProcessedCode : string = ''
 let processedCode: string = ''
 let compileErrors: CompileError[]
 let tokenArray: [ParseTree, ParseTree][];
+let jrePath:string = ''
 
 /** 
  * Map which maps the line in the java file to the line in the .pde file (tab). 
@@ -58,6 +59,7 @@ export function initialize(textDocument: lsp.TextDocument) {
 		path : path,
 		name : name
 	}
+	jrePath = `${__dirname.substring(0,__dirname.length-11)}/jre/bin`
 
 	try {
 		let mainFileName = sketchInfo.name+'.pde'
@@ -112,7 +114,8 @@ export function build(textDocument: lsp.TextDocument){
 	// diagnostics.cookDiagnosticsReport(processedText)
 	let pwd
 	if (process.platform === 'win32') {
-		pwd =`${__dirname}\\compile\\${pStandards.defaultClassName}.java`
+		let cwd = __dirname.replace(/(\\)/g, "/")
+		pwd =`${cwd}/compile/${pStandards.defaultClassName}.java`
 	}else {
 		pwd = `${__dirname}/compile/${pStandards.defaultClassName}.java`
 	}
@@ -352,10 +355,11 @@ function compile(processedCode: string){
 	}
 
 	try{
-		childProcess.execSync(`javac -classpath ${__dirname.substring(0,__dirname.length-11)}/pcore/ ${__dirname}/compile/${pStandards.defaultClassName}.java -Xlint:none -Xstdout ${__dirname}/compile/error.txt`,
-			{ stdio:[ 'inherit', 'pipe', 'pipe' ], windowsHide : true})
+		childProcess.execSync(`${jrePath}/java --module compilerModule/com.compiler ${__dirname}/compile/${pStandards.defaultClassName}.java > ${__dirname}/compile/error.txt`, 
+		{ stdio:[ 'inherit', 'pipe', 'pipe' ], windowsHide : true})
 		log.writeLog(`Java File compilation successful`)
 	} catch(e) {
+		console.log(e)
 		log.writeLog(`[[ERR]] - Error in Java File Compilation`)
 	}
 }
@@ -387,19 +391,22 @@ function cookCompilationErrors(pwd: string){
 					// Shifts the error colon by one in the array
 					let splitIndex
 					if(process.platform === 'win32') {
-						splitIndex = 2
+						splitIndex = 3
 					}
 					else {
-						splitIndex = 1
+						splitIndex = 2
 					}
 
 					// Handling line number based on current Behaviour - since preprocessing is done
-					let errorLineNumber = +innerSplit[splitIndex] - getLineOffset()
+					let errorLineNumber = +innerSplit[splitIndex].replace("L", "") - getLineOffset()
 
 					let localIndex = index + 1
-					let errorMessage = line.split("error:")[1]
+					let errorMessage = ""
 					while(true){
-						if(tempSplit[localIndex].includes(`${pwd}`) || 
+						if (localIndex >= tempSplit.length) {
+							break
+						}
+						else if(tempSplit[localIndex].includes(`${pwd}`) || 
 							tempSplit[localIndex].includes(`error`) ||
 							tempSplit[localIndex].includes(`errors`)) {
 							break
