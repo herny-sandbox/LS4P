@@ -39,7 +39,8 @@ try{
 	})
 	_insightCounter = 0
 } catch(e) {
-	log.writeLog(`Error fetching Insights`)
+	log.write(`During fetching Insights`, log.severity.ERROR)
+	log.write(e, log.severity.ERROR)
 }
 
 export function scheduleHover(params: lsp.TextDocumentPositionParams, errorLine: number = -10): lsp.Hover | null {

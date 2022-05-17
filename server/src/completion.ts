@@ -320,7 +320,7 @@ export function decideCompletionMethods(_textDocumentParams: lsp.CompletionParam
 	model.clearVaribaleDeclarationContext()
 	model.clearLocalClassDeclarators()
 
-	log.writeLog(`AutoCompletion invoked`)
+	log.write(`AutoCompletion invoked`, log.severity.EVENT)
 
 	return resultantCompletionItem
 }

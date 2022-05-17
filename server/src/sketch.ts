@@ -68,8 +68,8 @@ export function initialize(textDocument: lsp.TextDocument) {
 		contents.set(mainFileName, mainFileContents)
 	}
 	catch (e) {
-		log.writeLog("Something went wrong while loading the main file")
-		log.writeLog(e)
+		log.write("Something went wrong while loading the main file", log.severity.ERROR)
+		log.write(e, log.severity.ERROR)
 		return false
 	}
 
@@ -83,8 +83,8 @@ export function initialize(textDocument: lsp.TextDocument) {
 		});
 	}
 	catch(e) {
-		log.writeLog("Some thing went wrong while loading the other files")
-		log.writeLog(e)
+		log.write("Some thing went wrong while loading the other files", log.severity.ERROR)
+		log.write(e, log.severity.ERROR)
 		return false
 	}
 	
@@ -349,18 +349,19 @@ function compile(processedCode: string){
 	// This suites for raw java case - should handle for default and setupDraw case
 	try{
 		fs.writeFileSync(__dirname+"/compile/"+pStandards.defaultClassName+".java", processedCode)
-		log.writeLog(`Java File creation successful`)
+		log.write(`Java File creation successful`, log.severity.INFO)
 	} catch(e) {
-		log.writeLog(`[[ERR]] - Error in Java File Creation`)
+		log.write(`Java File Creation failed`, log.severity.ERROR)
+		log.write(e, log.severity.ERROR)
 	}
 
 	try{
 		childProcess.execSync(`${jrePath}/java --module compilerModule/com.compiler ${__dirname}/compile/${pStandards.defaultClassName}.java > ${__dirname}/compile/error.txt`, 
 		{ stdio:[ 'inherit', 'pipe', 'pipe' ], windowsHide : true})
-		log.writeLog(`Java File compilation successful`)
+		log.write(`Java File compilation successful`, log.severity.INFO)
 	} catch(e) {
-		log.writeLog(e)
-		log.writeLog(`[[ERR]] - Error in Java File Compilation`)
+		log.write(`Java file compilation failed`, log.severity.ERROR)
+		log.write(e, log.severity.ERROR)
 	}
 }
 
@@ -376,10 +377,10 @@ function cookCompilationErrors(pwd: string){
 		let data = fs.readFileSync(`${__dirname}/compile/error.txt`, 'utf-8')
 		if(data == ''){
 			// No Error on Compilation
-			log.writeLog(`No error on Compilation`)
+			log.write(`No error on compilation`, log.severity.INFO)
 		} else if(data.split(`:`)[0] == `Note`){
 			// Compilation warning
-			log.writeLog(`Compilation warning encountered`)
+			log.write(`Compilation warning encountered`, log.severity.WARNING)
 		} else {
 			let tempSplit = data.split('\n')
 			
@@ -419,10 +420,11 @@ function cookCompilationErrors(pwd: string){
 				}
 			})
 			// Place a break point
-			log.writeLog(`[[ERR]] - Compiler throws errors check \`server\/out\/compile\/error\.txt\``)
+			log.write(`Compilation errors encountered`, log.severity.INFO)
 		}
 	} catch(e) {
-		log.writeLog(`[[ERR]] - Problem with cooking diagnostics`)
+		log.write(`Problem with cooking diagnostics`, log.severity.ERROR)
+		log.write(e, log.severity.ERROR)
 	}
 }
 
@@ -450,11 +452,12 @@ function cookTransformDict(fileName: string, fileContents: string, bigCount: num
 			bigCount ++
 			lineCount ++
 		})
-		log.writeLog(`[INFO] Transform dictonary created for : ${fileName}`)
+		log.write(`Transform dictonary created for : ${fileName}`, log.severity.INFO)
 	}
 	catch (e)
 	{
-		log.writeLog(`[ERROR] ${e}`)
+		log.write(`Tranfsomation dictonary creation failed`, log.severity.ERROR)
+		log.write(e, log.severity.ERROR)
 	}
 
 	return bigCount;

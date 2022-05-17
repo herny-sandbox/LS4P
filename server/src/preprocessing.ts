@@ -63,13 +63,13 @@ export  function performPreProcessing(unProcessedCode: string): string{
 	if(higherOrderMethods.length > 0) {
 		processedCode = pStandards.methodBehaviour(pStandards.settingsRenderPipeline(unProcessedCode))
 		setBehaviours(false,true)
-		log.writeLog(`[[BEHAVIOUR]] - Method Behaviour`)
+		log.write(`Method Behaviour`, log.severity.BEHAVOIR)
 	} else {
 		processedCode = pStandards.setupBehaviour(pStandards.settingsRenderPipeline(unProcessedCode))
 		setBehaviours(true,false)
-		log.writeLog(`[[BEHAVIOUR]] - SetupDraw Behaviour`)
+		log.write(`SetupDraw Behaviour`, log.severity.BEHAVOIR)
 	}
-	log.writeLog("PreProcessing complete.!")
+	log.write("PreProcessing complete!", log.severity.INFO)
 	return processedCode
 }
 
