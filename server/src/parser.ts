@@ -20,7 +20,7 @@ export function parseAST(processedText: string) : [ParseTree, ParseTree][] {
 		extractTokens(ast.children![i])
 	}
 
-	console.log("Break point here to obtain AST")
+	log.writeLog("Break point here to obtain AST")
 	log.writeLog("Parse Tree construction Successfully")
 	return tokenArray
 

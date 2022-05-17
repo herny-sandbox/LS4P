@@ -68,8 +68,8 @@ export function initialize(textDocument: lsp.TextDocument) {
 		contents.set(mainFileName, mainFileContents)
 	}
 	catch (e) {
-		console.log("Something went wrong while loading the main file")
-		console.log(e)
+		log.writeLog("Something went wrong while loading the main file")
+		log.writeLog(e)
 		return false
 	}
 
@@ -83,8 +83,8 @@ export function initialize(textDocument: lsp.TextDocument) {
 		});
 	}
 	catch(e) {
-		console.log("Some thing went wrong while loading the other files")
-		console.log(e)
+		log.writeLog("Some thing went wrong while loading the other files")
+		log.writeLog(e)
 		return false
 	}
 	
@@ -359,7 +359,7 @@ function compile(processedCode: string){
 		{ stdio:[ 'inherit', 'pipe', 'pipe' ], windowsHide : true})
 		log.writeLog(`Java File compilation successful`)
 	} catch(e) {
-		console.log(e)
+		log.writeLog(e)
 		log.writeLog(`[[ERR]] - Error in Java File Compilation`)
 	}
 }
@@ -454,7 +454,7 @@ function cookTransformDict(fileName: string, fileContents: string, bigCount: num
 	}
 	catch (e)
 	{
-		console.log(`[ERROR] ${e}`)
+		log.writeLog(`[ERROR] ${e}`)
 	}
 
 	return bigCount;

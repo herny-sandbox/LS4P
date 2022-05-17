@@ -76,7 +76,7 @@ connection.onInitialized(() => {
 	}
 	if (hasWorkspaceFolderCapability) {
 		connection.workspace.onDidChangeWorkspaceFolders(_event => {
-			connection.console.log('Workspace folder change event received.');
+			log.writeLog('Workspace folder change event received.');
 		});
 	}
 });
@@ -156,7 +156,7 @@ function sleep(ms: number) {
 }
 
 connection.onDidChangeWatchedFiles(_change => {
-	connection.console.log('We received an file change event');
+	log.writeLog('We received an file change event');
 
 	for (let i = 0; i < _change.changes.length; i++) {
 		const change = _change.changes[i];
