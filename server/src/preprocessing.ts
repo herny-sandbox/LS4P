@@ -1,6 +1,6 @@
 import * as log from './scripts/syslogs'
 import * as pStandards from './grammer/terms/preprocessingsnippets'
-import { parse } from 'java-ast'
+import { parse } from './parser'
 import { ParseTree } from 'antlr4ts/tree/ParseTree'
 import { MethodDeclarationContext } from 'java-ast/dist/parser/JavaParser';
 
@@ -63,13 +63,13 @@ export  function performPreProcessing(unProcessedCode: string): string{
 	if(higherOrderMethods.length > 0) {
 		processedCode = pStandards.methodBehaviour(pStandards.settingsRenderPipeline(unProcessedCode))
 		setBehaviours(false,true)
-		log.writeLog(`[[BEHAVIOUR]] - Method Behaviour`)
+		log.write(`Method Behaviour`, log.severity.BEHAVOIR)
 	} else {
 		processedCode = pStandards.setupBehaviour(pStandards.settingsRenderPipeline(unProcessedCode))
 		setBehaviours(true,false)
-		log.writeLog(`[[BEHAVIOUR]] - SetupDraw Behaviour`)
+		log.write(`SetupDraw Behaviour`, log.severity.BEHAVOIR)
 	}
-	console.log("PreProcessing complete.!")
+	log.write("PreProcessing complete!", log.severity.SUCCES)
 	return processedCode
 }
 

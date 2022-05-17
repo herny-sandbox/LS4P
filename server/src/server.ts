@@ -70,13 +70,13 @@ connection.onInitialize((params: InitializeParams) => {
 });
 
 connection.onInitialized(() => {
-	log.writeLog(`Server initialized`)
+	log.write(`Server initialized`, log.severity.SUCCES)
 	if (hasConfigurationCapability) {
 		connection.client.register(DidChangeConfigurationNotification.type, undefined);
 	}
 	if (hasWorkspaceFolderCapability) {
 		connection.workspace.onDidChangeWorkspaceFolders(_event => {
-			connection.console.log('Workspace folder change event received.');
+			log.write('Workspace folder change event received.', log.severity.EVENT);
 		});
 	}
 });
@@ -91,7 +91,7 @@ let globalSettings: ExampleSettings = defaultSettings;
 let documentSettings: Map<string, Thenable<ExampleSettings>> = new Map();
 
 connection.onDidChangeConfiguration(change => {
-	log.writeLog(`Config change event occured`)
+	log.write(`Config change event occured`, log.severity.EVENT)
 	if (hasConfigurationCapability) {
 		documentSettings.clear();
 	} else {
@@ -121,21 +121,21 @@ export function getDocumentSettings(resource: string): Thenable<ExampleSettings>
 export let latestChangesInTextDoc: TextDocument
 
 documents.onDidOpen(event => {
-	log.writeLog(`File Open / Tab switching event occured`)
+	log.write(`File Open / Tab switching occured`, log.severity.EVENT)
 	latestChangesInTextDoc = event.document
 	sketch.build(event.document)
 	diagnostics.checkForRealtimeDiagnostics(event.document)
 });
 
 documents.onDidClose(e => {
-	log.writeLog(`File Close event occured`)
+	log.write(`File Closed`, log.severity.EVENT)
 	documentSettings.delete(e.document.uri);
 });
 
 let bufferInProgress = false
 
 documents.onDidChangeContent(change => {
-	log.writeLog(`Outside -> Content change event occured`)
+	log.write(`Content changed`, log.severity.EVENT)
 	latestChangesInTextDoc = change.document
 	if(!bufferInProgress)
 		initPreProcessDiagnostics()
@@ -145,7 +145,6 @@ documents.onDidChangeContent(change => {
 async function initPreProcessDiagnostics() {
 	bufferInProgress = true
 	await sleep(300);
-	log.writeLog(`Inside -> Content change event occured`)
 	sketch.build(latestChangesInTextDoc)
 	diagnostics.checkForRealtimeDiagnostics(latestChangesInTextDoc)
 	bufferInProgress = false
@@ -156,7 +155,7 @@ function sleep(ms: number) {
 }
 
 connection.onDidChangeWatchedFiles(_change => {
-	connection.console.log('We received an file change event');
+	log.write('Files in workspace have changed', log.severity.EVENT);
 
 	for (let i = 0; i < _change.changes.length; i++) {
 		const change = _change.changes[i];
@@ -235,7 +234,7 @@ connection.onHover(
 				hoverResult = hover.scheduleHover(params, errorLine)
 			})
 		}
-		log.writeLog(`Hover Invoked`)
+		log.write(`Hover Invoked`, log.severity.EVENT)
 		return hoverResult
 	}
 )

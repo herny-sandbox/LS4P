@@ -1,9 +1,11 @@
 import * as log from './scripts/syslogs'
-import { parse } from 'java-ast'
 import { ParseTree } from 'antlr4ts/tree/ParseTree'
 
 const childProcess = require('child_process');
 const fs = require('fs')
+const antlr4ts_1 = require("antlr4ts");
+const JavaLexer_1 = require("java-ast/dist/parser/JavaLexer");
+const JavaParser_1 = require("java-ast/dist/parser/JavaParser");
 
 /**
  * Parses code to create a AST
@@ -20,8 +22,7 @@ export function parseAST(processedText: string) : [ParseTree, ParseTree][] {
 		extractTokens(ast.children![i])
 	}
 
-	console.log("Break point here to obtain AST")
-	log.writeLog("Parse Tree construction Successfully")
+	log.write("Parse Tree constructed", log.severity.SUCCES)
 	return tokenArray
 
 	function extractTokens(gotOne: ParseTree){
@@ -69,4 +70,51 @@ export function lineMap(line: string) : [string, number, number][]{
 			currentLineASTExtract(gotOne.getChild(j))
 		}
 	}
+}
+
+/**
+ * "Overide" function for java-ast parser. Mutes the false errors during parsing.
+ * 
+ * @param source string to be parsed
+ * @returns Compilation unit
+ */
+export function parse(source : string) {
+	let consoleOriginal = console
+	try {
+	console = redirectConsole(console)
+    const chars = new antlr4ts_1.ANTLRInputStream(source);
+    const lexer = new JavaLexer_1.JavaLexer(chars);
+    const tokens = new antlr4ts_1.CommonTokenStream(lexer);
+    const parser = new JavaParser_1.JavaParser(tokens);
+	const compilationUnit = parser.compilationUnit();
+	console = consoleOriginal
+    return compilationUnit
+
+	}
+	catch(e){
+		console = consoleOriginal
+		log.write("Parsing failed", log.severity.ERROR)
+		log.write(e, log.severity.ERROR)
+	}
+}
+
+/**
+ * Redirects console output. Is needed to have no output during parsing @see parse 
+ * Not the niced thing but the only way i could think of. 
+ * An issue (#44) is opend to clean this up
+ * 
+ * @param obj console instance
+ * @returns mutated console
+ */
+function redirectConsole(obj : any)
+{
+    return new Proxy(obj, {
+        get(target, methodName, receiver) {
+            // get origin method
+            const originMethod = target[methodName];
+
+            return function(...args : any) {
+			};
+        }
+    });
 }
