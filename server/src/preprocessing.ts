@@ -1,11 +1,8 @@
 import * as log from './scripts/syslogs'
 import * as pStandards from './grammer/terms/preprocessingsnippets'
-import { parse } from './parser'
-import { ParseTree } from 'antlr4ts/tree/ParseTree'
+import * as parser from './parser'
 import { MethodDeclarationContext } from 'java-ast/dist/parser/JavaParser';
 
-let unProcessedTokenArray : [ParseTree, ParseTree][] = new Array();
-let _unProcessedTokenCounter = -1
 let behaviourType : Behaviour
 
 export interface Behaviour{
@@ -23,22 +20,12 @@ export  function performPreProcessing(unProcessedCode: string): string{
 	let unProcessedClassMethodNames : string[] = []
 	let _unProcessedClassMethodCounter = 0
 
-	// let fileName = textDocument.uri.split('/')
-	// pStandards.setDefaultClassName(`${fileName[fileName.length-1].substring(0,fileName[fileName.length-1].length-4)}`)
-
 	// TODO: Handle preprocessing Properly: - Done
 	// case 1 -> class and a method inside it without a method in the plain sketch
 	// case 2 -> class and a method inside it with a method in the plain sketch
 	// This is done by constructing parse tree even before preprocessing to find whether the method is inside a class or not
 
-	let unProcessedWorkSpaceChildren = parse(unProcessedCode)
-	unProcessedTokenArray = []
-	_unProcessedTokenCounter = -1
-
-	for(let i = 0; i < unProcessedWorkSpaceChildren.childCount; i++){
-		extractTokens(unProcessedWorkSpaceChildren.children![i])
-	}
-
+	let unProcessedTokenArray = parser.parseAST(unProcessedCode)
 	unProcessedTokenArray.forEach(function(node,index){
 		if(node[1] instanceof MethodDeclarationContext){
 			unProcessedClassMethodNames[_unProcessedClassMethodCounter] = node[0].text
@@ -79,16 +66,6 @@ export  function performPreProcessing(unProcessedCode: string): string{
  */
 export function getBehavoirType() : Behaviour {
 	return behaviourType
-}
-
-function extractTokens(gotOne: ParseTree){
-	for(let j = 0; j < gotOne.childCount; j++){
-		if(gotOne.getChild(j).childCount == 0){
-			_unProcessedTokenCounter +=1
-			unProcessedTokenArray[_unProcessedTokenCounter] = [gotOne.getChild(j),gotOne]
-		}
-		extractTokens(gotOne.getChild(j))
-	}
 }
 
 function setBehaviours(_b1:boolean,_b2: boolean){
