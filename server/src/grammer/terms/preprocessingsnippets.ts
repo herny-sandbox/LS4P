@@ -1,4 +1,5 @@
-import * as preprocessing from '../../preprocessing'
+import * as refactoring from '../../codeRefactoring'
+
 export const classChecker = `class`
 export const newChecker = `new`
 export let defaultClassName = "ProcessingDefault"
@@ -24,21 +25,17 @@ export let removeGeneratedToken = [
 	`args`
 ]
 
-const sizePattern = /(size)\([ ]*[0-9]+[ ]*\,[ ]*[0-9]+[ ]*\,*[ ]*[A-Z 0-9]{0,}[ ]*\)\;/
-const fullScreenPattern = /(fullScreen)\([ ]*[A-Z 0-9]{0,}[ ]*\,*[ ]*[0-9]*[ ]*\)\;/
-const smoothPattern = /(smooth)\([ ]*[0-9]+[ ]*\)\;/
-const noSmoothPatterns = /(noSmooth)\(\)\;/
-const ifelsePattern = /[ ]*(else)[ ]*(if)[ ]*\(/g
-const singleLineComment = /\/\/(.)*/g
-const multiLineCommentComponents = [
+export const sizePattern = /(size)\([ ]*[0-9]+[ ]*\,[ ]*[0-9]+[ ]*\,*[ ]*[A-Z 0-9]{0,}[ ]*\)\;/
+export const fullScreenPattern = /(fullScreen)\([ ]*[A-Z 0-9]{0,}[ ]*\,*[ ]*[0-9]*[ ]*\)\;/
+export const smoothPattern = /(smooth)\([ ]*[0-9]+[ ]*\)\;/
+export const noSmoothPatterns = /(noSmooth)\(\)\;/
+export const ifelsePattern = /[ ]*(else)[ ]*(if)[ ]*\(/g
+export const singleLineComment = /\/\/(.)*/g
+export const multiLineCommentComponents = [
 	/\/\*/g,
 	/\*\//g
 ]
 export const methodPattern = /[\w\<\>\[\]]+\s+(\w+) *\([^\)]*\) *(\{)/g
-
-let settingsContext = ""
-let isSettingsRequired = false
-let settingsSet = new Set()
 
 export function setDefaultClassName(className : string){
 	defaultClassName = className as string
@@ -73,86 +70,15 @@ ${preprocessingFooter()}
 	return processedText
 }
 
-// Handle size(), fullScreen(), smooth() & noSmooth()
-// Takes in Unprocessed Text and returns UnProcessed Text with the `settings` lines stripped out
-export function settingsRenderPipeline(unProcessedTest: string): string {
-	let recordLine = unProcessedTest.split(`\n`)
-	let newUnProcessedText = ``
-	// Fixes method scoping for methods unassigned access specifiers
-	recordLine.forEach(function(line,index){
-		if(methodPattern.exec(line) && !(line.includes(`public`) || line.includes(`private`) || line.includes(`protected`) || ifelsePattern.exec(line))){
-			recordLine[index] = `public ${line.trimLeft()}`
-		}
-	})
-	let startEncountered = false
-	recordLine.forEach(function(line, index){
-		if(multiLineCommentComponents[0].exec(line)){
-			startEncountered = true
-		}
-		if(startEncountered) {
-			recordLine[index] = ``
-			if(multiLineCommentComponents[1].exec(line)){
-				startEncountered = false
-			}
-		}
-		if(	sizePattern.exec(recordLine[index]) || 
-			fullScreenPattern.exec(recordLine[index]) || 
-			smoothPattern.exec(recordLine[index]) ||
-			noSmoothPatterns.exec(recordLine[index]) ){
-			moveToSettings(recordLine[index])
-		}
-	})
-	cookSettingsContext(unProcessedTest)
-	recordLine.forEach(function(line,index){
-		if(sizePattern.exec(line) || fullScreenPattern.exec(line) || smoothPattern.exec(line) || noSmoothPatterns.exec(line)){
-			recordLine[index] = ``
-		}
-		newUnProcessedText = `${newUnProcessedText}\n${recordLine[index]}`
-	})
-	newUnProcessedText = mapperPipeline(newUnProcessedText)
-	return newUnProcessedText
-}
-
-export function mapperPipeline(newUnProcessedText: string): string{
-	let localUnProcessedText = newUnProcessedText.replace(/([0-9]+\.[0-9]+)/g,'$1f')
-	conversionTuples.forEach(function(tuple){
-		localUnProcessedText = localUnProcessedText.replace(tuple[0],tuple[1])
-	})
-	localUnProcessedText = localUnProcessedText.replace(singleLineComment,``)
-	// localUnProcessedText = localUnProcessedText.replace(/[\']{1}/g,"\\\'")
-	// localUnProcessedText = localUnProcessedText.replace(/[\"]{1}/g,"\\\"")
-	return localUnProcessedText
-}
-
-export function disableSettingsBeforeParse() {
-	isSettingsRequired = false
-}
-
-// TODO - appends a new line for every character change after settings is initiated - fix it
-function moveToSettings(line: string) {
-	isSettingsRequired = true
-	settingsSet.add(line);
-}
-
-function cookSettingsContext(unProcessedTest: string){
-	settingsContext = ``
-	settingsSet.forEach(function(setting : any){
-		if(unProcessedTest.includes(setting)){
-			settingsContext = `${settingsContext}\n${setting}`
-		}
-	})
-}
-
 function settingsPreprocessing(): string{
 	let generateSettings: string = ""
-	if(isSettingsRequired){
+	if(refactoring.isSettingsRequired){
 		generateSettings = `
 public void settings(){
-${settingsContext}
+${refactoring.settingsContext}
 }`
 	} else {
-		settingsContext = ``
-		disableSettingsBeforeParse()
+		refactoring.disableSettingsBeforeParse()
 	}
 	return generateSettings
 }
@@ -165,7 +91,7 @@ PApplet.main("${defaultClassName}");
 	return generatedFooter
 }
 
-let conversionTuples : [RegExp,string][] = [
+export let conversionTuples : [RegExp,string][] = [
 	[/(float\()/g,"PApplet.parseFloat("],
 	[/(boolean\()/g,"PApplet.parseBoolean("],
 	[/(byte\()/g,"PApplet.parseByte("],

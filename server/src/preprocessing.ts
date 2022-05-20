@@ -1,5 +1,6 @@
 import * as log from './scripts/syslogs'
 import * as pStandards from './grammer/terms/preprocessingsnippets'
+import * as refactoring from './codeRefactoring'
 import * as parser from './parser'
 import { MethodDeclarationContext } from 'java-ast/dist/parser/JavaParser';
 
@@ -33,9 +34,9 @@ export  function performPreProcessing(unProcessedCode: string): string{
 		}
 	})
  
-	pStandards.disableSettingsBeforeParse()
+	refactoring.disableSettingsBeforeParse()
 
-	let settingsPipelineResult = pStandards.settingsRenderPipeline(unProcessedCode)
+	let settingsPipelineResult = refactoring.settingsRenderPipeline(unProcessedCode)
 
 	let unProcessedLineSplit = settingsPipelineResult.split(`\n`)
 	unProcessedLineSplit.forEach(function(line){
@@ -48,11 +49,11 @@ export  function performPreProcessing(unProcessedCode: string): string{
 	let higherOrderMethods = unProcessedMethodNameArray.filter(item => unProcessedClassMethodNames.indexOf(item[1]) < 0);
 	let processedCode : string;
 	if(higherOrderMethods.length > 0) {
-		processedCode = pStandards.methodBehaviour(pStandards.settingsRenderPipeline(unProcessedCode))
+		processedCode = pStandards.methodBehaviour(refactoring.settingsRenderPipeline(unProcessedCode))
 		setBehaviours(false,true)
 		log.write(`Method Behaviour`, log.severity.BEHAVOIR)
 	} else {
-		processedCode = pStandards.setupBehaviour(pStandards.settingsRenderPipeline(unProcessedCode))
+		processedCode = pStandards.setupBehaviour(refactoring.settingsRenderPipeline(unProcessedCode))
 		setBehaviours(true,false)
 		log.write(`SetupDraw Behaviour`, log.severity.BEHAVOIR)
 	}
