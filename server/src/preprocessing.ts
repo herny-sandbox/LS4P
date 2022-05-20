@@ -1,11 +1,9 @@
 import * as log from './scripts/syslogs'
-import * as pStandards from './grammer/terms/preprocessingsnippets'
-import { parse } from './parser'
-import { ParseTree } from 'antlr4ts/tree/ParseTree'
+import * as parser from './parser'
+import * as pStandards from './grammer/terms/processingStandards'
+import * as codeRefactoring from  './codeRefactoring'
 import { MethodDeclarationContext } from 'java-ast/dist/parser/JavaParser';
 
-let unProcessedTokenArray : [ParseTree, ParseTree][] = new Array();
-let _unProcessedTokenCounter = -1
 let behaviourType : Behaviour
 
 export interface Behaviour{
@@ -13,87 +11,88 @@ export interface Behaviour{
 	methodEnabled: boolean
 }
 
+/**
+ * Transforms user code to java compliant code.
+ *
+ * Method behaviour has functions in the global scope.
+ * Setup behaviour has all functions inside classes.
+ *  
+ * @param unProcessedCode code to be processed
+ * @returns processed code
+ */
 export  function performPreProcessing(unProcessedCode: string): string{
 	
-	let unProcessedMethodName: RegExpExecArray | null
-	// Super set that contains all the methods in the workspace
-	let unProcessedMethodNameArray: RegExpExecArray[] = []
-	let _unProcessedMethodNameArrayCounter = 0
-	// Sub set that contains method names only inside local class declarations in the workspace
-	let unProcessedClassMethodNames : string[] = []
-	let _unProcessedClassMethodCounter = 0
+	let processedCode = codeRefactoring.pipeLine(unProcessedCode)
+	let higherOrderMethodCount = allMethodsCount(processedCode) - classMethodsCount(processedCode)
 
-	// let fileName = textDocument.uri.split('/')
-	// pStandards.setDefaultClassName(`${fileName[fileName.length-1].substring(0,fileName[fileName.length-1].length-4)}`)
-
-	// TODO: Handle preprocessing Properly: - Done
-	// case 1 -> class and a method inside it without a method in the plain sketch
-	// case 2 -> class and a method inside it with a method in the plain sketch
-	// This is done by constructing parse tree even before preprocessing to find whether the method is inside a class or not
-
-	let unProcessedWorkSpaceChildren = parse(unProcessedCode)
-	unProcessedTokenArray = []
-	_unProcessedTokenCounter = -1
-
-	for(let i = 0; i < unProcessedWorkSpaceChildren.childCount; i++){
-		extractTokens(unProcessedWorkSpaceChildren.children![i])
-	}
-
-	unProcessedTokenArray.forEach(function(node,index){
-		if(node[1] instanceof MethodDeclarationContext){
-			unProcessedClassMethodNames[_unProcessedClassMethodCounter] = node[0].text
-			_unProcessedClassMethodCounter += 1
-		}
-	})
- 
-	pStandards.disableSettingsBeforeParse()
-
-	let settingsPipelineResult = pStandards.settingsRenderPipeline(unProcessedCode)
-
-	let unProcessedLineSplit = settingsPipelineResult.split(`\n`)
-	unProcessedLineSplit.forEach(function(line){
-		if(unProcessedMethodName = pStandards.methodPattern.exec(line)){
-			unProcessedMethodNameArray[_unProcessedMethodNameArrayCounter] = unProcessedMethodName
-			_unProcessedMethodNameArrayCounter += 1
-		}
-	})
-
-	let higherOrderMethods = unProcessedMethodNameArray.filter(item => unProcessedClassMethodNames.indexOf(item[1]) < 0);
-	let processedCode : string;
-	if(higherOrderMethods.length > 0) {
-		processedCode = pStandards.methodBehaviour(pStandards.settingsRenderPipeline(unProcessedCode))
-		setBehaviours(false,true)
-		log.write(`Method Behaviour`, log.severity.BEHAVOIR)
-	} else {
-		processedCode = pStandards.setupBehaviour(pStandards.settingsRenderPipeline(unProcessedCode))
+	if(higherOrderMethodCount == 0) {
 		setBehaviours(true,false)
-		log.write(`SetupDraw Behaviour`, log.severity.BEHAVOIR)
+		log.write(`Setup Behaviour`, log.severity.BEHAVOIR)
+		log.write("PreProcessing complete!", log.severity.SUCCES)
+		return pStandards.setupBehaviour(processedCode)
 	}
+	
+	setBehaviours(false,true)
+	log.write(`Method Behaviour`, log.severity.BEHAVOIR)
 	log.write("PreProcessing complete!", log.severity.SUCCES)
-	return processedCode
+	return pStandards.methodBehaviour(processedCode)	
+	
 }
 
 /**
- * Provides the current sketch behavoir type
+ * Provides the current behaviour type of a sketch
  * @returns Behavoir type
  */
 export function getBehavoirType() : Behaviour {
 	return behaviourType
 }
 
-function extractTokens(gotOne: ParseTree){
-	for(let j = 0; j < gotOne.childCount; j++){
-		if(gotOne.getChild(j).childCount == 0){
-			_unProcessedTokenCounter +=1
-			unProcessedTokenArray[_unProcessedTokenCounter] = [gotOne.getChild(j),gotOne]
-		}
-		extractTokens(gotOne.getChild(j))
-	}
-}
-
+/**
+ * Change the current behaviour type of a sketch
+ * @param _b1 default behaviour
+ * @param _b2 method behavior
+ */
 function setBehaviours(_b1:boolean,_b2: boolean){
 	behaviourType = {
 		defaultEnabled : _b1,
 		methodEnabled : _b2
 	}
+}
+
+/**
+ * Counts all methods inside all classes
+ * @param code Code to count the amount of methods form
+ * @returns Amount of methods inside classes
+ */
+function classMethodsCount(code : string) : number {
+	let classMethodNames : string[] = []
+	let tokenArray = parser.parseAST(code)
+
+	tokenArray.forEach(function(token,index){
+		if(token[1] instanceof MethodDeclarationContext){
+			classMethodNames.push(token[0].text)
+		}
+	})
+
+	return classMethodNames.length
+
+}
+
+/**
+ * Counts all methods in the code
+ * @param code Code to count the amount of methods form
+ * @returns Amount of methods
+ */
+function allMethodsCount(code : string) : number{
+	let allMethodNames: string[] = []
+	let unProcessedLineSplit = code.split(`\n`)
+
+	unProcessedLineSplit.forEach(function(line){
+		let methodName: RegExpExecArray | null
+		if(methodName = pStandards.methodPattern.exec(line)){
+			allMethodNames.push(methodName[1])
+		}
+	})
+
+	return allMethodNames.length
 }

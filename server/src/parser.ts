@@ -78,7 +78,7 @@ export function lineMap(line: string) : [string, number, number][]{
  * @param source string to be parsed
  * @returns Compilation unit
  */
-export function parse(source : string) {
+function parse(source : string) {
 	let consoleOriginal = console
 	try {
 	console = redirectConsole(console)
