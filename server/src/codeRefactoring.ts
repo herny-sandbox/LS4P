@@ -1,77 +1,176 @@
 import * as pStandards from './grammer/terms/preprocessingsnippets'
 
-export let settingsContext = ""
-export let isSettingsRequired = false
-let settingsSet = new Set()
+let settingsSet = new Set
+let startEncountered = false
 
-// Handle size(), fullScreen(), smooth() & noSmooth()
-// Takes in Unprocessed Text and returns UnProcessed Text with the `settings` lines stripped out
-export function settingsRenderPipeline(unProcessedTest: string): string {
-	let settingsContext = ""
+/**
+ * Refactors the userscode to confirm to java code style
+ * 
+ * @param unProcessedCode Code to refactor
+ * @returns Refactored code, ready to be inserted in a java file
+ */
+export function pipeLine(unProcessedCode: string): string {
+	settingsSet = new Set()
+	startEncountered = false
+	let refactoredCode = ``
+	let unprocessedLines = unProcessedCode.split(`\n`)
 
-	let recordLine = unProcessedTest.split(`\n`)
-	let newUnProcessedText = ``
-	// Fixes method scoping for methods unassigned access specifiers
-	recordLine.forEach(function(line,index){
-		if(pStandards.methodPattern.exec(line) && !(line.includes(`public`) || line.includes(`private`) || line.includes(`protected`) || pStandards.ifelsePattern.exec(line))){
-			recordLine[index] = `public ${line.trimLeft()}`
-		}
+	unprocessedLines.forEach(function(line){
+		line = increaseIndent(line)
+		line = addExplicitAccesModifier(line)
+		line = removeComments(line)
+		line = extractEnvironmentCallsInSetup(line)
+		line = addFloatingIndicator(line)
+		refactoredCode += `\n${line}`
 	})
-	let startEncountered = false
-	recordLine.forEach(function(line, index){
-		if(pStandards.multiLineCommentComponents[0].exec(line)){
-			startEncountered = true
-		}
-		if(startEncountered) {
-			recordLine[index] = ``
-			if(pStandards.multiLineCommentComponents[1].exec(line)){
-				startEncountered = false
-			}
-		}
-		if(	pStandards.sizePattern.exec(recordLine[index]) || 
-			pStandards.fullScreenPattern.exec(recordLine[index]) || 
-			pStandards.smoothPattern.exec(recordLine[index]) ||
-			pStandards.noSmoothPatterns.exec(recordLine[index]) ){
-			moveToSettings(recordLine[index])
-		}
-	})
-	cookSettingsContext(unProcessedTest)
-	recordLine.forEach(function(line,index){
-		if(pStandards.sizePattern.exec(line) || pStandards.fullScreenPattern.exec(line) || pStandards.smoothPattern.exec(line) || pStandards.noSmoothPatterns.exec(line)){
-			recordLine[index] = ``
-		}
-		newUnProcessedText = `${newUnProcessedText}\n${recordLine[index]}`
-	})
-	newUnProcessedText = mapperPipeline(newUnProcessedText)
-	return newUnProcessedText
+
+	refactoredCode += addSettingsFunction()
+	refactoredCode = convertCastingCalls(refactoredCode)
+	
+	return refactoredCode
 }
 
-export function mapperPipeline(newUnProcessedText: string): string{
-	let localUnProcessedText = newUnProcessedText.replace(/([0-9]+\.[0-9]+)/g,'$1f')
-	pStandards.conversionTuples.forEach(function(tuple){
-		localUnProcessedText = localUnProcessedText.replace(tuple[0],tuple[1])
-	})
-	localUnProcessedText = localUnProcessedText.replace(pStandards.singleLineComment,``)
-	// localUnProcessedText = localUnProcessedText.replace(/[\']{1}/g,"\\\'")
-	// localUnProcessedText = localUnProcessedText.replace(/[\"]{1}/g,"\\\"")
-	return localUnProcessedText
+/**
+ * Adds one tab to the beginning of a line
+ * 
+ * @param line code string
+ * @returns Line with increased indent
+ */
+function increaseIndent(line : string) : string{
+	return `	${line}`
 }
 
-export function disableSettingsBeforeParse() {
-	isSettingsRequired = false
+/**
+ * Adds a public acces modifier to methodes if no other modifier was specified
+ * 
+ * @param line Line to check for acces modifier
+ * @returns Line with a explicit public modifier
+ */
+function addExplicitAccesModifier(line : string) : string{ 
+	if(	pStandards.methodPattern.exec(line) &&
+	  	!(
+			line.includes(`public`) ||
+		  	line.includes(`private`) ||
+			line.includes(`protected`) ||
+			pStandards.ifelsePattern.exec(line)
+		)
+	){
+		let whiteSpaceCount = line.search(/[^\\t\s]/)
+		return line.substring(0, whiteSpaceCount) + 'public ' + line.substring(whiteSpaceCount);
+	}
+
+	return line
 }
 
-// TODO - appends a new line for every character change after settings is initiated - fix it
-function moveToSettings(line: string) {
-	isSettingsRequired = true
-	settingsSet.add(line);
+/**
+ * Erases single and block comments
+ * 
+ * @param line line to check for comments
+ * @returns line without comments
+ */
+function removeComments(line : string) : string {
+	line = removeSingleComment(line)
+	line = removeBlockComments(line)
+
+	return line
 }
 
-function cookSettingsContext(unProcessedTest: string){
-	settingsContext = ``
+/**
+ * Erases single line comment
+ * 
+ * @param line line to check for single line comment
+ * @returns line without comment
+ */
+function removeSingleComment(line : string) : string {
+	return line.replace(pStandards.singleLineComment,``)
+}
+
+/**
+ * Erases block line comment
+ * 
+ * @param line line to check for block comment
+ * @returns line without comment
+ */
+function removeBlockComments(line : string) : string {
+	
+	if(pStandards.multiLineCommentComponents[0].exec(line)){
+		startEncountered = true
+	}
+	if(startEncountered) {
+		if(pStandards.multiLineCommentComponents[1].exec(line)){
+			startEncountered = false
+		}
+		line = ``
+	}
+
+	return line
+}
+
+/**
+ * Explicitily use floats instead of double using f indicator
+ * 
+ * @param line Line to check for floating point number
+ * @returns Line with floating point indicator
+ */
+function addFloatingIndicator(line : string) : string{
+	return line.replace(/([0-9]+\.[0-9]+)/g,'$1f')
+}
+
+/**
+ * Separates environment calls from the user codes and adds them to a set. 
+ * officially these calls need to be in a settings function. 
+ * But for backwards compatibility putting them in setup() is still allowed.
+ * The following functions are extracted:
+ * size(), fullscreen(), smooth() and nosmooth().
+ * @param line Line to check for environment calls
+ * @returns Line without environment call
+ */
+function extractEnvironmentCallsInSetup(line : string) : string {
+	if(	pStandards.sizePattern.exec(line) || 
+		pStandards.fullScreenPattern.exec(line) || 
+		pStandards.smoothPattern.exec(line) ||
+		pStandards.noSmoothPatterns.exec(line))
+		{
+			settingsSet.add(line);
+			line = ``
+		}
+	
+	return line
+}
+
+/**
+ * Creates a settings() function which includes the environment calls extracted
+ * by @see extractEnvironmentCallsInSetup
+ * 
+ * @returns code with environment calls in a settings() function
+ */
+function addSettingsFunction() : string{
+	let settingsContext = ``
+	let index = 0
 	settingsSet.forEach(function(setting : any){
-		if(unProcessedTest.includes(setting)){
-			settingsContext = `${settingsContext}\n${setting}`
+		settingsContext += `${setting}`
+		index ++
+		if(index < settingsSet.size) {
+			settingsContext += `\n`
 		}
 	})
+	let settingsFunction = ''
+	if (settingsContext != ``) {
+		settingsFunction = pStandards.preprocessingSettings(settingsContext)
+	}
+	return settingsFunction
+}
+
+/**
+ * Changes type casting like int() to the processing specifiek calls
+ * 
+ * @param unprocessedText code which needs checking for casting calls
+ * @returns code with the correct casting calls
+ */
+function convertCastingCalls(unprocessedText : string) : string {
+	pStandards.conversionTuples.forEach(function(tuple){
+		unprocessedText = unprocessedText.replace(tuple[0],tuple[1])
+	})
+
+	return unprocessedText
 }

@@ -34,9 +34,8 @@ export  function performPreProcessing(unProcessedCode: string): string{
 		}
 	})
  
-	refactoring.disableSettingsBeforeParse()
 
-	let settingsPipelineResult = refactoring.settingsRenderPipeline(unProcessedCode)
+	let settingsPipelineResult = refactoring.pipeLine(unProcessedCode)
 
 	let unProcessedLineSplit = settingsPipelineResult.split(`\n`)
 	unProcessedLineSplit.forEach(function(line){
@@ -49,11 +48,11 @@ export  function performPreProcessing(unProcessedCode: string): string{
 	let higherOrderMethods = unProcessedMethodNameArray.filter(item => unProcessedClassMethodNames.indexOf(item[1]) < 0);
 	let processedCode : string;
 	if(higherOrderMethods.length > 0) {
-		processedCode = pStandards.methodBehaviour(refactoring.settingsRenderPipeline(unProcessedCode))
+		processedCode = pStandards.methodBehaviour(refactoring.pipeLine(unProcessedCode))
 		setBehaviours(false,true)
 		log.write(`Method Behaviour`, log.severity.BEHAVOIR)
 	} else {
-		processedCode = pStandards.setupBehaviour(refactoring.settingsRenderPipeline(unProcessedCode))
+		processedCode = pStandards.setupBehaviour(refactoring.pipeLine(unProcessedCode))
 		setBehaviours(true,false)
 		log.write(`SetupDraw Behaviour`, log.severity.BEHAVOIR)
 	}

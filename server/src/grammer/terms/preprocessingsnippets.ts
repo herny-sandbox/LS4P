@@ -1,5 +1,3 @@
-import * as refactoring from '../../codeRefactoring'
-
 export const classChecker = `class`
 export const newChecker = `new`
 export let defaultClassName = "ProcessingDefault"
@@ -50,7 +48,6 @@ public class ${defaultClassName} extends ${defaultLib}{
 public void setup(){
 ${unProcessedTest}
 }
-${settingsPreprocessing()}
 ${preprocessingFooter()}
 }
 `
@@ -63,23 +60,17 @@ export function methodBehaviour(unProcessedTest: string): string {
 ${dynamicImports}
 public class ${defaultClassName} extends ${defaultLib}{
 ${unProcessedTest}
-${settingsPreprocessing()}
 ${preprocessingFooter()}
 }
 `
 	return processedText
 }
 
-function settingsPreprocessing(): string{
-	let generateSettings: string = ""
-	if(refactoring.isSettingsRequired){
-		generateSettings = `
-public void settings(){
-${refactoring.settingsContext}
-}`
-	} else {
-		refactoring.disableSettingsBeforeParse()
-	}
+export function preprocessingSettings(settingsContext : string): string{
+	let	generateSettings = `
+	public void settings(){
+${settingsContext}
+	}`
 	return generateSettings
 }
 
