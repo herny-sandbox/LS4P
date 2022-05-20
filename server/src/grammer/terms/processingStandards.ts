@@ -3,7 +3,7 @@ export const newChecker = `new`
 export let defaultClassName = "ProcessingDefault"
 const defaultLib = `PApplet`
 // Dynamic Imports should take format - `import __.__.__;`
-const dynamicImports = `import processing.core.*\;
+const staticImports = `import processing.core.*\;
 import processing.awt.*\;
 import processing.data.*\;
 import processing.event.*\;
@@ -29,11 +29,18 @@ export const smoothPattern = /(smooth)\([ ]*[0-9]+[ ]*\)\;/
 export const noSmoothPatterns = /(noSmooth)\(\)\;/
 export const ifelsePattern = /[ ]*(else)[ ]*(if)[ ]*\(/g
 export const singleLineComment = /\/\/(.)*/g
-export const multiLineCommentComponents = [
-	/\/\*/g,
-	/\*\//g
-]
+export const multiLineCommentComponents = [/\/\*/g, /\*\//g]
 export const methodPattern = /[\w\<\>\[\]]+\s+(\w+) *\([^\)]*\) *(\{)/g
+
+export const castingConversionTuples : [RegExp,string][] = [
+	[/(float\()/g,"PApplet.parseFloat("],
+	[/(boolean\()/g,"PApplet.parseBoolean("],
+	[/(byte\()/g,"PApplet.parseByte("],
+	[/(char\()/g,"PApplet.parseChar("],
+	[/(int\()/g,"PApplet.parseInt("],
+	[/(color[ ]+)/g,"int "],
+	[/(color\[)/g,"int["]
+]
 
 export function setDefaultClassName(className : string){
 	defaultClassName = className as string
@@ -41,57 +48,35 @@ export function setDefaultClassName(className : string){
 
 // Similar to : https://github.com/processing/processing/blob/37108add372272d7b1fc23d2500dce911c4d1098/java/src/processing/mode/java/preproc/PdePreprocessor.java#L1149
 // Mode.STATIC
-export function setupBehaviour(unProcessedTest: string): string {
-	let processedText = `
-${dynamicImports}
-public class ${defaultClassName} extends ${defaultLib}{
-public void setup(){
-${unProcessedTest}
-}
-${preprocessingFooter()}
-}
-`
-	return processedText
+export function setupBehaviour(refactoredCode: string): string {
+	return	`${staticImports} \n`+
+			`public class ${defaultClassName} extends ${defaultLib}{\n`+
+			`	public void setup(){`+
+				`${refactoredCode}`+
+				`}`+
+				`${preprocessingFooter()}\n`+
+			`}`						
 }
 
 // Mode.ACTIVE
-export function methodBehaviour(unProcessedTest: string): string {
-	let processedText = `
-${dynamicImports}
-public class ${defaultClassName} extends ${defaultLib}{
-${unProcessedTest}
-${preprocessingFooter()}
-}
-`
-	return processedText
+export function methodBehaviour(refactoredCode: string): string {
+	return	`${staticImports} \n`+
+			`public class ${defaultClassName} extends ${defaultLib}{\n`+
+				`${refactoredCode}\n` +
+				`${preprocessingFooter()}\n`+
+			`}`
 }
 
 export function preprocessingSettings(settingsContext : string): string{
-	let	generateSettings = `
-	public void settings(){
-${settingsContext}
-	}`
-	return generateSettings
+	return 	`\n`+
+			`	public void settings(){\n`+
+			`	${settingsContext}`+
+			`	}`
 }
 
 function preprocessingFooter(): string{
-	let generatedFooter: string = `
-public static void main(String[] args) {
-PApplet.main("${defaultClassName}");
-}`
-	return generatedFooter
-}
-
-export let conversionTuples : [RegExp,string][] = [
-	[/(float\()/g,"PApplet.parseFloat("],
-	[/(boolean\()/g,"PApplet.parseBoolean("],
-	[/(byte\()/g,"PApplet.parseByte("],
-	[/(char\()/g,"PApplet.parseChar("],
-	// [/(int\()/g,"PApplet.parseInt("],
-	[/(color[ ]+)/g,"int "],
-	[/(color\[)/g,"int["]
-]
-
-function getRandomInt(max: number) {
-	return Math.floor(Math.random() * Math.floor(max));
+	return 	`\n`+
+			`	public static void main(String[] args) {\n`+
+			`		PApplet.main("${defaultClassName}");\n`+
+			`	}`
 }

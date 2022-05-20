@@ -1,6 +1,6 @@
 import * as log from './scripts/syslogs'
 import * as parser from './parser'
-import * as pStandards from './grammer/terms/preprocessingsnippets'
+import * as pStandards from './grammer/terms/processingStandards'
 import * as codeRefactoring from  './codeRefactoring'
 import { MethodDeclarationContext } from 'java-ast/dist/parser/JavaParser';
 

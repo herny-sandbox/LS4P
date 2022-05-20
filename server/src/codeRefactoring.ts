@@ -1,4 +1,4 @@
-import * as pStandards from './grammer/terms/preprocessingsnippets'
+import * as pStandards from './grammer/terms/processingStandards'
 
 let settingsSet = new Set
 let startEncountered = false
@@ -16,11 +16,11 @@ export function pipeLine(unProcessedCode: string): string {
 	let unprocessedLines = unProcessedCode.split(`\n`)
 
 	unprocessedLines.forEach(function(line){
-		line = increaseIndent(line)
 		line = addExplicitAccesModifier(line)
 		line = removeComments(line)
 		line = extractEnvironmentCallsInSetup(line)
 		line = addFloatingIndicator(line)
+		line = increaseIndent(line)
 		refactoredCode += `\n${line}`
 	})
 
@@ -168,7 +168,7 @@ function addSettingsFunction() : string{
  * @returns code with the correct casting calls
  */
 function convertCastingCalls(unprocessedText : string) : string {
-	pStandards.conversionTuples.forEach(function(tuple){
+	pStandards.castingConversionTuples.forEach(function(tuple){
 		unprocessedText = unprocessedText.replace(tuple[0],tuple[1])
 	})
 
