@@ -35,6 +35,13 @@ export async function write(message: string | unknown, logLevel : severity = sev
 		logEntry = `${datetime} - ${_message}`
 	}
 	
+	if(process.platform === 'win32') {
+		logEntry = logEntry.replace(/>/g, '^>')
+	}
+	else {
+		logEntry = logEntry.replace(/>/g, '\>')
+	}
+
 	exec(`echo ${logEntry} >> ${logPath}`)
 
 	if (logLevel == 3 || logLevel == 4 ) {
