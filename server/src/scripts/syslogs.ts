@@ -14,6 +14,11 @@ type errorWithMessage = {
 	message: string
 }
 
+export async function writeLog(logContents: String) {
+    let datetime = new Date()
+    exec(`echo \"${datetime.toISOString().slice(0,22)} -> ${logContents}\" >> ${__dirname.substring(0,__dirname.length-8)}/logs/syslogs.txt`)
+}
+
 export async function write(message: string | unknown, logLevel : severity = severity.NONE) {
 	let datetime = new Date().toISOString().slice(0,22)
 	let _message;

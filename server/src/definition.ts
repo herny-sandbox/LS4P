@@ -3,7 +3,7 @@ import * as sketch from './sketch'
 import * as javaSpecific from './grammer/terms/javaspecific'
 import { Definition } from 'vscode-languageserver'
 import { ClassDeclarationContext, VariableDeclaratorIdContext, MethodDeclarationContext } from 'java-ast/dist/parser/JavaParser';
-
+import { ParserRuleContext, Token } from 'antlr4ts';
 
 // [string,string,number,number] => [type, name, line number, character number]
 let foundDeclaration: [string,string,number,number][] = new Array();
@@ -20,19 +20,32 @@ export function scheduleLookUpDefinition(receivedUri: string, lineNumber: number
 	let adjustOffset = sketch.getLineOffset()
 	let tokenArray = sketch.getTokenArray();
 
-	tokenArray.forEach(function(token){
-		if(token[1] instanceof ClassDeclarationContext){
-			if(!(javaSpecific.TOP_LEVEL_KEYWORDS.indexOf(token[0].text) > -1)){
-				foundDeclaration[_foundDeclarationCount] = [`class`, token[0].text, token[0].payload._line, token[0].payload._charPositionInLine]
+	tokenArray.forEach(function(tokenPair)
+	{
+		if( tokenPair[0] instanceof ParserRuleContext)
+		{
+			const token: Token = (tokenPair[0] as ParserRuleContext).start;
+
+			if(tokenPair[1] instanceof ClassDeclarationContext)
+			{
+				if(!(javaSpecific.TOP_LEVEL_KEYWORDS.indexOf(tokenPair[0].text) > -1))
+				{
+					
+					foundDeclaration[_foundDeclarationCount] = [`class`, tokenPair[0].text, token.line, token.charPositionInLine]
+					_foundDeclarationCount +=1
+				}
+			} 
+			else if(tokenPair[1] instanceof VariableDeclaratorIdContext)
+			{
+				foundDeclaration[_foundDeclarationCount] = [`var`, tokenPair[0].text, token.line, token.charPositionInLine]
+				_foundDeclarationCount +=1
+			} 
+			else if(tokenPair[1] instanceof MethodDeclarationContext)
+			{
+				// TODO: conflict in `_charPositionInLine` due to addition of `public` infront during preprocessing -> tabs should also be handled
+				foundDeclaration[_foundDeclarationCount] = [`method`, tokenPair[0].text, token.line, token.charPositionInLine]
 				_foundDeclarationCount +=1
 			}
-		} else if(token[1] instanceof VariableDeclaratorIdContext){
-			foundDeclaration[_foundDeclarationCount] = [`var`, token[0].text, token[0].payload._line, token[0].payload._charPositionInLine]
-			_foundDeclarationCount +=1
-		} else if(token[1] instanceof MethodDeclarationContext){
-			// TODO: conflict in `_charPositionInLine` due to addition of `public` infront during preprocessing -> tabs should also be handled
-			foundDeclaration[_foundDeclarationCount] = [`method`, token[0].text, token[0].payload._line, token[0].payload._charPositionInLine]
-			_foundDeclarationCount +=1
 		}
 	})
 

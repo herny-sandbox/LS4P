@@ -1,119 +1,97 @@
 {
-	"name": "processing-lsp",
-	"description": "Processing language server",
-	"author": "Processing Foundation",
-	"license": "MIT",
-	"version": "1.0.0",
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/processing-language-server/LS4P"
-	},
-	"publisher": "Processing",
-	"categories": [],
-	"keywords": [
-		"multi-root ready"
-	],
-	"engines": {
-		"vscode": "^1.23.0"
-	},
-	"activationEvents": [
-		"onLanguage:Processing"
-	],
-	"main": "./client/out/extension",
-	"contributes": {
-		"languages": [
-			{
-				"id": "Processing",
-				"extensions": [
-					".pde"
-				],
-				"configuration": "./language-configuration.json"
-			}
-		],
-		"commands": [
-			{
-				"command": "extension.processing.runSketch",
-				"title": "Run Processing Sketch",
-				"icon" : "./client/src/assets/play-arrow.svg"
-			},
-			{
-				"command": "extension.processing.stopSketch",
-				"title": "Run Processing Sketch",
-				"icon" : "./client/src/assets/stop-square.svg"
-			}
-		],
-		"menus": {
-			"editor/title": [
-				{
-					"command": "extension.processing.runSketch",
-					"group": "navigation",
-					"when": "!processing.runningSketch"
-				},
-				{
-					"command": "extension.processing.stopSketch",
-					"group": "navigation",
-					"when": "processing.runningSketch"
-				}
-			]
-		},
-		"configuration": {
-			"type": "object",
-			"title": "Processing configuration",
-			"properties": {
-				"languageServerExample.maxNumberOfProblems": {
-					"scope": "resource",
-					"type": "number",
-					"default": 100,
-					"description": "Controls the maximum number of problems produced by the server."
-				},
-				"languageServerExample.trace.server": {
-					"scope": "window",
-					"type": "string",
-					"enum": [
-						"off",
-						"messages",
-						"verbose"
-					],
-					"default": "off",
-					"description": "Traces the communication between VS Code and the language server."
-				}
-			}
-		},
-		"grammars": [
-			{
-				"language": "Processing",
-				"scopeName": "source.pde",
-				"path": "./syntax/pde.tmLanguage.json"
-			}
-		],
-		"snippets": [
-			{
-				"language": "Processing",
-				"path": "./snippets.json"
-			}
-		],
-		"iconThemes": [
-			{
-				"id": "processingTheme",
-				"label": "ProcessingTheme",
-				"path": "./fileicons/processing-icon-theme.json"
-			}
-		]
-	},
-	"scripts": {
-		"vscode:prepublish": "npm run compile",
-		"compile": "tsc -b",
-		"watch": "tsc -b -w",
-		"preinstall": "node preinstall.js",
-		"postinstall": "cd client && npm install && cd ../server && npm install && cd .."
-	},
-	"devDependencies": {
-		"@types/mocha": "^5.2.0",
-		"@types/node": "^8.0.0",
-		"tslint": "^5.16.0",
-		"typescript": "^3.5.1"
-	},
-	"dependencies": {
-		"java-ast": "^0.1.0"
-	}
+  "name": "processing-lsp",
+  "description": "Processing language server",
+  "author": "Processing Foundation",
+  "license": "MIT",
+  "version": "1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/processing-language-server/LS4P"
+  },
+  "publisher": "Processing",
+  "categories": [],
+  "keywords": [
+    "multi-root ready"
+  ],
+  "engines": {
+    "vscode": "^1.23.0"
+  },
+  "activationEvents": [
+    "onLanguage:Processing"
+  ],
+  "main": "./client/out/extension",
+  "contributes": {
+    "languages": [
+      {
+        "id": "Processing",
+        "extensions": [
+          ".pde"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "extension.processing",
+        "title": "Run Processing Sketch"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Processing configuration",
+      "properties": {
+        "languageServerExample.maxNumberOfProblems": {
+          "scope": "resource",
+          "type": "number",
+          "default": 100,
+          "description": "Controls the maximum number of problems produced by the server."
+        },
+        "languageServerExample.trace.server": {
+          "scope": "window",
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language server."
+        }
+      }
+    },
+    "grammars": [
+      {
+        "language": "Processing",
+        "scopeName": "source.pde",
+        "path": "./syntax/pde.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "Processing",
+        "path": "./snippets.json"
+      }
+    ],
+    "iconThemes": [
+      {
+        "id": "processingTheme",
+        "label": "ProcessingTheme",
+        "path": "./fileicons/processing-icon-theme.json"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -b",
+    "watch": "tsc -b -w",
+    "postinstall": "cd client && npm install && cd ../server && npm install && cd .."
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.1",
+    "@types/node": "^20.4.5",
+    "typescript": "^5.2.0-dev.20230730"
+  },
+  "dependencies": {
+    "@types/vscode": "^1.23.0"
+  }
 }

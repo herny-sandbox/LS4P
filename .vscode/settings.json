@@ -2,9 +2,5 @@
 	"editor.insertSpaces": false,
 	"tslint.enable": true,
 	"typescript.tsc.autoDetect": "off",
-	"typescript.preferences.quoteStyle": "single",
-	"java.project.referencedLibraries": [
-		"lib/**/*.jar",
-		"server/src/processing/jar/core.jar"
-	]
+	"typescript.preferences.quoteStyle": "single"
 }

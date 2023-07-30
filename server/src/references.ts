@@ -25,31 +25,35 @@ export function scheduleLookUpReference(_referenceParams: ReferenceParams): Loca
 
 	currentReferenceMap.forEach(function(word){
 		// params.position.character -> can be of any character, even a character within a word
-		if((word[1] <= _referenceParams.position.character) && (_referenceParams.position.character <= word[2])){
-			tokenArray.forEach(function(token){
-				if(token[0].text == word[0]){
-					let lineNumberJavaFile = token[0].payload._line-adjustOffset
+		if((word[1] <= _referenceParams.position.character) && (_referenceParams.position.character <= word[2]))
+		{
+			tokenArray.forEach(function(tokenPair)
+			{
+				if(tokenPair[0].text == word[0])
+				{
+					let lineNumberJavaFile = word[1]-adjustOffset
 					let refLine : number = 0;
 					let docUri : string = '';
 					let transformMap = sketch.getTransformationMap()
-					if (transformMap.get(lineNumberJavaFile)) {
+					if (transformMap.get(lineNumberJavaFile)) 
+					{
 						refLine = transformMap.get(lineNumberJavaFile)!.lineNumber
 						let docName =  transformMap.get(lineNumberJavaFile)!.fileName
 						docUri = sketch.getInfo().uri+docName
 					}
 
-					let charOffset = sketch.getCharacterOffset(lineNumberJavaFile, token[0].payload._line)
+					let charOffset = sketch.getCharacterOffset(lineNumberJavaFile, word[1])
 
 					multipleTokenOccurenceLocations[_multipleTokenCount] = {
 						uri: docUri,
 						range: {
 							start: {
 								line: refLine-1,
-								character: token[0].payload._charPositionInLine - charOffset
+								character: word[2] - charOffset
 							},
 							end: {
 								line: refLine-1,
-								character: token[0].payload._charPositionInLine + word[0].length - charOffset
+								character: word[2] + word[0].length - charOffset
 							}
 						}
 					}

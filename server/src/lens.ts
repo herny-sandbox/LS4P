@@ -2,6 +2,7 @@ import * as sketch from './sketch'
 import * as javaSpecific from './grammer/terms/javaspecific'
 import { CodeLens, CodeLensParams } from 'vscode-languageserver'
 import { ClassDeclarationContext, VariableDeclaratorIdContext, MethodDeclarationContext } from 'java-ast/dist/parser/JavaParser';
+import { ParserRuleContext, Token } from 'antlr4ts';
 
 // [string,string,number,number] => [type, name, line number, character number]
 let lensDeclaration: [string,string,number,number][] = new Array();
@@ -13,16 +14,24 @@ export function scheduleLookUpLens(_codeLensParams: CodeLensParams): CodeLens[] 
 	let tokenArray = sketch.getTokenArray();
 	let adjustOffset = sketch.getLineOffset()
 
-	tokenArray.forEach(function(token){
-		if(token[1] instanceof ClassDeclarationContext) {
-			if(!(javaSpecific.TOP_LEVEL_KEYWORDS.indexOf(token[0].text) > -1)){
-				lensDeclaration[_lensDeclarationCount] = [`class`, token[0].text, token[0].payload._line-(adjustOffset+1), token[0].payload._charPositionInLine]
+	tokenArray.forEach(function(tokenPair)
+	{
+		const token: Token = (tokenPair[0] as ParserRuleContext).start;
+
+		if(tokenPair[1] instanceof ClassDeclarationContext) 
+		{
+			if(!(javaSpecific.TOP_LEVEL_KEYWORDS.indexOf(tokenPair[0].text) > -1)){
+				lensDeclaration[_lensDeclarationCount] = [`class`, tokenPair[0].text, token.line-(adjustOffset+1), token.charPositionInLine]
 				_lensDeclarationCount +=1
 			}
-		} else if(token[1] instanceof VariableDeclaratorIdContext) {
-			lensDeclaration[_lensDeclarationCount] = [`var`, token[0].text, token[0].payload._line-(adjustOffset+1), token[0].payload._charPositionInLine]
+		} 
+		else if(tokenPair[1] instanceof VariableDeclaratorIdContext) 
+		{
+			lensDeclaration[_lensDeclarationCount] = [`var`, tokenPair[0].text, token.line-(adjustOffset+1), token.charPositionInLine]
 			_lensDeclarationCount +=1
-		} else if(token[1] instanceof MethodDeclarationContext) {
+		} 
+		else if(tokenPair[1] instanceof MethodDeclarationContext) 
+		{
 			// TODO: conflict in `_charPositionInLine` due to addition of `public` infront during preprocessing -> tabs should also be handled
 			// lensDeclaration[_lensDeclarationCount] = [`method`, token[0].text, token[0].payload._line-(adjustOffset+1), token[0].payload._charPositionInLine - 3]
 			// _lensDeclarationCount +=1

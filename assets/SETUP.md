@@ -12,27 +12,6 @@
 - To run a Processing sketch - hit `Shift+cmd+P` and enter `Run Processing Sketch` and hit enter.
 - This should run the Processing Sketch.
 
-
-# required packages/software
-## Linux/Ubuntu 
-
-- nodejs 
-- npm 
-- open-jdk
-
-```
-sudo apt install npm
-sudo apt install nodejs
-sudo apt install openjdk-11-jdk-headless
-```
-
-## Windows
-- [nodejs and npm](https://nodejs.org/en/download/)
-- [java development kit (jdk)](https://www.oracle.com/java/technologies/downloads/)
-
-**Imported:** Set path environment variable to nodejs, npm and jdk folders
-
-
-# Issues
+## Issues
 
 - If you run into any issues, make sure to raise an Issue.

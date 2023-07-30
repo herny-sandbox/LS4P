@@ -1,36 +1,39 @@
 import {
-	createConnection,
-	TextDocuments,
-	ProposedFeatures,
-	InitializeParams,
-	DidChangeConfigurationNotification,
+	CodeLens,
+	CodeLensParams,
 	CompletionItem,
 	CompletionParams,
-	TextDocument,
 	TextDocumentPositionParams,
 	Definition,
-	CodeLensParams,
-	CodeLens,
+	DidChangeConfigurationNotification,
+	FileChangeType,
+	Hover,
+	InitializeParams,
 	Location,
 	ReferenceParams,
 	RenameParams,
 	WorkspaceEdit,
-	Hover,
-	FileChangeType
-} from 'vscode-languageserver';
+	createConnection,
+	ProposedFeatures,
+	TextDocuments,
+	TextDocumentsConfiguration,
+	TextDocumentSyncKind,
+	InitializeResult
+} from 'vscode-languageserver/node';
 
-import * as completion from './completion'
-import * as diagnostics from './diagnostics'
-import * as hover from './hover'
-import * as log from './scripts/syslogs'
-import * as definition from './definition'
-import * as lens from './lens'
-import * as reference from './references'
+import { TextDocument } from 'vscode-languageserver-textdocument';
+
+import * as completion from './completion';
+import * as definition from './definition';
+import * as diagnostics from './diagnostics';
+import * as hover from './hover';
+import * as reference from './references';
+import * as log from './scripts/syslogs';
 import * as sketch from './sketch';
 
 export let connection = createConnection(ProposedFeatures.all);
 
-let documents: TextDocuments = new TextDocuments();
+let documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
 
 let hasConfigurationCapability: boolean = false;
 let hasWorkspaceFolderCapability: boolean = false;
@@ -51,22 +54,31 @@ connection.onInitialize((params: InitializeParams) => {
 		capabilities.textDocument.publishDiagnostics.relatedInformation
 	);
 
-	return {
+	const result: InitializeResult = {
 		capabilities: {
-			textDocumentSync: documents.syncKind,
-			completionProvider: {
-				resolveProvider: true,
-				triggerCharacters: [ '.' ]
-			},
-			hoverProvider: true,
-			definitionProvider : true,
-			codeLensProvider : {
+		  textDocumentSync: TextDocumentSyncKind.Incremental,
+		  // Tell the client that this server supports code completion.
+		  completionProvider: {
+			resolveProvider: true,
+			triggerCharacters: ['.']
+		  },
+		  hoverProvider: true,
+			definitionProvider: true,
+			codeLensProvider: {
 				resolveProvider: true
 			},
 			referencesProvider: true,
 			renameProvider: true
 		}
-	};
+	  };
+	  if (hasWorkspaceFolderCapability) {
+		result.capabilities.workspace = {
+		  workspaceFolders: {
+			supported: true
+		  }
+		};
+	  }
+	  return result;
 });
 
 connection.onInitialized(() => {
@@ -120,24 +132,24 @@ export function getDocumentSettings(resource: string): Thenable<ExampleSettings>
 
 export let latestChangesInTextDoc: TextDocument
 
-documents.onDidOpen(event => {
+documents.onDidOpen((event: { document: TextDocument; }) => {
 	log.write(`File Open / Tab switching occured`, log.severity.EVENT)
 	latestChangesInTextDoc = event.document
 	sketch.build(event.document)
 	diagnostics.checkForRealtimeDiagnostics(event.document)
 });
 
-documents.onDidClose(e => {
+documents.onDidClose((e: { document: { uri: string; }; }) => {
 	log.write(`File Closed`, log.severity.EVENT)
 	documentSettings.delete(e.document.uri);
 });
 
 let bufferInProgress = false
 
-documents.onDidChangeContent(change => {
+documents.onDidChangeContent((change: { document: TextDocument; }) => {
 	log.write(`Content changed`, log.severity.EVENT)
 	latestChangesInTextDoc = change.document
-	if(!bufferInProgress)
+	if (!bufferInProgress)
 		initPreProcessDiagnostics()
 });
 
@@ -177,7 +189,7 @@ connection.onDidChangeWatchedFiles(_change => {
 // Implementation for `goto definition` goes here
 connection.onDefinition(
 	(_textDocumentParams: TextDocumentPositionParams): Definition | null => {
-		return definition.scheduleLookUpDefinition(_textDocumentParams.textDocument.uri,_textDocumentParams.position.line,_textDocumentParams.position.character)
+		return definition.scheduleLookUpDefinition(_textDocumentParams.textDocument.uri, _textDocumentParams.position.line, _textDocumentParams.position.character)
 	}
 )
 
@@ -226,15 +238,15 @@ connection.onCompletionResolve(
 connection.onHover(
 	(params: TextDocumentPositionParams): Hover | null => {
 		let hoverResult: Hover | null = null
-		if(sketch.getCompileErrors.length == 0){
+		if (sketch.getCompileErrors.length == 0) {
 			hoverResult = hover.scheduleHover(params)
 		} else {
-			sketch.getCompileErrors().forEach(function(compileError){
+			sketch.getCompileErrors().forEach(function (compileError) {
 				let errorLine = compileError.lineNumber
 				hoverResult = hover.scheduleHover(params, errorLine)
 			})
 		}
-		log.write(`Hover Invoked`, log.severity.EVENT)
+		log.write("Hover Invoked, result: "+hoverResult?.contents, log.severity.EVENT)
 		return hoverResult
 	}
 )

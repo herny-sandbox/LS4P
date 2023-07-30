@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { SketchRunner } from './sketchRunner';
+const childProcess = require('child_process');
 
 import {
 	LanguageClient,
@@ -32,7 +32,7 @@ export function activate(context: vscode.ExtensionContext) {
 	let clientOptions: LanguageClientOptions = {
 		documentSelector: [{ scheme: 'file', language: 'Processing' }],
 		synchronize: {
-			fileEvents: vscode.workspace.createFileSystemWatcher('**/*')
+			fileEvents: vscode.workspace.createFileSystemWatcher('**/.clientrc')
 		}
 	};
 
@@ -43,35 +43,34 @@ export function activate(context: vscode.ExtensionContext) {
 		clientOptions
 	);
 
-	let clientPath = context.asAbsolutePath(path.join('client'))
-	let serverPath = context.asAbsolutePath(path.join('server'))
-	let jrePath = context.asAbsolutePath(path.join('jre', 'bin'))
+	let disposable = vscode.commands.registerCommand('extension.processing', () => {
+		// Running the Sketch entered in Extension Host
+		vscode.window.showInformationMessage(`Running Processing Sketch.!`);
+		try{
+			// exec(`mkdir client/out/class`)
+			let workspacePath = vscode.workspace.rootPath;
+			childProcess.exec(`cp -a ${workspacePath}/** ${__dirname}/class`)
+			childProcess.exec(`cp ${__dirname.substring(0,__dirname.length-11)}/server/out/compile/** ${__dirname}/class`)
+			childProcess.exec(`cd ${__dirname.substring(0,__dirname.length-11)}/client/out/class ; java -classpath ${__dirname.substring(0,__dirname.length-11)}/server/src/processing/jar/core.jar: ProcessingDefault`)
+		} catch(e) {
+			vscode.window.showInformationMessage(`Error occured while running sketch.!`);
+		}
 
-	let serverCompilePath = path.join(serverPath, 'out', 'compile')
-	let clientSketchPath = path.join(clientPath, 'out', 'class')
-
-	const sketchRunner = SketchRunner.getInstance();
-	sketchRunner.initilize(jrePath, clientSketchPath, serverCompilePath)
-
-	let sketchRunnerDisp = vscode.commands.registerCommand("extension.processing.runSketch", () => sketchRunner.runSketch())
-	let sketchStopperDisp = vscode.commands.registerCommand("extension.processing.stopSketch", () => sketchRunner.stopSketch())
+	});
 
 	let referenceDisposable = vscode.commands.registerCommand('processing.command.findReferences', (...args: any[]) => {
 		vscode.commands.executeCommand('editor.action.findReferences', vscode.Uri.file(args[0].uri.substring(7,args[0].uri.length)), new vscode.Position(args[0].lineNumber,args[0].column));
 	})
 
+	context.subscriptions.push(disposable);
 	context.subscriptions.push(referenceDisposable)
-	context.subscriptions.push(sketchRunnerDisp)
-	context.subscriptions.push(sketchStopperDisp)
 
 	client.start();
 }
 
-export async function deactivate(): Promise<void> | undefined {
+export function deactivate(): Thenable<void> | undefined {
 	if (!client) {
 		return undefined;
 	}
-	const sketchRunner = SketchRunner.getInstance();
-	await sketchRunner.stopSketch();
 	return client.stop();
 }
