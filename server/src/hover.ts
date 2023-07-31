@@ -43,41 +43,41 @@ try{
 	log.write(e, log.severity.ERROR)
 }
 
-export function scheduleHover(params: lsp.TextDocumentPositionParams, errorLine: number = -10): lsp.Hover | null {
-	if(errorLine - 1 != params.position.line){
-		let currentContent = sketch.getTabContent(params.textDocument.uri)
-		if (!currentContent) {
-			return null
-		}
-		let splitHover = currentContent.split(`\n`)
-		let currentLine = splitHover[params.position.line]
-		let hover : Hover | null = null
-		let hoverMap = sketch.lineMap(currentLine)
+export function scheduleHover(params: lsp.TextDocumentPositionParams, errorLine: number = -10): lsp.Hover | null 
+{
+	if(errorLine - 1 == params.position.line)
+		return null;
 
-		hoverMap.forEach(function(word){
-			// params.position.character -> can be of any character, even a character within a word
-			if((word[1] <= params.position.character) && (params.position.character <= word[2])){
-				insightMap.forEach(function(value){
-					if(value[0] == word[0]){
-						hover = {
-							contents:MarkedString.fromPlainText(value[1]),
-							range: {
-								start: {
-									line: params.position.line,
-									character: word[1]
-								},
-								end: {
-									line: params.position.line,
-									character: word[2]
-								}
+	let currentContent = sketch.getTabContent(params.textDocument.uri)
+	if (!currentContent)
+		return null;
+
+	let splitHover = currentContent.split(`\n`);
+	let currentLine = splitHover[params.position.line];
+	let hover : Hover | null = null;
+	let hoverMap = sketch.lineMap(currentLine);
+
+	hoverMap.forEach(function(word){
+		// params.position.character -> can be of any character, even a character within a word
+		if((word[1] <= params.position.character) && (params.position.character <= word[2])){
+			insightMap.forEach(function(value){
+				if(value[0] == word[0]){
+					hover = {
+						contents:MarkedString.fromPlainText(value[1]),
+						range: {
+							start: {
+								line: params.position.line,
+								character: word[1]
+							},
+							end: {
+								line: params.position.line,
+								character: word[2]
 							}
 						}
 					}
-				})
-			}
-		})
-		return hover
-	} else {
-		return null
-	}
+				}
+			})
+		}
+	})
+	return hover;
 }

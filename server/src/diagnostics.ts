@@ -1,6 +1,7 @@
 import * as server from './server'
 import * as sketch from './sketch';
-import {TextDocument, Diagnostic, DiagnosticSeverity,} from 'vscode-languageserver';
+import { Diagnostic, DiagnosticSeverity,} from 'vscode-languageserver';
+import { TextDocument } from 'vscode-languageserver-textdocument';
 
 const fs = require('fs');
 

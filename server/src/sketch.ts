@@ -1,9 +1,9 @@
 import * as log from './scripts/syslogs'
-import * as lsp from 'vscode-languageserver'
 import * as parser from './parser'
 import * as pStandards from './grammer/terms/processingStandards'
 import * as preprocessor from './preprocessing'
 import { ParseTree } from 'antlr4ts/tree/ParseTree'
+import { TextDocument } from 'vscode-languageserver-textdocument';
 
 const fs = require('fs')
 const pathM = require('path')
@@ -49,7 +49,7 @@ export interface CompileError{
  * @param textDocument  .pde file(tab) in the sketch directory.
  * @returns Creation succes state
  */
-export function initialize(textDocument: lsp.TextDocument) {
+export function initialize(textDocument: TextDocument) {
 	
 	let uri = pathM.dirname(textDocument.uri)+'/'
 	let path = getPathFromUri(uri)
@@ -99,7 +99,7 @@ export function initialize(textDocument: lsp.TextDocument) {
  * 
  * @param textDocument last changed document
  */
-export function build(textDocument: lsp.TextDocument){
+export function build(textDocument: TextDocument){
 	if (!initialized) {
 		initialize(textDocument);
 	}
@@ -129,7 +129,7 @@ export function build(textDocument: lsp.TextDocument){
  * @param changedDocument Document of which the content should be updated
  * @returns Update succes state
  */
-export function updateContent(changedDocument: lsp.TextDocument) {
+export function updateContent(changedDocument: TextDocument) {
 
 	if (!initialized) {
 		return false

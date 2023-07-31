@@ -15,6 +15,8 @@ import {
 	WorkspaceEdit,
 	createConnection,
 	ProposedFeatures,
+	DocumentSymbolParams,
+	DocumentSymbol,
 	TextDocuments,
 	TextDocumentsConfiguration,
 	TextDocumentSyncKind,
@@ -22,6 +24,8 @@ import {
 } from 'vscode-languageserver/node';
 
 import { TextDocument } from 'vscode-languageserver-textdocument';
+import { ProcessingSketch } from "./ProcessingSketch";
+import { ProcessingParser } from "./ProcessingParser";
 
 import * as completion from './completion';
 import * as definition from './definition';
@@ -32,6 +36,7 @@ import * as log from './scripts/syslogs';
 import * as sketch from './sketch';
 
 export let connection = createConnection(ProposedFeatures.all);
+const processingSketch = new ProcessingSketch();
 
 let documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
 
@@ -56,19 +61,20 @@ connection.onInitialize((params: InitializeParams) => {
 
 	const result: InitializeResult = {
 		capabilities: {
-		  textDocumentSync: TextDocumentSyncKind.Incremental,
-		  // Tell the client that this server supports code completion.
-		  completionProvider: {
-			resolveProvider: true,
-			triggerCharacters: ['.']
-		  },
-		  hoverProvider: true,
+			textDocumentSync: TextDocumentSyncKind.Incremental,
+			// Tell the client that this server supports code completion.
+			completionProvider: {
+				resolveProvider: true,
+				triggerCharacters: ['.']
+			},
+		  	hoverProvider: true,
 			definitionProvider: true,
 			codeLensProvider: {
 				resolveProvider: true
 			},
 			referencesProvider: true,
-			renameProvider: true
+			renameProvider: true,
+			documentSymbolProvider: true
 		}
 	  };
 	  if (hasWorkspaceFolderCapability) {
@@ -91,7 +97,13 @@ connection.onInitialized(() => {
 			log.write('Workspace folder change event received.', log.severity.EVENT);
 		});
 	}
+	documents.all().forEach(AddPdeDoc);
 });
+
+function AddPdeDoc(value: TextDocument, index: number, array: TextDocument[])
+{
+	processingSketch.addCode(value.getText(), value.uri);
+}
 
 interface ExampleSettings {
 	maxNumberOfProblems: number;
@@ -169,7 +181,8 @@ function sleep(ms: number) {
 connection.onDidChangeWatchedFiles(_change => {
 	log.write('Files in workspace have changed', log.severity.EVENT);
 
-	for (let i = 0; i < _change.changes.length; i++) {
+	for (let i = 0; i < _change.changes.length; i++) 
+	{
 		const change = _change.changes[i];
 		
 		switch (change.type) {
@@ -237,11 +250,13 @@ connection.onCompletionResolve(
 // Implementation for Hover request
 connection.onHover(
 	(params: TextDocumentPositionParams): Hover | null => {
-		let hoverResult: Hover | null = null
-		if (sketch.getCompileErrors.length == 0) {
+		let hoverResult: Hover | null = null;
+		let compileErrors : sketch.CompileError[] = sketch.getCompileErrors();
+		
+		if (compileErrors.length == 0) {
 			hoverResult = hover.scheduleHover(params)
 		} else {
-			sketch.getCompileErrors().forEach(function (compileError) {
+			compileErrors.forEach(function (compileError) {
 				let errorLine = compileError.lineNumber
 				hoverResult = hover.scheduleHover(params, errorLine)
 			})
@@ -250,6 +265,17 @@ connection.onHover(
 		return hoverResult
 	}
 )
+
+// When the client requests document symbols
+connection.onDocumentSymbol((params: DocumentSymbolParams) => 
+{
+	const document = documents.get(params.textDocument.uri);
+	if (!document)
+	  return null;
+  
+	return ProcessingParser.ParseSymbols(document.getText());
+});
+
 
 documents.listen(connection);
 connection.listen();

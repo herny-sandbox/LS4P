@@ -40,6 +40,11 @@
       "type": "object",
       "title": "Processing configuration",
       "properties": {
+        "processing.path": {
+          "type": "string",
+          "default": "processing-java",
+          "description": "Path to Processing. Leave default if you've added processing to your path, otherwise enter the path to processing-java here. Example: 'C:\\Program Files\\processing-3.0.1\\processing-java' for Windows"
+        },
         "languageServerExample.maxNumberOfProblems": {
           "scope": "resource",
           "type": "number",

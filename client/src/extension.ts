@@ -48,7 +48,7 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.window.showInformationMessage(`Running Processing Sketch.!`);
 		try{
 			// exec(`mkdir client/out/class`)
-			let workspacePath = vscode.workspace.rootPath;
+			let workspacePath = vscode.workspace.workspaceFolders[0];
 			childProcess.exec(`cp -a ${workspacePath}/** ${__dirname}/class`)
 			childProcess.exec(`cp ${__dirname.substring(0,__dirname.length-11)}/server/out/compile/** ${__dirname}/class`)
 			childProcess.exec(`cd ${__dirname.substring(0,__dirname.length-11)}/client/out/class ; java -classpath ${__dirname.substring(0,__dirname.length-11)}/server/src/processing/jar/core.jar: ProcessingDefault`)
