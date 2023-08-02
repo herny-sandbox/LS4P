@@ -86,11 +86,11 @@ export class ProcessingParser
 		}
 
 		// Recursively traverse child nodes
-		for (let i = 0; i < node.childCount; i++) 
+		for (let i = 0; node.children && i < node.children.length; i++) 
 		{
-			const child : ast.ParseTree = node.getChild(i, ast.CompilationUnitContext);
-			if(child)
-				ProcessingParser.Traverse(child, symbols);
+			// const child : ast.ParseTree = node.children[i];
+			// if(child)
+			// 	ProcessingParser.Traverse(child, symbols);
 		}
 	}
 }

@@ -25,7 +25,8 @@ export  function performPreProcessing(unProcessedCode: string): string{
 	let processedCode = codeRefactoring.pipeLine(unProcessedCode)
 	let higherOrderMethodCount = allMethodsCount(processedCode) - classMethodsCount(processedCode)
 
-	if(higherOrderMethodCount == 0) {
+	if(higherOrderMethodCount == 0) 
+	{
 		setBehaviours(true,false)
 		log.write(`Setup Behaviour`, log.severity.BEHAVOIR)
 		log.write("PreProcessing complete!", log.severity.SUCCES)
@@ -43,7 +44,8 @@ export  function performPreProcessing(unProcessedCode: string): string{
  * Provides the current behaviour type of a sketch
  * @returns Behavoir type
  */
-export function getBehavoirType() : Behaviour {
+export function getBehavoirType() : Behaviour 
+{
 	return behaviourType
 }
 
@@ -52,7 +54,8 @@ export function getBehavoirType() : Behaviour {
  * @param _b1 default behaviour
  * @param _b2 method behavior
  */
-function setBehaviours(_b1:boolean,_b2: boolean){
+function setBehaviours(_b1:boolean,_b2: boolean)
+{
 	behaviourType = {
 		defaultEnabled : _b1,
 		methodEnabled : _b2
@@ -64,14 +67,15 @@ function setBehaviours(_b1:boolean,_b2: boolean){
  * @param code Code to count the amount of methods form
  * @returns Amount of methods inside classes
  */
-function classMethodsCount(code : string) : number {
+function classMethodsCount(code : string) : number 
+{
 	let classMethodNames : string[] = []
 	let tokenArray = parser.parseAST(code)
 
-	tokenArray.forEach(function(token,index){
-		if(token[1] instanceof MethodDeclarationContext){
+	tokenArray.forEach(function(token,index)
+	{
+		if(token[1] instanceof MethodDeclarationContext)
 			classMethodNames.push(token[0].text)
-		}
 	})
 
 	return classMethodNames.length
@@ -83,15 +87,16 @@ function classMethodsCount(code : string) : number {
  * @param code Code to count the amount of methods form
  * @returns Amount of methods
  */
-function allMethodsCount(code : string) : number{
+function allMethodsCount(code : string) : number
+{
 	let allMethodNames: string[] = []
 	let unProcessedLineSplit = code.split(`\n`)
 
-	unProcessedLineSplit.forEach(function(line){
+	unProcessedLineSplit.forEach(function(line)
+	{
 		let methodName: RegExpExecArray | null
-		if(methodName = pStandards.methodPattern.exec(line)){
+		if(methodName = pStandards.methodPattern.exec(line))
 			allMethodNames.push(methodName[1])
-		}
 	})
 
 	return allMethodNames.length

@@ -4,13 +4,13 @@ import * as pStandards from './grammer/terms/processingStandards'
 import * as preprocessor from './preprocessing'
 import { ParseTree } from 'antlr4ts/tree/ParseTree'
 import { TextDocument } from 'vscode-languageserver-textdocument';
+import { ParserRuleContext } from 'antlr4ts';
 
 const fs = require('fs')
 const pathM = require('path')
 const childProcess = require('child_process');
 
 let sketchInfo : Info;
-let contents  = new Map<string, string>()
 let initialized = false;
 
 let unProcessedCode : string = ''
@@ -25,21 +25,36 @@ let jrePath:string = ''
  * The interface holds the line number and name of the .pde file (tab).
 */
 let transformMap = new Map<number, IOriginalTab>()
+let pdeMap  = new Map<string, PdeContentInfo>()
 
-export interface IOriginalTab {
+export interface IOriginalTab 
+{
 	lineNumber: number;
 	fileName: string;
 }
 
-export interface Info{
+export interface Info
+{
 	path : string,
 	uri : string,
 	name : string,
 }
 
-export interface CompileError{
+export interface CompileError
+{
 	lineNumber: number,
 	message: string
+}
+export interface PdeContentInfo
+{
+	rawContent : string;
+	tokens: ParseTree[] | null;
+	compiledLineStart: number;
+	compiledLineEnd: number;
+}
+function createPdeContentInfo(c : string, t: ParseTree[] | null, n0: number, nf : number)
+{
+	return {rawContent: c, tokens: t, compiledLineStart: n0, compiledLineEnd : nf };
 }
 
 /**
@@ -49,47 +64,72 @@ export interface CompileError{
  * @param textDocument  .pde file(tab) in the sketch directory.
  * @returns Creation succes state
  */
-export function initialize(textDocument: TextDocument) {
-	
-	let uri = pathM.dirname(textDocument.uri)+'/'
-	let path = getPathFromUri(uri)
-	let name = pathM.basename(path)
+export function initialize(workspacePath: string) 
+{
+	let uri = workspacePath;
+	let path = getPathFromUri(uri);
+	let name = pathM.basename(path);
 	sketchInfo = { 
 		uri : uri,
 		path : path,
 		name : name
 	}
-	jrePath = `${__dirname.substring(0,__dirname.length-11)}/jre/bin`
+	jrePath = `${__dirname.substring(0,__dirname.length-11)}/jre/bin`;
 
-	try {
-		let mainFileName = sketchInfo.name+'.pde'
-		let mainFileContents = fs.readFileSync(sketchInfo.path+mainFileName, 'utf-8')
+	try 
+	{
+		let mainFileName = sketchInfo.name+'.pde';
+		let mainFileContents : string = fs.readFileSync(sketchInfo.path+mainFileName, 'utf-8');
 
-		contents.set(mainFileName, mainFileContents)
+		refreshPdeContent(mainFileName, mainFileContents);
+		//contents.set(mainFileName, mainFileContents);
 	}
-	catch (e) {
-		log.write("Something went wrong while loading the main file", log.severity.ERROR)
-		log.write(e, log.severity.ERROR)
-		return false
+	catch (e) 
+	{
+		log.write("Something went wrong while loading the main file", log.severity.ERROR);
+		log.write(e, log.severity.ERROR);
+		return false;
 	}
 
-	try{
-		let fileNames = fs.readdirSync(sketchInfo.path)
+	try
+	{
+		let fileNames = fs.readdirSync(sketchInfo.path);
 		fileNames.forEach((fileName : string) =>{
-			if (fileName.endsWith('.pde') && !fileName.includes(sketchInfo.name)){
-				let tabContents = fs.readFileSync(sketchInfo.path+fileName, 'utf-8')
-				contents.set(fileName, tabContents)
+			if (fileName.endsWith('.pde') && !fileName.includes(sketchInfo.name))
+			{
+				let tabContents = fs.readFileSync(sketchInfo.path+fileName, 'utf-8');
+				refreshPdeContent(fileName, tabContents);
+				//contents.set(fileName, tabContents);
 			}
 		});
 	}
-	catch(e) {
-		log.write("Some thing went wrong while loading the other files", log.severity.ERROR)
-		log.write(e, log.severity.ERROR)
-		return false
+	catch(e) 
+	{
+		log.write("Some thing went wrong while loading the other files", log.severity.ERROR);
+		log.write(e, log.severity.ERROR);
+		return false;
 	}
 	
 	initialized = true
 	return true
+}
+
+export function prepareSketch(sketchFolder : string)
+{
+	log.write("sketch prepare start", log.severity.EVENT);
+	initialize(sketchFolder+'/');
+
+	let bigCount = 1
+	for (let [pdeName, pdeContents] of pdeMap) 
+		bigCount = cookTransformDict(pdeName, pdeContents, bigCount);
+
+	unProcessedCode = getContent();
+	//processedCode = preprocessor.performPreProcessing(unProcessedCode);
+
+	log.write("parsing AST", log.severity.EVENT);
+	let ast : ParseTree = parser.parse(unProcessedCode);
+	LinkTokensWithPDEs(ast);
+	log.write("sketch prepare end", log.severity.EVENT);
 }
 
 /**
@@ -99,27 +139,38 @@ export function initialize(textDocument: TextDocument) {
  * 
  * @param textDocument last changed document
  */
-export function build(textDocument: TextDocument){
-	if (!initialized) {
-		initialize(textDocument);
-	}
+export function build(textDocument: TextDocument)
+{
+	if (!initialized)
+		initialize(pathM.dirname(textDocument.uri)+'/');
 
+	log.write("sketch build started", log.severity.EVENT);
 	updateContent(textDocument)
 	unProcessedCode = getContent()
 	processedCode = preprocessor.performPreProcessing(unProcessedCode)
-	tokenArray = parser.parseAST(processedCode)
-	compile(processedCode)
+	log.write("parsing AST pairs", log.severity.EVENT);
+	tokenArray = parser.parseAST(processedCode);
+	log.write("parsing AST", log.severity.EVENT);
+	let ast : ParseTree = parser.parse(processedCode);
+	log.write("LinkTokensWithPDEs", log.severity.EVENT);
+	if(ast instanceof ParserRuleContext) 
+		LinkTokensWithPDEs(ast);
 
+	//compile(processedCode)
 	// Wrote methods to handle Error in the Error Stream
 	// diagnostics.cookDiagnosticsReport(processedText)
-	let pwd
-	if (process.platform === 'win32') {
-		let cwd = __dirname.replace(/(\\)/g, "/")
-		pwd =`${cwd}/compile/${pStandards.defaultClassName}.java`
-	}else {
-		pwd = `${__dirname}/compile/${pStandards.defaultClassName}.java`
-	}
-	cookCompilationErrors(pwd)
+	// let pwd
+	// if (process.platform === 'win32') 
+	// {
+	// 	let cwd = __dirname.replace(/(\\)/g, "/")
+	// 	pwd =`${cwd}/compile/${pStandards.defaultClassName}.java`
+	// }
+	// else 
+	// {
+	// 	pwd = `${__dirname}/compile/${pStandards.defaultClassName}.java`
+	// }
+	// cookCompilationErrors(pwd);
+	log.write("sketch build ended", log.severity.EVENT);
 }
 
 /**
@@ -129,24 +180,24 @@ export function build(textDocument: TextDocument){
  * @param changedDocument Document of which the content should be updated
  * @returns Update succes state
  */
-export function updateContent(changedDocument: TextDocument) {
-
-	if (!initialized) {
-		return false
-	}
+export function updateContent(changedDocument: TextDocument) 
+{
+	if (!initialized)
+		return false;
 
 	//Update content
-	let tabName = pathM.basename(changedDocument.uri)
-	if(tabName.endsWith('.pde')) {
-		contents.set(tabName, changedDocument.getText())
+	let tabName = pathM.basename(changedDocument.uri);
+	if(tabName.endsWith('.pde'))
+	{
+		refreshPdeContent(tabName, changedDocument.getText());
+		//contents.set(tabName, changedDocument.getText());
 	}
 
 	//Update transformation dict
 	let bigCount = 1
-	for (let [fileName, fileContents] of contents) {
-		fileContents += '\n'
-
-		bigCount = cookTransformDict(fileName, fileContents, bigCount)
+	for (let [pdeName, pdeContents] of pdeMap) 
+	{
+		bigCount = cookTransformDict(pdeName, pdeContents, bigCount)
 	}
 
 	return true
@@ -158,13 +209,17 @@ export function updateContent(changedDocument: TextDocument) {
  * 
  * @param uri Location to the file that needs adding
  */
- export function addTab(uri: string) {
-	if (initialized) {
-		let fileName = pathM.basename(uri)
-		if (fileName.endsWith('.pde')) {
-			let tabContents = fs.readdirSync(sketchInfo.path+fileName, 'utf-8')
-			contents.set(fileName, tabContents)
-		}
+ export function addTab(uri: string) 
+ {
+	if (!initialized)
+		return;
+
+	let fileName = pathM.basename(uri)
+	if (fileName.endsWith('.pde')) 
+	{
+		let tabContents = fs.readdirSync(sketchInfo.path+fileName, 'utf-8');
+		refreshPdeContent(fileName, tabContents);
+		//contents.set(fileName, tabContents)
 	}
 }
 
@@ -174,20 +229,22 @@ export function updateContent(changedDocument: TextDocument) {
  * 
  * @param uri Location to the file that needs removing
  */
-export function removeTab(uri: string) {
-	if (initialized) {
-		let fileName = pathM.basename(uri)
-		if (fileName.endsWith('.pde') && contents.has(fileName)) {
-			contents.delete(fileName)
-		}
-	}
+export function removeTab(uri: string) 
+{
+	if (!initialized)
+		return;
+
+	let fileName = pathM.basename(uri)
+	if (fileName.endsWith('.pde') && pdeMap.has(fileName))
+		pdeMap.delete(fileName);
 }
 
 /**
  * Provides the basic sketch info
  * @returns Sketch ifo
  */
-export function getInfo() : Info {
+export function getInfo() : Info 
+{
 	return sketchInfo;
 }
 
@@ -196,18 +253,15 @@ export function getInfo() : Info {
  * 
  * @returns sketch content
  */
-export function getContent() : string{
-
-	if (!initialized) {
-		return ''
-	}
-
+export function getContent() : string
+{
+	if (!initialized)
+		return '';
+	
 	let content = ''
 
-	for (let [fileName, fileContents] of contents) {
-		fileContents += '\n' //Tab must end with a new line
-		content += fileContents
-	}
+	for (let [fileName, pdeContent] of pdeMap) 
+		content += pdeContent.rawContent + '\n'; //Tab must end with a new line
 
 	return content
 }
@@ -217,17 +271,15 @@ export function getContent() : string{
  * 
  * @returns sketch file names
  */
- export function getFileNames() : string[] | undefined{
+ export function getFileNames() : string[] | undefined
+ {
+	if (!initialized)
+		return;
 
-	if (!initialized) {
-		return
-	}
+	let fileNames : string[] = new Array;
 
-	let fileNames : string[] = new Array
-
-	for (let [fileName, fileContents] of contents) {
+	for (let [fileName, fileContents] of pdeMap)
 		fileNames.push(fileName)
-	}
 
 	return fileNames
 }
@@ -238,19 +290,20 @@ export function getContent() : string{
  * @param uri Uri to the file
  * @returns tab content or undefined if no file is found
  */
-export function getTabContent(uri : string) : string | undefined{
-	if (!initialized) {
+export function getTabContent(uri : string) : string | undefined
+{
+	if (!initialized)
 		return
-	}
+	
 	let tabName = pathM.basename(uri)
 
-	for (let [fileName, fileContents] of contents) {
-		if (fileName == tabName) {
-			return fileContents
-		}
+	for (let [fileName, fileContents] of pdeMap) 
+	{
+		if (fileName == tabName)
+			return fileContents.rawContent;
 	}
 
-	return
+	return undefined;
 
 }
 
@@ -260,14 +313,15 @@ export function getTabContent(uri : string) : string | undefined{
  * The ammount of lines that where added can change depending on the unprocessed code.
  * @returns number of lines added during preprocessing
  */
- export function getLineOffset() : number {
-	let adjustOffset = 0
-	let behaviourType = preprocessor.getBehavoirType()
-	if(behaviourType.defaultEnabled){
-		adjustOffset = pStandards.reduceLineDefaultBehaviour
-	} else if(behaviourType.methodEnabled){
-		adjustOffset = pStandards.reduceLineMethodBehaviour
-	}
+ export function getLineOffset() : number 
+ {
+	let adjustOffset = 0;
+	let behaviourType = preprocessor.getBehavoirType();
+
+	if(behaviourType.defaultEnabled)
+		adjustOffset = pStandards.reduceLineDefaultBehaviour;
+	else if(behaviourType.methodEnabled)
+		adjustOffset = pStandards.reduceLineMethodBehaviour;
 
 	return adjustOffset
 }
@@ -282,7 +336,8 @@ export function getTabContent(uri : string) : string | undefined{
  * @param processedLineNumber The processed text line number to use.
  * @returns The amount of characters to offset
  */
-export function getCharacterOffset(unProcessedLineNumber: number, processedLineNumber: number): number {
+export function getCharacterOffset(unProcessedLineNumber: number, processedLineNumber: number): number 
+{
 	let offset: number = 0;
 	let processedTextSplit = processedCode.split(/\r\n|\n/)
 	let unProcessedTextSplit = unProcessedCode.split(/\r\n|\n/)
@@ -306,7 +361,8 @@ export function getCharacterOffset(unProcessedLineNumber: number, processedLineN
  * 
  * @returns The token parse tree of the sketch
  */
-export function getTokenArray() : [ParseTree, ParseTree][]{
+export function getTokenArray() : [ParseTree, ParseTree][]
+{
 	return tokenArray;
 }
 
@@ -314,7 +370,8 @@ export function getTokenArray() : [ParseTree, ParseTree][]{
  * Provides a array of all compile errors
  * @returns Array of all compile errors
  */
-export function getCompileErrors() : CompileError[]{
+export function getCompileErrors() : CompileError[]
+{
 	return compileErrors
 }
 
@@ -323,7 +380,8 @@ export function getCompileErrors() : CompileError[]{
  * and its linenumbers to the original tab (.pde file) code
  * @returns transformation map
  */
-export function getTransformationMap() : Map<number, IOriginalTab>{
+export function getTransformationMap() : Map<number, IOriginalTab>
+{
 	return transformMap
 }
 
@@ -334,7 +392,8 @@ export function getTransformationMap() : Map<number, IOriginalTab>{
  * @param line Line to be mapped
  * @returns [word, startPos, endPos][]
  */
- export function lineMap(line: string) : [string, number, number][]{
+ export function lineMap(line: string) : [string, number, number][]
+ {
 	return parser.lineMap(line)
  }
 
@@ -343,23 +402,30 @@ export function getTransformationMap() : Map<number, IOriginalTab>{
  * 
  * @param processedCode Code to compile
  */
-function compile(processedCode: string){
+function compile(processedCode: string)
+{
 	// mkdir /out/compile
 	// make sure to set .classpath for Processing core as environment variable
 	// This suites for raw java case - should handle for default and setupDraw case
-	try{
+	try
+	{
 		fs.writeFileSync(__dirname+"/compile/"+pStandards.defaultClassName+".java", processedCode)
 		log.write(`Java File created`, log.severity.SUCCES)
-	} catch(e) {
+	} 
+	catch(e) 
+	{
 		log.write(`Java File Creation failed`, log.severity.ERROR)
 		log.write(e, log.severity.ERROR)
 	}
 
-	try{
+	try
+	{
 		childProcess.execSync(`${jrePath}/java --module compilerModule/com.compiler ${__dirname}/compile/${pStandards.defaultClassName}.java > ${__dirname}/compile/error.txt`, 
 		{ stdio:[ 'inherit', 'pipe', 'pipe' ], windowsHide : true})
 		log.write(`Java File compiled`, log.severity.SUCCES)
-	} catch(e) {
+	} 
+	catch(e) 
+	{
 		log.write(`Java file compilation failed`, log.severity.ERROR)
 		log.write(e, log.severity.ERROR)
 	}
@@ -370,48 +436,59 @@ function compile(processedCode: string){
  * 
  * @param pwd Path to the error.txt file generated by the compiler
  */
-function cookCompilationErrors(pwd: string){
+function cookCompilationErrors(pwd: string)
+{
 	// If one error is fixed it's not popped from stack - check
-	try {  
+	try 
+	{  
 		compileErrors = new Array()
 		let data = fs.readFileSync(`${__dirname}/compile/error.txt`, 'utf-8')
-		if(data == ''){
+		if(data == '')
+		{
 			// No Error on Compilation
 			log.write(`No error on compilation`, log.severity.INFO)
-		} else if(data.split(`:`)[0] == `Note`){
+		} 
+		else if(data.split(`:`)[0] == `Note`)
+		{
 			// Compilation warning
 			log.write(`Compilation warning encountered`, log.severity.WARNING)
-		} else {
+		} 
+		else 
+		{
 			let tempSplit = data.split('\n')
 			
-			tempSplit.forEach(function(line:string, index: number){
-				if(line.includes(`${pwd}`)){
-					let innerSplit = line.split(":")
+			tempSplit.forEach(function(line:string, index: number)
+			{
+				if(line.includes(`${pwd}`))
+				{
+					let innerSplit = line.split(":");
 
 					// Windows paths have a colon after the drive letter
 					// Shifts the error colon by one in the array
-					let splitIndex
-					if(process.platform === 'win32') {
-						splitIndex = 3
-					}
-					else {
-						splitIndex = 2
-					}
+					let splitIndex;
+					if(process.platform === 'win32')
+						splitIndex = 3;
+					else
+						splitIndex = 2;
 
 					// Handling line number based on current Behaviour - since preprocessing is done
 					let errorLineNumber = +innerSplit[splitIndex].replace("L", "") - getLineOffset()
 
 					let localIndex = index + 1
 					let errorMessage = ""
-					while(true){
-						if (localIndex >= tempSplit.length) {
-							break
-						}
+					while(true)
+					{
+						if (localIndex >= tempSplit.length)
+							break;
+						
 						else if(tempSplit[localIndex].includes(`${pwd}`) || 
 							tempSplit[localIndex].includes(`error`) ||
-							tempSplit[localIndex].includes(`errors`)) {
-							break
-						} else {
+							tempSplit[localIndex].includes(`errors`)) 
+						{
+							break;
+						} 
+						else 
+						{
 							errorMessage += `\n ${tempSplit[localIndex]}`
 							localIndex+=1
 						}
@@ -437,14 +514,17 @@ function cookCompilationErrors(pwd: string){
  * @param bigCount Line number in the created java file
  * @returns 
  */
-function cookTransformDict(fileName: string, fileContents: string, bigCount: number) : number{
+function cookTransformDict(fileName: string, pdeContent: PdeContentInfo, bigCount: number) : number{
 
 	// Revert big count due to new line at end of a tab
-	if (bigCount > 1) {
+	if (bigCount > 1)
 		bigCount -= 1
-	}
 
-	try {
+	try 
+	{
+		let fileContents : string = pdeContent.rawContent + "\n";
+		pdeContent.compiledLineStart = bigCount;
+
 		// Create transformation Dictonary
 		let lineCount = 1			
 		fileContents.split(/\r?\n/).forEach((line) => {
@@ -452,6 +532,7 @@ function cookTransformDict(fileName: string, fileContents: string, bigCount: num
 			bigCount ++
 			lineCount ++
 		})
+		pdeContent.compiledLineEnd = bigCount;
 		log.write(`Transform dictonary created for : ${fileName}`, log.severity.INFO)
 	}
 	catch (e)
@@ -461,8 +542,33 @@ function cookTransformDict(fileName: string, fileContents: string, bigCount: num
 	}
 
 	return bigCount;
-
 }
+
+
+function LinkTokensWithPDEs(node : ParseTree)
+{
+	if(!(node instanceof ParserRuleContext))
+		return;
+	const startPos : number = node.start.line;
+	const endPos : number = node.stop?.line ?? startPos;
+	let found = false;
+	for (let [pdeName, pdeContent] of pdeMap) 
+	{
+		if( startPos >= pdeContent.compiledLineStart && endPos < pdeContent.compiledLineEnd )
+		{
+			if(!pdeContent.tokens)
+				pdeContent.tokens = [];
+			pdeContent.tokens.push(node);
+			found = true;
+		}
+	}
+	if(node.children && !found)
+	{
+		for(let i=0; i < node.childCount; i++)
+			LinkTokensWithPDEs(node.children[i]);
+	}
+}
+
 
 /**
  * Transforms a file uri to a path
@@ -470,11 +576,12 @@ function cookTransformDict(fileName: string, fileContents: string, bigCount: num
  * @param uri File based Uniform resource identifier
  * @returns Path in OS style
  */
-function getPathFromUri(uri : string) : string {
-	let path = uri.replace('file:///', '')
-	path =  path.replace('%3A', ':')
+export function getPathFromUri(uri : string) : string 
+{
+	let path = uri.replace('file:///', '');
+	path =  path.replace('%3A', ':');
 
-	return path
+	return path;
 }
 
 /**
@@ -483,9 +590,28 @@ function getPathFromUri(uri : string) : string {
  * @param path Path of a file
  * @returns Uniform resource identifier (URI) to the file path
  */
-function getUriFromPath(path : string) : string  {
-	let tempUri = path.replace(':', '%3A')
-	tempUri = 'file:///'+ + tempUri
+function getUriFromPath(path : string) : string  
+{
+	let tempUri = path.replace(':', '%3A');
+	tempUri = 'file:///'+ + tempUri;
 
-	return tempUri
+	return tempUri;
+}
+
+export function getPdeContentInfo(pdeName : string ) : PdeContentInfo | undefined
+{
+	return pdeMap.get(pdeName);
+}
+
+function refreshPdeContent(pdeName : string, newContent : string | undefined)
+{
+	let info : PdeContentInfo | undefined = pdeMap.get(pdeName);
+	if(info)
+	{
+		if(newContent)
+			info.rawContent = newContent;
+	}
+	else if(newContent)
+		pdeMap.set(pdeName, createPdeContentInfo(newContent, null, 0, 0));
+
 }

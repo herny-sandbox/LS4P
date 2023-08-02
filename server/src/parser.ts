@@ -13,25 +13,30 @@ const JavaParser_1 = require("java-ast/dist/parser/JavaParser");
  * @param processedText code to generate a parsetree from
  * @returns Parse tree
  */
-export function parseAST(processedText: string) : [ParseTree, ParseTree][] {
+export function parseAST(processedText: string) : [ParseTree, ParseTree][] 
+{
 	let ast = parse(processedText)
 	let tokenArray: [ParseTree, ParseTree][] = new Array();
 	let _tokenCounter = -1
 	
-	for(let i = 0; i < ast.childCount; i++){
-		extractTokens(ast.children![i])
-	}
+	extractTokens(ast);
+	// for(let i = 0; i < ast.childCount; i++)
+	// 	extractTokens(ast.children![i])
 
 	log.write("Parse Tree constructed", log.severity.SUCCES)
 	return tokenArray
 
-	function extractTokens(gotOne: ParseTree){
-		for(let j = 0; j < gotOne.childCount; j++){
-			if(gotOne.getChild(j).childCount == 0){
+	function extractTokens(gotOne: ParseTree)
+	{
+		for(let j = 0; j < gotOne.childCount; j++)
+		{
+			let child : ParseTree =  gotOne.getChild(j);
+			if(child.childCount == 0)
+			{
 				_tokenCounter +=1
-				tokenArray[_tokenCounter] = [gotOne.getChild(j),gotOne]
+				tokenArray[_tokenCounter] = [child,gotOne]
 			}
-			extractTokens(gotOne.getChild(j))
+			extractTokens(child)
 		}
 	}
 }
@@ -43,7 +48,8 @@ export function parseAST(processedText: string) : [ParseTree, ParseTree][] {
  * @param line Line to be mapped
  * @returns [word, startPos, endPos][]
  */
-export function lineMap(line: string) : [string, number, number][]{
+export function lineMap(line: string) : [string, number, number][]
+{
 	let currentTempAST: [ParseTree][] = new Array()
 	let tempCounter = -1
 
@@ -78,20 +84,22 @@ export function lineMap(line: string) : [string, number, number][]{
  * @param source string to be parsed
  * @returns Compilation unit
  */
-function parse(source : string) {
+export function parse(source : string) 
+{
 	let consoleOriginal = console
-	try {
-	console = redirectConsole(console)
-    const chars = new antlr4ts_1.ANTLRInputStream(source);
-    const lexer = new JavaLexer_1.JavaLexer(chars);
-    const tokens = new antlr4ts_1.CommonTokenStream(lexer);
-    const parser = new JavaParser_1.JavaParser(tokens);
-	const compilationUnit = parser.compilationUnit();
-	console = consoleOriginal
-    return compilationUnit
-
+	try 
+	{
+		console = redirectConsole(console)
+		const chars = new antlr4ts_1.ANTLRInputStream(source);
+		const lexer = new JavaLexer_1.JavaLexer(chars);
+		const tokens = new antlr4ts_1.CommonTokenStream(lexer);
+		const parser = new JavaParser_1.JavaParser(tokens);
+		const compilationUnit = parser.compilationUnit();
+		console = consoleOriginal
+		return compilationUnit
 	}
-	catch(e){
+	catch(e)
+	{
 		console = consoleOriginal
 		log.write("Parsing failed", log.severity.ERROR)
 		log.write(e, log.severity.ERROR)

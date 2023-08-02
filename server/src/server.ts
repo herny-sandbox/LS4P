@@ -25,7 +25,7 @@ import {
 
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { ProcessingSketch } from "./ProcessingSketch";
-import { ProcessingParser } from "./ProcessingParser";
+import { DocumentSymbols } from "./DocumentSymbols";
 
 import * as completion from './completion';
 import * as definition from './definition';
@@ -34,6 +34,7 @@ import * as hover from './hover';
 import * as reference from './references';
 import * as log from './scripts/syslogs';
 import * as sketch from './sketch';
+import * as path from 'path';
 
 export let connection = createConnection(ProposedFeatures.all);
 const processingSketch = new ProcessingSketch();
@@ -59,7 +60,11 @@ connection.onInitialize((params: InitializeParams) => {
 		capabilities.textDocument.publishDiagnostics.relatedInformation
 	);
 
-	const result: InitializeResult = {
+	if(params.workspaceFolders && params.workspaceFolders.length > 0)
+		sketch.prepareSketch(params.workspaceFolders[0].uri);
+
+	const result: InitializeResult = 
+	  {
 		capabilities: {
 			textDocumentSync: TextDocumentSyncKind.Incremental,
 			// Tell the client that this server supports code completion.
@@ -147,8 +152,8 @@ export let latestChangesInTextDoc: TextDocument
 documents.onDidOpen((event: { document: TextDocument; }) => {
 	log.write(`File Open / Tab switching occured`, log.severity.EVENT)
 	latestChangesInTextDoc = event.document
-	sketch.build(event.document)
-	diagnostics.checkForRealtimeDiagnostics(event.document)
+	//sketch.build(event.document)
+	//diagnostics.checkForRealtimeDiagnostics(event.document)
 });
 
 documents.onDidClose((e: { document: { uri: string; }; }) => {
@@ -166,11 +171,13 @@ documents.onDidChangeContent((change: { document: TextDocument; }) => {
 });
 
 
-async function initPreProcessDiagnostics() {
+async function initPreProcessDiagnostics() 
+{
+	log.write(`initPreProcessDiagnostics`, log.severity.EVENT)
 	bufferInProgress = true
-	await sleep(300);
-	sketch.build(latestChangesInTextDoc)
-	diagnostics.checkForRealtimeDiagnostics(latestChangesInTextDoc)
+	//await sleep(300);
+	//sketch.build(latestChangesInTextDoc)
+	//diagnostics.checkForRealtimeDiagnostics(latestChangesInTextDoc)
 	bufferInProgress = false
 }
 
@@ -248,32 +255,40 @@ connection.onCompletionResolve(
 );
 
 // Implementation for Hover request
-connection.onHover(
-	(params: TextDocumentPositionParams): Hover | null => {
-		let hoverResult: Hover | null = null;
-		let compileErrors : sketch.CompileError[] = sketch.getCompileErrors();
-		
-		if (compileErrors.length == 0) {
-			hoverResult = hover.scheduleHover(params)
-		} else {
-			compileErrors.forEach(function (compileError) {
-				let errorLine = compileError.lineNumber
-				hoverResult = hover.scheduleHover(params, errorLine)
-			})
-		}
-		log.write("Hover Invoked, result: "+hoverResult?.contents, log.severity.EVENT)
-		return hoverResult
-	}
-)
+connection.onHover(	(params: TextDocumentPositionParams): Hover | null => 
+{
+	let hoverResult: Hover | null = null;
+	//let compileErrors : sketch.CompileError[] = sketch.getCompileErrors();
+	
+	// if (compileErrors.length == 0) {
+	// 	hoverResult = hover.scheduleHover(params)
+	// } else {
+	// 	compileErrors.forEach(function (compileError) {
+	// 		let errorLine = compileError.lineNumber
+	// 		hoverResult = hover.scheduleHover(params, errorLine)
+	// 	})
+	// }
+	//log.write("Hover Invoked, result: "+hoverResult?.contents, log.severity.EVENT)
+	return hoverResult
+});
 
 // When the client requests document symbols
 connection.onDocumentSymbol((params: DocumentSymbolParams) => 
 {
-	const document = documents.get(params.textDocument.uri);
-	if (!document)
-	  return null;
-  
-	return ProcessingParser.ParseSymbols(document.getText());
+	const pdeName : string = path.basename(sketch.getPathFromUri(params.textDocument.uri));
+	let pdeInfo : sketch.PdeContentInfo | undefined = sketch.getPdeContentInfo(pdeName);
+	if(!pdeInfo)
+		return null;
+
+	let offset : number = pdeInfo.compiledLineStart;
+	let tokens = pdeInfo.tokens;
+	if(!tokens)
+		return null;
+
+	log.write("Preparing to show document symbols for: "+params.textDocument.uri, log.severity.EVENT);
+	let result: DocumentSymbol [] = [];
+	DocumentSymbols.generateSymbolsFromArray(tokens, offset, result);
+	return result;
 });
 
 

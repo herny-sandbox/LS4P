@@ -7,7 +7,7 @@ import {
 	LanguageClientOptions,
 	ServerOptions,
 	TransportKind
-} from 'vscode-languageclient';
+} from 'vscode-languageclient/node';
 
 let client: LanguageClient;
 
@@ -62,6 +62,7 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.executeCommand('editor.action.findReferences', vscode.Uri.file(args[0].uri.substring(7,args[0].uri.length)), new vscode.Position(args[0].lineNumber,args[0].column));
 	})
 
+	//context.subscriptions.push(vscode.languages.registerDocumentSymbolProvider({ language: 'Processing' }, yourDocumentSymbolProvider));
 	context.subscriptions.push(disposable);
 	context.subscriptions.push(referenceDisposable)
 
