@@ -1,12 +1,12 @@
 {
-  "name": "processing-lsp",
+  "name": "vscode-processing-ls",
   "description": "Processing language server",
   "author": "Processing Foundation",
   "license": "MIT",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/processing-language-server/LS4P"
+    "url": "https://github.com/herny-sandbox/LS4P"
   },
   "publisher": "Processing",
   "categories": [],
@@ -97,6 +97,8 @@
     "typescript": "^5.2.0-dev.20230730"
   },
   "dependencies": {
+    "lru-cache" : "^6.0.0",
+    "brace-expansion": "^2.0.1",
     "@types/vscode": "^1.23.0"
   }
 }
