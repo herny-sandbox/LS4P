@@ -48,7 +48,7 @@ export function scheduleHover(params: lsp.TextDocumentPositionParams, errorLine:
 	if(errorLine - 1 == params.position.line)
 		return null;
 
-	let currentContent = sketch.getTabContent(params.textDocument.uri)
+	let currentContent = sketch.getPdeContentFromUri(params.textDocument.uri)
 	if (!currentContent)
 		return null;
 

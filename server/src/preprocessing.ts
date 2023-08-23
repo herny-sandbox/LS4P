@@ -3,6 +3,7 @@ import * as parser from './parser'
 import * as pStandards from './grammer/terms/processingStandards'
 import * as codeRefactoring from  './codeRefactoring'
 import { MethodDeclarationContext } from 'java-ast/dist/parser/JavaParser';
+import { CompilationUnitContext } from "./grammer/ProcessingParser";
 
 let behaviourType : Behaviour
 
@@ -20,7 +21,8 @@ export interface Behaviour{
  * @param unProcessedCode code to be processed
  * @returns processed code
  */
-export  function performPreProcessing(unProcessedCode: string): string{
+export  function performPreProcessing(unProcessedCode: string): string
+{
 	
 	let processedCode = codeRefactoring.pipeLine(unProcessedCode)
 	let higherOrderMethodCount = allMethodsCount(processedCode) - classMethodsCount(processedCode)
@@ -28,13 +30,13 @@ export  function performPreProcessing(unProcessedCode: string): string{
 	if(higherOrderMethodCount == 0) 
 	{
 		setBehaviours(true,false)
-		log.write(`Setup Behaviour`, log.severity.BEHAVOIR)
+		log.write(`Setup Behaviour`, log.severity.BEHAVIOR)
 		log.write("PreProcessing complete!", log.severity.SUCCES)
 		return pStandards.setupBehaviour(processedCode)
 	}
 	
 	setBehaviours(false,true)
-	log.write(`Method Behaviour`, log.severity.BEHAVOIR)
+	log.write(`Method Behaviour`, log.severity.BEHAVIOR)
 	log.write("PreProcessing complete!", log.severity.SUCCES)
 	return pStandards.methodBehaviour(processedCode)	
 	
@@ -71,13 +73,14 @@ function classMethodsCount(code : string) : number
 {
 	let classMethodNames : string[] = []
 	let tokenArray = parser.parseAST(code)
-
+	if(tokenArray)
+	{
 	tokenArray.forEach(function(token,index)
 	{
 		if(token[1] instanceof MethodDeclarationContext)
 			classMethodNames.push(token[0].text)
 	})
-
+	}
 	return classMethodNames.length
 
 }

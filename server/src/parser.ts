@@ -4,8 +4,16 @@ import { ParseTree } from 'antlr4ts/tree/ParseTree'
 const childProcess = require('child_process');
 const fs = require('fs')
 const antlr4ts_1 = require("antlr4ts");
-const JavaLexer_1 = require("java-ast/dist/parser/JavaLexer");
-const JavaParser_1 = require("java-ast/dist/parser/JavaParser");
+//const JavaLexer_1 = require("java-ast/dist/parser/JavaLexer");
+//const JavaParser_1 = require("java-ast/dist/parser/JavaParser");
+import { ProcessingParserListener } from "./grammer/ProcessingParserListener";
+import { ProcessingParserVisitor } from "./grammer/ProcessingParserVisitor";
+import { ProcessingErrorListener, clearSyntaxDiagnostics } from "./grammer/ProcessingErrorListener";
+import { ProcessingLexer } from "./grammer/ProcessingLexer";
+import { ProcessingParser, ProcessingSketchContext } from "./grammer/ProcessingParser";
+
+export let currentParser : ProcessingParser;
+let errorListener : ProcessingErrorListener;
 
 /**
  * Parses code to create a AST
@@ -15,11 +23,22 @@ const JavaParser_1 = require("java-ast/dist/parser/JavaParser");
  */
 export function parseAST(processedText: string) : [ParseTree, ParseTree][] 
 {
-	let ast = parse(processedText)
+	let ast = parse(processedText);
+	return buildTokenArray(ast);
+}
+
+/**
+ * Builds the token array
+ *  
+ * @param ast processing sketch context to generate a parsetree from
+ * @returns Parse tree
+ */
+export function buildTokenArray( ast : ProcessingSketchContext | undefined ) : [ParseTree, ParseTree][] 
+{
 	let tokenArray: [ParseTree, ParseTree][] = new Array();
 	let _tokenCounter = -1
-	
-	extractTokens(ast);
+	if(ast)
+		extractTokens(ast);
 	// for(let i = 0; i < ast.childCount; i++)
 	// 	extractTokens(ast.children![i])
 
@@ -54,8 +73,9 @@ export function lineMap(line: string) : [string, number, number][]
 	let tempCounter = -1
 
 	//Extract tokens
-	let currentTokens = parse(line)
-	for (let i = 0; i < currentTokens.childCount; i++) {
+	let currentTokens = parse(line);
+
+	for (let i = 0; currentTokens && i < currentTokens.childCount; i++) {
 		currentLineASTExtract(currentTokens.children![i])
 	}
 
@@ -84,23 +104,29 @@ export function lineMap(line: string) : [string, number, number][]
  * @param source string to be parsed
  * @returns Compilation unit
  */
-export function parse(source : string) 
+export function parse(source : string) : ProcessingSketchContext | undefined
 {
-	let consoleOriginal = console
+	//let consoleOriginal = console
 	try 
 	{
-		console = redirectConsole(console)
+		clearSyntaxDiagnostics();
+
+		//console = redirectConsole(console)
 		const chars = new antlr4ts_1.ANTLRInputStream(source);
-		const lexer = new JavaLexer_1.JavaLexer(chars);
+		const lexer = new ProcessingLexer(chars);
 		const tokens = new antlr4ts_1.CommonTokenStream(lexer);
-		const parser = new JavaParser_1.JavaParser(tokens);
-		const compilationUnit = parser.compilationUnit();
-		console = consoleOriginal
+		currentParser = new ProcessingParser(tokens);
+		errorListener = new ProcessingErrorListener();
+		currentParser.removeErrorListeners();
+		currentParser.addErrorListener(errorListener);
+		const compilationUnit = currentParser.processingSketch();
+		
+		//console = consoleOriginal
 		return compilationUnit
 	}
 	catch(e)
 	{
-		console = consoleOriginal
+		//console = consoleOriginal
 		log.write("Parsing failed", log.severity.ERROR)
 		log.write(e, log.severity.ERROR)
 	}
@@ -126,3 +152,8 @@ function redirectConsole(obj : any)
         }
     });
 }
+
+// class SintaxErrorListener extends BaseErrorListener
+// {
+
+// }

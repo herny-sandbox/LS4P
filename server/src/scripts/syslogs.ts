@@ -3,7 +3,7 @@ const logPath = `${__dirname.substring(0, __dirname.length - 8)}/logs/syslogs.lo
 export enum severity {
 	NONE,
 	INFO,
-	BEHAVOIR,
+	BEHAVIOR,
 	EVENT,
 	SUCCES,
 	WARNING,
@@ -68,7 +68,7 @@ function severityToString(logLevel : severity) : string {
 		case severity.INFO:
 			return "INFO"
 
-		case severity.BEHAVOIR:
+		case severity.BEHAVIOR:
 			return "BEHAVOIR"
 		
 		case severity.EVENT:

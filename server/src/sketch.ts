@@ -3,8 +3,12 @@ import * as parser from './parser'
 import * as pStandards from './grammer/terms/processingStandards'
 import * as preprocessor from './preprocessing'
 import { ParseTree } from 'antlr4ts/tree/ParseTree'
-import { TextDocument } from 'vscode-languageserver-textdocument';
+//import { TextDocument } from 'vscode-languageserver-textdocument';
 import { ParserRuleContext } from 'antlr4ts';
+import { ProcessingSketchContext, StaticProcessingSketchContext } from "./grammer/ProcessingParser";
+import { SymbolTableVisitor } from './symbols';
+import * as symbols from 'antlr4-c3'
+import { DocumentUri } from 'vscode-languageserver'
 
 const fs = require('fs')
 const pathM = require('path')
@@ -15,9 +19,12 @@ let initialized = false;
 
 let unProcessedCode : string = ''
 let processedCode: string = ''
+let processedSketchTokens : ProcessingSketchContext
 let compileErrors: CompileError[]
 let tokenArray: [ParseTree, ParseTree][];
 let jrePath:string = ''
+
+let symbolTableVisitor : SymbolTableVisitor;
 
 /** 
  * Map which maps the line in the java file to the line in the .pde file (tab). 
@@ -47,15 +54,21 @@ export interface CompileError
 }
 export interface PdeContentInfo
 {
+	name : string;
 	rawContent : string;
-	tokens: ParseTree[] | null;
-	compiledLineStart: number;
-	compiledLineEnd: number;
+	syntaxTokens : ParserRuleContext | null;
+	symbols : symbols.BaseSymbol [];
+	processedTokens: ParserRuleContext[] | null;
+	linesCount : number;
+	linesOffset: number;
 }
-function createPdeContentInfo(c : string, t: ParseTree[] | null, n0: number, nf : number)
+function createPdeContentInfo(name: string, c : string, lines : number)
 {
-	return {rawContent: c, tokens: t, compiledLineStart: n0, compiledLineEnd : nf };
+	return {name: name, rawContent: c, linesCount: lines, processedTokens: null, linesOffset: 0, syntaxTokens: null, symbols: [] };
 }
+
+export function getRootContext() { return processedSketchTokens; }
+export function getSymbolTable() { return symbolTableVisitor.symbolTable; }
 
 /**
  * Initializes a sketch. 
@@ -76,12 +89,14 @@ export function initialize(workspacePath: string)
 	}
 	jrePath = `${__dirname.substring(0,__dirname.length-11)}/jre/bin`;
 
+	symbolTableVisitor = new SymbolTableVisitor();
+
 	try 
 	{
 		let mainFileName = sketchInfo.name+'.pde';
 		let mainFileContents : string = fs.readFileSync(sketchInfo.path+mainFileName, 'utf-8');
 
-		refreshPdeContent(mainFileName, mainFileContents);
+		internalRefreshPdeContent(mainFileName, mainFileContents);
 		//contents.set(mainFileName, mainFileContents);
 	}
 	catch (e) 
@@ -98,7 +113,7 @@ export function initialize(workspacePath: string)
 			if (fileName.endsWith('.pde') && !fileName.includes(sketchInfo.name))
 			{
 				let tabContents = fs.readFileSync(sketchInfo.path+fileName, 'utf-8');
-				refreshPdeContent(fileName, tabContents);
+				internalRefreshPdeContent(fileName, tabContents);
 				//contents.set(fileName, tabContents);
 			}
 		});
@@ -110,51 +125,66 @@ export function initialize(workspacePath: string)
 		return false;
 	}
 	
+	cookPdeContentOffsets();
 	initialized = true
 	return true
 }
 
 export function prepareSketch(sketchFolder : string)
 {
-	log.write("sketch prepare start", log.severity.EVENT);
+	log.write("prepareSketch Started", log.severity.EVENT);
 	initialize(sketchFolder+'/');
 
-	let bigCount = 1
-	for (let [pdeName, pdeContents] of pdeMap) 
-		bigCount = cookTransformDict(pdeName, pdeContents, bigCount);
+	// let bigCount = 1
+	// for (let [pdeName, pdeContents] of pdeMap) 
+	// 	bigCount = cookTransformDict(pdeName, pdeContents, bigCount);
+	
+	
+}
 
-	unProcessedCode = getContent();
+export function startPreprocessing()
+{
+	log.write("startPreprocessing BEGIN", log.severity.EVENT);
+	
+	log.write("generating unprocessed content", log.severity.INFO);
+	unProcessedCode = getFullUnprocessedContent();
+	//log.write("generating preprocessing content", log.severity.EVENT);
 	//processedCode = preprocessor.performPreProcessing(unProcessedCode);
 
-	log.write("parsing AST", log.severity.EVENT);
-	let ast : ParseTree = parser.parse(unProcessedCode);
-	LinkTokensWithPDEs(ast);
-	log.write("sketch prepare end", log.severity.EVENT);
+	log.write("parsing AST", log.severity.INFO);
+	let ast : ProcessingSketchContext | undefined = parser.parse(unProcessedCode);
+	if(ast)
+	{
+		tokenArray = parser.buildTokenArray(ast);
+		processedSketchTokens = ast;
+		//symbolTableVisitor.visit(processedSketchTokens);
+		LinkTokensWithPDEs(processedSketchTokens);
+	}
+	log.write("startPreprocessing END", log.severity.EVENT);
+
 }
 
 /**
  * Creates the java-code does this by updating the existing code,
  * preprocessing, parsing the tokenarray and compiling the code.
  * After which the errors are checked
- * 
- * @param textDocument last changed document
  */
-export function build(textDocument: TextDocument)
+export function build()
 {
-	if (!initialized)
-		initialize(pathM.dirname(textDocument.uri)+'/');
+	// log.write("sketch build started", log.severity.EVENT);
+	// unProcessedCode = getFullJavaContent();
+	// processedCode = preprocessor.performPreProcessing(unProcessedCode);
 
-	log.write("sketch build started", log.severity.EVENT);
-	updateContent(textDocument)
-	unProcessedCode = getContent()
-	processedCode = preprocessor.performPreProcessing(unProcessedCode)
-	log.write("parsing AST pairs", log.severity.EVENT);
+	// log.write("parsing AST pairs", log.severity.EVENT);
 	tokenArray = parser.parseAST(processedCode);
-	log.write("parsing AST", log.severity.EVENT);
-	let ast : ParseTree = parser.parse(processedCode);
-	log.write("LinkTokensWithPDEs", log.severity.EVENT);
-	if(ast instanceof ParserRuleContext) 
-		LinkTokensWithPDEs(ast);
+
+	// log.write("parsing AST", log.severity.EVENT);
+
+	// let ast : ParseTree = parser.parse(processedCode);
+
+	// log.write("LinkTokensWithPDEs", log.severity.EVENT);
+	// if(ast instanceof ParserRuleContext) 
+	// 	LinkTokensWithPDEs(ast);
 
 	//compile(processedCode)
 	// Wrote methods to handle Error in the Error Stream
@@ -168,39 +198,26 @@ export function build(textDocument: TextDocument)
 	// else 
 	// {
 	// 	pwd = `${__dirname}/compile/${pStandards.defaultClassName}.java`
-	// }
+	// }B
 	// cookCompilationErrors(pwd);
 	log.write("sketch build ended", log.severity.EVENT);
 }
 
 /**
- * Updates the sketch based on the changed document.
- * The tranform dict is automatically updated to the new changes
+ * Provides the content of a single (.pde) file/tab
  * 
- * @param changedDocument Document of which the content should be updated
- * @returns Update succes state
+ * @param uri Uri to the file
+ * @returns tab content or undefined if no file is found
  */
-export function updateContent(changedDocument: TextDocument) 
+export function getPdeContentFromUri(uri : string) : string | undefined
 {
 	if (!initialized)
-		return false;
+		return
+	
+	let tabName = pathM.basename(uri)
 
-	//Update content
-	let tabName = pathM.basename(changedDocument.uri);
-	if(tabName.endsWith('.pde'))
-	{
-		refreshPdeContent(tabName, changedDocument.getText());
-		//contents.set(tabName, changedDocument.getText());
-	}
-
-	//Update transformation dict
-	let bigCount = 1
-	for (let [pdeName, pdeContents] of pdeMap) 
-	{
-		bigCount = cookTransformDict(pdeName, pdeContents, bigCount)
-	}
-
-	return true
+	let pdeInfo : PdeContentInfo | undefined = pdeMap.get(tabName);
+	return pdeInfo?.rawContent??undefined;
 }
 
 /**
@@ -209,7 +226,7 @@ export function updateContent(changedDocument: TextDocument)
  * 
  * @param uri Location to the file that needs adding
  */
- export function addTab(uri: string) 
+ export function addPdeToSketch(uri: string) 
  {
 	if (!initialized)
 		return;
@@ -218,9 +235,10 @@ export function updateContent(changedDocument: TextDocument)
 	if (fileName.endsWith('.pde')) 
 	{
 		let tabContents = fs.readdirSync(sketchInfo.path+fileName, 'utf-8');
-		refreshPdeContent(fileName, tabContents);
+		internalRefreshPdeContent(fileName, tabContents);
 		//contents.set(fileName, tabContents)
 	}
+	cookPdeContentOffsets();
 }
 
 /**
@@ -229,7 +247,7 @@ export function updateContent(changedDocument: TextDocument)
  * 
  * @param uri Location to the file that needs removing
  */
-export function removeTab(uri: string) 
+export function removePdeFromSketch(uri: string) 
 {
 	if (!initialized)
 		return;
@@ -238,6 +256,8 @@ export function removeTab(uri: string)
 	if (fileName.endsWith('.pde') && pdeMap.has(fileName))
 		pdeMap.delete(fileName);
 }
+
+
 
 /**
  * Provides the basic sketch info
@@ -253,7 +273,7 @@ export function getInfo() : Info
  * 
  * @returns sketch content
  */
-export function getContent() : string
+export function getFullUnprocessedContent() : string
 {
 	if (!initialized)
 		return '';
@@ -284,28 +304,7 @@ export function getContent() : string
 	return fileNames
 }
 
-/**
- * Provides the content of a single (.pde) file/tab
- * 
- * @param uri Uri to the file
- * @returns tab content or undefined if no file is found
- */
-export function getTabContent(uri : string) : string | undefined
-{
-	if (!initialized)
-		return
-	
-	let tabName = pathM.basename(uri)
 
-	for (let [fileName, fileContents] of pdeMap) 
-	{
-		if (fileName == tabName)
-			return fileContents.rawContent;
-	}
-
-	return undefined;
-
-}
 
 /**
  * This methode returns the ammount of lines that where added during preprocessing. 
@@ -523,21 +522,19 @@ function cookTransformDict(fileName: string, pdeContent: PdeContentInfo, bigCoun
 	try 
 	{
 		let fileContents : string = pdeContent.rawContent + "\n";
-		pdeContent.compiledLineStart = bigCount;
-
+	
 		// Create transformation Dictonary
-		let lineCount = 1			
+		let lineCount = 1;
 		fileContents.split(/\r?\n/).forEach((line) => {
 			transformMap.set(bigCount, {lineNumber: lineCount, fileName: fileName})
 			bigCount ++
 			lineCount ++
 		})
-		pdeContent.compiledLineEnd = bigCount;
 		log.write(`Transform dictonary created for : ${fileName}`, log.severity.INFO)
 	}
 	catch (e)
 	{
-		log.write(`Tranfsomation dictonary creation failed`, log.severity.ERROR)
+		log.write(`Transformation dictionary creation failed`, log.severity.ERROR)
 		log.write(e, log.severity.ERROR)
 	}
 
@@ -552,15 +549,20 @@ function LinkTokensWithPDEs(node : ParseTree)
 	const startPos : number = node.start.line;
 	const endPos : number = node.stop?.line ?? startPos;
 	let found = false;
+	let mainIndex : number = 1;
 	for (let [pdeName, pdeContent] of pdeMap) 
 	{
-		if( startPos >= pdeContent.compiledLineStart && endPos < pdeContent.compiledLineEnd )
+		let contentLineStart : number = mainIndex;
+		let contentLineEnd : number = mainIndex + pdeContent.linesCount - 1;
+		if( startPos >= contentLineStart && endPos < contentLineEnd )
 		{
-			if(!pdeContent.tokens)
-				pdeContent.tokens = [];
-			pdeContent.tokens.push(node);
+			if(!pdeContent.processedTokens)
+				pdeContent.processedTokens = [];
+			pdeContent.processedTokens.push(node);
 			found = true;
+			break;
 		}
+		mainIndex = contentLineEnd+1;
 	}
 	if(node.children && !found)
 	{
@@ -568,6 +570,28 @@ function LinkTokensWithPDEs(node : ParseTree)
 			LinkTokensWithPDEs(node.children[i]);
 	}
 }
+
+function cookPdeContentOffsets()
+{
+	let mainIndex : number = 0;
+	for (let [pdeName, pdeContent] of pdeMap) 
+	{
+		pdeContent.linesOffset = mainIndex + 1;
+		mainIndex = mainIndex + pdeContent.linesCount;
+	}
+}
+
+export function getPdeContentBySyntaxPosition(line : number) : PdeContentInfo | null
+{
+	for (let [pdeName, pdeContent] of pdeMap) 
+	{
+		let endPos : number = pdeContent.linesOffset + pdeContent.linesCount;
+		if( line >= pdeContent.linesOffset && line < endPos)
+			return pdeContent;
+	}
+	return null;
+}
+
 
 
 /**
@@ -593,9 +617,12 @@ export function getPathFromUri(uri : string) : string
 function getUriFromPath(path : string) : string  
 {
 	let tempUri = path.replace(':', '%3A');
-	tempUri = 'file:///'+ + tempUri;
+	return 'file:///'+ tempUri;
+}
 
-	return tempUri;
+export function getUriFromPdeName(pdeName : string) : DocumentUri
+{
+	return getUriFromPath(sketchInfo.path+pdeName);
 }
 
 export function getPdeContentInfo(pdeName : string ) : PdeContentInfo | undefined
@@ -603,15 +630,52 @@ export function getPdeContentInfo(pdeName : string ) : PdeContentInfo | undefine
 	return pdeMap.get(pdeName);
 }
 
-function refreshPdeContent(pdeName : string, newContent : string | undefined)
+export function updatePdeContent(pdeName : string, newContent : string, linesCount : number)
 {
+	if (!initialized)
+		return false;
+
+	let offsetsChanged : boolean = true;
+	let pdeInfo : PdeContentInfo | undefined = pdeMap.get(pdeName);
+	if(pdeInfo)
+	{
+		offsetsChanged = pdeInfo.linesCount != linesCount;
+
+		pdeInfo.rawContent = newContent;
+		pdeInfo.linesCount = linesCount;
+	}
+	else
+	{
+		pdeInfo = createPdeContentInfo(pdeName, newContent, linesCount);
+		pdeMap.set(pdeName, pdeInfo);
+	}
+
+	if(offsetsChanged)
+		cookPdeContentOffsets();
+
+	pdeInfo.syntaxTokens = parser.parse(newContent) as ParserRuleContext;
+	symbolTableVisitor.removeRootSymbols(pdeInfo.symbols);
+	symbolTableVisitor.visitPdeLinked(pdeInfo.name, pdeInfo.syntaxTokens, pdeInfo.symbols);
+
+	return pdeInfo;
+}
+
+function internalRefreshPdeContent(pdeName : string, newContent : string, linesCount? : number) : PdeContentInfo
+{
+	if(!linesCount)
+		linesCount = newContent.split(/\r?\n/).length;
+
 	let info : PdeContentInfo | undefined = pdeMap.get(pdeName);
 	if(info)
 	{
-		if(newContent)
-			info.rawContent = newContent;
+		info.rawContent = newContent;
+		info.linesCount = linesCount;
+		return info;
 	}
-	else if(newContent)
-		pdeMap.set(pdeName, createPdeContentInfo(newContent, null, 0, 0));
-
+	else
+	{
+		let result : PdeContentInfo = createPdeContentInfo(pdeName, newContent, linesCount);
+		pdeMap.set(pdeName, result);
+		return result;
+	}
 }

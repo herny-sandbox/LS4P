@@ -1,9 +1,17 @@
 import * as log from './scripts/syslogs'
 import * as lsp from 'vscode-languageserver';
+import { TextDocument } from 'vscode-languageserver-textdocument';
 import * as model from './grammer/terms/model'
 import * as sketch from './sketch'
-import * as astUtils from './astutils'
-import * as javaParser from 'java-ast/dist/parser/JavaParser';
+//import * as javaParser from 'java-ast/dist/parser/JavaParser';
+import * as pp from './grammer/ProcessingParser';
+import { ParserRuleContext, Token } from 'antlr4ts';
+import * as parseUtils from './astutils'
+import * as parser from './parser'
+import { ParseTree, TerminalNode } from 'antlr4ts/tree'
+import { ProcessingParser } from './grammer/ProcessingParser';
+import * as symbols from 'antlr4-c3'
+
 const fs = require('fs');
 const { JavaClassFileReader } = require('java-class-tools')
 
@@ -123,7 +131,8 @@ function PCompletionMethods(classType: any): lsp.CompletionItem[] {
 	return completionItemList
 }
 
-export function findCompletionItemKind(value: number): lsp.CompletionItemKind{
+export function findCompletionItemKind(value: number): lsp.CompletionItemKind
+{
 	let completionKind: lsp.CompletionItemKind = lsp.CompletionItemKind.Text
 	switch (value) {
 		case 1:
@@ -207,7 +216,7 @@ export function findCompletionItemKind(value: number): lsp.CompletionItemKind{
 	return completionKind
 }
 
-export function decideCompletionMethods(_textDocumentParams: lsp.CompletionParams, latestChanges: lsp.TextDocument): lsp.CompletionItem[] {
+export function decideCompletionMethods(_textDocumentParams: lsp.CompletionParams, documentText: string): lsp.CompletionItem[] {
 	let resultantCompletionItem: lsp.CompletionItem[] = []
 	let lineStartMethodBody: number[] = []
 	let lineEndMethodBody: number[] = []
@@ -223,13 +232,13 @@ export function decideCompletionMethods(_textDocumentParams: lsp.CompletionParam
 
 	tokenArray.forEach(function(node, index){
 
-		if(node[1] instanceof javaParser.BlockContext && node[0].text == `{`) {
+		if(node[1] instanceof pp.BlockContext && node[0].text == `{`) {
 			lineStartMethodBody[_methodCounter] = node[1]._start.line
 			lineEndMethodBody[_methodCounter] = node[1]._stop!.line
 			_methodCounter += 1
 		}
 
-		if(node[1] instanceof javaParser.TypeTypeOrVoidContext || node[1] instanceof javaParser.PrimitiveTypeContext) {
+		if(node[1] instanceof pp.TypeTypeOrVoidContext || node[1] instanceof pp.PrimitiveTypeContext) {
 			avoidLineAuto[_avoidCounter] = node[1]._start.line
 			_avoidCounter += 1
 		}
@@ -237,7 +246,7 @@ export function decideCompletionMethods(_textDocumentParams: lsp.CompletionParam
 	})
 
 	tokenArray.forEach(function(node, index){
-		if(node[1] instanceof javaParser.ClassOrInterfaceTypeContext && tokenArray[index+1][1] instanceof javaParser.VariableDeclaratorIdContext){
+		if(node[1] instanceof pp.ClassOrInterfaceTypeContext && tokenArray[index+1][1] instanceof pp.VariableDeclaratorIdContext){
 			model.variableDeclarationContext[_classNameCounter] = [node[0], tokenArray[index+1][1]]
 			_classNameCounter += 1
 		}
@@ -272,7 +281,7 @@ export function decideCompletionMethods(_textDocumentParams: lsp.CompletionParam
 	// TODO: methods to avoid auto compleion during method declaration.'
 
 	// Produces dynamic auto completion results on the presence of Trigger Character `.`
-	let currentLineSplit = latestChanges.getText().split('\n')
+	let currentLineSplit = documentText.split('\n')
 
 	if(_textDocumentParams.context!.triggerCharacter == `.`){
 		let tempLine = currentLineSplit[currentLineInWorkSpace].split(`.`)[0].split(` `)
@@ -291,23 +300,23 @@ export function decideCompletionMethods(_textDocumentParams: lsp.CompletionParam
 						resultantCompletionItem = completeCustomMap.get(`${value[0].text}.class`)
 						if(resultantCompletionItem == undefined){
 							// Handle for locally declared classes
-							astUtils.constructClassParams(tokenArray)
+							parseUtils.constructClassParams(tokenArray)
 							let tempCompletionList: lsp.CompletionItem[] = []
 							let _tempCounter = 0
-							astUtils.fieldAndClass.forEach(function(fieldName,index){
+							parseUtils.fieldAndClass.forEach(function(fieldName,index){
 								if(fieldName[0] == value[0].text){
 									tempCompletionList[_tempCounter] = asCompletionItem(fieldName[1], findCompletionItemKind(5))
 									_tempCounter += 1
 								}
 							})
-							astUtils.memberAndClass.forEach(function(methodName,index){
+							parseUtils.memberAndClass.forEach(function(methodName,index){
 								if(methodName[0] == value[0].text){
 									tempCompletionList[_tempCounter] = asCompletionItem(`${methodName[1]}()`, findCompletionItemKind(2))
 									_tempCounter += 1
 								}
 							})
 							resultantCompletionItem = tempCompletionList
-							astUtils.flushRecords()
+							parseUtils.flushRecords()
 						}
 					}
 				}
@@ -323,4 +332,68 @@ export function decideCompletionMethods(_textDocumentParams: lsp.CompletionParam
 	log.write(`AutoCompletion invoked`, log.severity.EVENT)
 
 	return resultantCompletionItem
+}
+
+export async function collectCandidates(pdeName: string, line: number, posInLine : number, context : lsp.CompletionContext | undefined): Promise<lsp.CompletionItem[]> 
+{
+	let pdeInfo : sketch.PdeContentInfo | undefined = sketch.getPdeContentInfo(pdeName);
+	if(!pdeInfo || !pdeInfo.syntaxTokens)
+		return [];
+
+	let parseContext : ParseTree | null = parseUtils.findIdentifierAtPosition(pdeInfo.syntaxTokens, pdeInfo.linesOffset + line, posInLine);
+	if(!parseContext || !(parseContext instanceof TerminalNode))
+		return [];
+
+	const token: Token = parseContext.symbol;
+	log.write("parse context found: "+token.text, log.severity.EVENT);
+
+	//let core = new symbols.CodeCompletionCore(parser.currentParser);
+	//core.ignoredTokens = new Set([ ProcessingParser.LPAREN ]);
+	//core.preferredRules = new Set([ ProcessingParser.IDENTIFIER ]);
+
+	let symbolTable = sketch.getSymbolTable();
+	let symbolInterest : symbols.BaseSymbol | undefined = await symbolTable.symbolWithContext(parseContext);
+	if(!symbolInterest)
+	{
+		log.write("unable to find the right matching symbol: "+token.text, log.severity.ERROR);
+		return [];
+	}
+	//if(	symbolInterest instanceof(symbols.ClassSymbol) )
+	// let candidates = core.collectCandidates(token.tokenIndex);
+	log.write("matching symbol: "+symbolInterest.name, log.severity.EVENT);
+
+	let completions : lsp.CompletionItem[] = []; 
+
+	// if(candidates.rules.has(ProcessingParser.IDENTIFIER))
+	// {
+	// 	
+	// 	let members : lsp.CompletionItem[] = await suggestMembers(symbolTable);
+	// 	for(let child of members )
+	// 		completions.push(child);
+	// }
+	
+	// candidates.tokens.forEach((_, k) => {
+	// 	if( k == ProcessingParser.IDENTIFIER)
+	// 	{
+
+	// 	}
+	// 	else
+	// 	{
+	// 		let symbolicName : string | undefined = parser.currentParser.vocabulary.getSymbolicName(k);
+	// 		if(symbolicName)
+	// 			completions.push({ label: symbolicName.toLowerCase()});
+	// 	}
+	// });
+	return completions;
+}
+
+async function suggestMembers(symbolTable: symbols.SymbolTable) : Promise<lsp.CompletionItem[]>
+{
+	let completions : lsp.CompletionItem[] = []; 
+	let vars : symbols.VariableSymbol [] = await symbolTable.getNestedSymbolsOfType(symbols.VariableSymbol);
+	for(let child of vars )
+	{
+		completions.push({ label: child.name, kind: lsp.CompletionItemKind.Variable})
+	}
+    return completions;
 }

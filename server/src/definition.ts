@@ -1,96 +1,56 @@
-import * as server from './server'
 import * as sketch from './sketch'
-import * as javaSpecific from './grammer/terms/javaspecific'
-import { Definition } from 'vscode-languageserver'
-import { ClassDeclarationContext, VariableDeclaratorIdContext, MethodDeclarationContext } from 'java-ast/dist/parser/JavaParser';
-import { ParserRuleContext, Token } from 'antlr4ts';
+import * as parseUtils from './astutils'
+import * as log from './scripts/syslogs'
+import { Definition, LocationLink, Location, Range } from 'vscode-languageserver'
+import { ParseTree } from 'antlr4ts/tree/ParseTree'
+import { TerminalNode } from 'antlr4ts/tree'
+import * as symbols from 'antlr4-c3'
+import { DocumentUri } from 'vscode-languageserver-textdocument'
+import * as symb from './symbols'
 
-// [string,string,number,number] => [type, name, line number, character number]
-let foundDeclaration: [string,string,number,number][] = new Array();
-let _foundDeclarationCount = 0
+export async function scheduleLookUpDefinition(pdeName: string, lineNumber: number, charNumber: number): Promise<Definition | null>
+{
+	let pdeInfo : sketch.PdeContentInfo | undefined = sketch.getPdeContentInfo(pdeName);
+	if(!pdeInfo || !pdeInfo.syntaxTokens)
+		return null;
 
-export function scheduleLookUpDefinition(receivedUri: string, lineNumber: number, charNumber: number): Definition | null  {
-	let currentContent = sketch.getTabContent(receivedUri)
-	if (!currentContent) {
-		return null
-	}
-	let splitDefine = currentContent.split(`\n`)
-	let currentLine = splitDefine[lineNumber]
-	let currentDefineMap = sketch.lineMap(currentLine)
-	let adjustOffset = sketch.getLineOffset()
-	let tokenArray = sketch.getTokenArray();
-
-	tokenArray.forEach(function(tokenPair)
+	let symbolInterest : symbols.BaseSymbol | undefined = await parseUtils.findFromSymbolsAtPosition(pdeInfo.symbols, lineNumber+1, charNumber);
+	if(!symbolInterest || !symbolInterest.context)
 	{
-		if( tokenPair[0] instanceof ParserRuleContext)
+		log.write("unable to find the symbol context for line "+(lineNumber+1)+" pos: "+charNumber, log.severity.ERROR);
+		return [];
+	}
+
+	let parseNode : ParseTree | null = parseUtils.findIdentifierAtPosition(symbolInterest.context, lineNumber + 1, charNumber);
+	if(!parseNode || !(parseNode instanceof TerminalNode))
+		return null;
+
+	let word : string = parseNode.text;
+	let definition : symbols.BaseSymbol | undefined = await symbolInterest.resolve(word);
+	if(!definition)
+	{
+		log.write("unable to find the symbol definition for "+ word +" line "+(lineNumber+1)+" pos: "+charNumber, log.severity.ERROR);
+		return null;
+	}
+	if(definition instanceof symbols.TypedSymbol )
+	{
+		let typedSymbol : symbols.TypedSymbol = definition;
+		let pdeName : string | undefined = symb.findPdeName(typedSymbol);
+		
+		if(typedSymbol.type && typedSymbol.context && pdeName)
 		{
-			const token: Token = (tokenPair[0] as ParserRuleContext).start;
+			let targetUri: DocumentUri = sketch.getUriFromPdeName(pdeName);
+			
+			let targetRange: Range = parseUtils.calcRangeFromParseTree(typedSymbol.context);
+			//let targetSelectionRange: Range;
+			//let originSelectionRange: Range | undefined;
 
-			if(tokenPair[1] instanceof ClassDeclarationContext)
-			{
-				if(!(javaSpecific.TOP_LEVEL_KEYWORDS.indexOf(tokenPair[0].text) > -1))
-				{
-					
-					foundDeclaration[_foundDeclarationCount] = [`class`, tokenPair[0].text, token.line, token.charPositionInLine]
-					_foundDeclarationCount +=1
-				}
-			} 
-			else if(tokenPair[1] instanceof VariableDeclaratorIdContext)
-			{
-				foundDeclaration[_foundDeclarationCount] = [`var`, tokenPair[0].text, token.line, token.charPositionInLine]
-				_foundDeclarationCount +=1
-			} 
-			else if(tokenPair[1] instanceof MethodDeclarationContext)
-			{
-				// TODO: conflict in `_charPositionInLine` due to addition of `public` infront during preprocessing -> tabs should also be handled
-				foundDeclaration[_foundDeclarationCount] = [`method`, tokenPair[0].text, token.line, token.charPositionInLine]
-				_foundDeclarationCount +=1
-			}
+			log.write("LookUpDefinition for: " + word + "(" + typedSymbol.type.name + ")" + "", log.severity.EVENT);
+
+			return Location.create(targetUri, targetRange );
 		}
-	})
-
-	// Default Range value
+	}
+	// // Default Range value
 	let finalDefinition: Definition | null = null
-	currentDefineMap.forEach(function(word){
-		// params.position.character -> can be of any character, even a character within a word
-		if((word[1] <= charNumber) && (charNumber <= word[2])){
-			foundDeclaration.forEach(function(delarationName){
-				if(word[0] == delarationName[1]){
-
-					let lineNumberJavaFile = delarationName[2]-adjustOffset;
-					let diffLine : number = 0;
-					let docUri : string = '';
-					let transformMap = sketch.getTransformationMap()
-					if (transformMap.get(lineNumberJavaFile)) {
-						diffLine = transformMap.get(lineNumberJavaFile)!.lineNumber
-						let docName =  transformMap.get(lineNumberJavaFile)!.fileName
-						docUri = sketch.getInfo().uri+docName
-					}
-
-					let charOffset = sketch.getCharacterOffset(lineNumberJavaFile, delarationName[2])
-
-					finalDefinition = {
-						uri: docUri,
-						range:{
-							start: {
-								line: diffLine-1,
-								character: delarationName[3] - charOffset
-							},
-							end: {
-								line: diffLine-1,
-								character: delarationName[3] + word[0].length - charOffset
-							}
-						}
-					}
-				}
-			})
-		}
-	})
-	clearTempAST()
-	return finalDefinition
-}
-
-function clearTempAST(){
-	foundDeclaration = []
-	_foundDeclarationCount = 0
+	return finalDefinition;
 }

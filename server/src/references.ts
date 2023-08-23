@@ -2,9 +2,10 @@ import * as server from './server'
 import * as sketch from './sketch'
 import { Location, ReferenceParams } from 'vscode-languageserver'
 
-export function scheduleLookUpReference(_referenceParams: ReferenceParams): Location[] | null{
+export function scheduleLookUpReference(_referenceParams: ReferenceParams): Location[] | null
+{
 	let resultant: Location[] | null
-	let currentContent = sketch.getTabContent(_referenceParams.textDocument.uri)
+	let currentContent = sketch.getPdeContentFromUri(_referenceParams.textDocument.uri)
 	if (!currentContent) {
 		return null
 	}
