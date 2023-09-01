@@ -8,7 +8,11 @@ import { ParserRuleContext } from 'antlr4ts';
 import { ProcessingSketchContext, StaticProcessingSketchContext } from "./grammer/ProcessingParser";
 import { SymbolTableVisitor } from './symbols';
 import * as symbols from 'antlr4-c3'
-import { DocumentUri } from 'vscode-languageserver'
+import { DocumentUri, Range } from 'vscode-languageserver'
+import { ReferencesVisitor } from './references';
+import * as dm from './definitionsMap'
+import * as server from './server'
+import * as jarSymbols from './JarSymbols'
 
 const fs = require('fs')
 const pathM = require('path')
@@ -58,13 +62,25 @@ export interface PdeContentInfo
 	rawContent : string;
 	syntaxTokens : ParserRuleContext | null;
 	symbols : symbols.BaseSymbol [];
+	refs : dm.UsageVisitor | null;
+
 	processedTokens: ParserRuleContext[] | null;
 	linesCount : number;
 	linesOffset: number;
 }
 function createPdeContentInfo(name: string, c : string, lines : number)
 {
-	return {name: name, rawContent: c, linesCount: lines, processedTokens: null, linesOffset: 0, syntaxTokens: null, symbols: [] };
+	return {
+		name: name, 
+		rawContent: c, 
+		syntaxTokens: null, 
+		symbols: [], 
+		refs : null,
+
+		processedTokens: null, 
+		linesCount: lines, 
+		linesOffset: 0, 
+	};
 }
 
 export function getRootContext() { return processedSketchTokens; }
@@ -89,14 +105,18 @@ export function initialize(workspacePath: string)
 	}
 	jrePath = `${__dirname.substring(0,__dirname.length-11)}/jre/bin`;
 
-	symbolTableVisitor = new SymbolTableVisitor();
-
+	symbolTableVisitor = new SymbolTableVisitor(name);
+	jarSymbols.ImportDefaultLibraries(symbolTableVisitor.symbolTable);
+	let pappletSymbol : symbols.ClassSymbol | undefined = jarSymbols.GetClass("processing.core.PApplet");
+	if(pappletSymbol)
+		symbolTableVisitor.getMainClass().extends.push(pappletSymbol);
+	
 	try 
 	{
 		let mainFileName = sketchInfo.name+'.pde';
 		let mainFileContents : string = fs.readFileSync(sketchInfo.path+mainFileName, 'utf-8');
 
-		internalRefreshPdeContent(mainFileName, mainFileContents);
+		addPdeContent(mainFileName, mainFileContents);
 		//contents.set(mainFileName, mainFileContents);
 	}
 	catch (e) 
@@ -113,7 +133,7 @@ export function initialize(workspacePath: string)
 			if (fileName.endsWith('.pde') && !fileName.includes(sketchInfo.name))
 			{
 				let tabContents = fs.readFileSync(sketchInfo.path+fileName, 'utf-8');
-				internalRefreshPdeContent(fileName, tabContents);
+				addPdeContent(fileName, tabContents);
 				//contents.set(fileName, tabContents);
 			}
 		});
@@ -144,23 +164,23 @@ export function prepareSketch(sketchFolder : string)
 
 export function startPreprocessing()
 {
-	log.write("startPreprocessing BEGIN", log.severity.EVENT);
+	// log.write("startPreprocessing BEGIN", log.severity.EVENT);
 	
-	log.write("generating unprocessed content", log.severity.INFO);
-	unProcessedCode = getFullUnprocessedContent();
-	//log.write("generating preprocessing content", log.severity.EVENT);
-	//processedCode = preprocessor.performPreProcessing(unProcessedCode);
+	// log.write("generating unprocessed content", log.severity.INFO);
+	// unProcessedCode = getFullUnprocessedContent();
+	// //log.write("generating preprocessing content", log.severity.EVENT);
+	// //processedCode = preprocessor.performPreProcessing(unProcessedCode);
 
-	log.write("parsing AST", log.severity.INFO);
-	let ast : ProcessingSketchContext | undefined = parser.parse(unProcessedCode);
-	if(ast)
-	{
-		tokenArray = parser.buildTokenArray(ast);
-		processedSketchTokens = ast;
-		//symbolTableVisitor.visit(processedSketchTokens);
-		LinkTokensWithPDEs(processedSketchTokens);
-	}
-	log.write("startPreprocessing END", log.severity.EVENT);
+	// log.write("parsing AST", log.severity.INFO);
+	// let ast : ProcessingSketchContext | undefined = parser.parse(unProcessedCode);
+	// if(ast)
+	// {
+	// 	tokenArray = parser.buildTokenArray(ast);
+	// 	processedSketchTokens = ast;
+	// 	//symbolTableVisitor.visit(processedSketchTokens);
+	// 	LinkTokensWithPDEs(processedSketchTokens);
+	// }
+	// log.write("startPreprocessing END", log.severity.EVENT);
 
 }
 
@@ -235,7 +255,7 @@ export function getPdeContentFromUri(uri : string) : string | undefined
 	if (fileName.endsWith('.pde')) 
 	{
 		let tabContents = fs.readdirSync(sketchInfo.path+fileName, 'utf-8');
-		internalRefreshPdeContent(fileName, tabContents);
+		addPdeContent(fileName, tabContents);
 		//contents.set(fileName, tabContents)
 	}
 	cookPdeContentOffsets();
@@ -284,6 +304,11 @@ export function getFullUnprocessedContent() : string
 		content += pdeContent.rawContent + '\n'; //Tab must end with a new line
 
 	return content
+}
+
+export function getAllPdeInfos() : IterableIterator<PdeContentInfo>
+{
+	return pdeMap.values();
 }
 
 /**
@@ -654,28 +679,31 @@ export function updatePdeContent(pdeName : string, newContent : string, linesCou
 		cookPdeContentOffsets();
 
 	pdeInfo.syntaxTokens = parser.parse(newContent) as ParserRuleContext;
+	
+	pdeInfo.refs = new dm.UsageVisitor(symbolTableVisitor.getMainClass());
 	symbolTableVisitor.removeRootSymbols(pdeInfo.symbols);
-	symbolTableVisitor.visitPdeLinked(pdeInfo.name, pdeInfo.syntaxTokens, pdeInfo.symbols);
+	symbolTableVisitor.visitPdeLinked(pdeInfo);
 
+	pdeInfo.refs.analize(pdeInfo.syntaxTokens);
+
+	let fileUri = sketchInfo.uri+pdeInfo.name
+	server.connection.sendDiagnostics({uri: fileUri, diagnostics: pdeInfo.refs.diagnostics})
+
+	//new ReferencesVisitor(symbolTableVisitor.symbolTable).visitForInfo(pdeInfo.syntaxTokens, pdeInfo.references)
 	return pdeInfo;
 }
 
-function internalRefreshPdeContent(pdeName : string, newContent : string, linesCount? : number) : PdeContentInfo
+function addPdeContent(pdeName : string, newContent : string) : PdeContentInfo
 {
-	if(!linesCount)
-		linesCount = newContent.split(/\r?\n/).length;
+	log.write(`adding ${pdeName} symbols.`, log.severity.EVENT);
+	let	linesCount : number = newContent.split(/\r?\n/).length;
 
-	let info : PdeContentInfo | undefined = pdeMap.get(pdeName);
-	if(info)
-	{
-		info.rawContent = newContent;
-		info.linesCount = linesCount;
-		return info;
-	}
-	else
-	{
-		let result : PdeContentInfo = createPdeContentInfo(pdeName, newContent, linesCount);
-		pdeMap.set(pdeName, result);
-		return result;
-	}
+	let result : PdeContentInfo = createPdeContentInfo(pdeName, newContent, linesCount);
+	pdeMap.set(pdeName, result);
+	result.refs = new dm.UsageVisitor(symbolTableVisitor.getMainClass());
+	result.syntaxTokens = parser.parse(newContent) as ParserRuleContext;
+	symbolTableVisitor.visitPdeLinked(result);
+	result.refs.analize(result.syntaxTokens);
+	
+	return result;
 }

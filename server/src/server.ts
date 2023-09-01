@@ -162,19 +162,19 @@ connection.onDidChangeConfiguration(change => {
 //export let latestChangesInTextDoc: TextDocument
 
 documents.onDidOpen((event: { document: TextDocument; }) => {
-	log.write(`File Open / Tab switching occured`, log.severity.EVENT);
+	//log.write(`File Open / Tab switching occured`, log.severity.EVENT);
 	//const pdeName : string = path.basename(sketch.getPathFromUri(event.document.uri));
 	//sketch.updatePdeContent(pdeName, event.document.getText(), event.document.lineCount );
 });
 
 documents.onDidClose((e: { document: { uri: string; }; }) => {
-	log.write(`File Closed`, log.severity.EVENT);
-	const pdeName : string = path.basename(sketch.getPathFromUri(e.document.uri));
-	let pdeInfo : sketch.PdeContentInfo | undefined = sketch.getPdeContentInfo(pdeName);
-	if(!pdeInfo)
-		return;
+	// log.write(`File Closed`, log.severity.EVENT);
+	// const pdeName : string = path.basename(sketch.getPathFromUri(e.document.uri));
+	// let pdeInfo : sketch.PdeContentInfo | undefined = sketch.getPdeContentInfo(pdeName);
+	// if(!pdeInfo)
+	// 	return;
 
-	pdeInfo.syntaxTokens = null;
+	// pdeInfo.syntaxTokens = null;
 });
 
 let sketchRefreshInProgress = false
@@ -240,22 +240,30 @@ connection.onDidChangeWatchedFiles(_change => {
 // ================================================================================================
 // ================================================================================================
 // ================================================================================================
-// SYMBOL DEFINITION
+// SYMBOL DEFINITION & REFERENCES
 // ================================================================================================
 
 // Implementation for `goto definition` goes here
 connection.onDefinition( async (params: TextDocumentPositionParams): Promise<Definition | null> => {
 		const pdeName : string = path.basename(sketch.getPathFromUri(params.textDocument.uri));
-		return definition.scheduleLookUpDefinition(pdeName, params.position.line, params.position.character);
+		return definition.scheduleLookUpDefinition(pdeName, params.position.line+1, params.position.character);
 	}
 )
 
 // Implementation for finding references
-connection.onReferences( (_referenceParams: ReferenceParams): Location[] | null => {
+connection.onReferences( async (params: ReferenceParams): Promise<Location[] | null> => {
 		// _referenceParams.position.line, _referenceParams.position.character -> lineNumber, column from the arguments sent along with the command in the code lens
-		return reference.scheduleLookUpReference(_referenceParams)
+		const pdeName : string = path.basename(sketch.getPathFromUri(params.textDocument.uri));
+		return reference.scheduleLookUpReference(pdeName, params.position.line+1, params.position.character)
 	}
 )
+
+// ================================================================================================
+// ================================================================================================
+// ================================================================================================
+// ================================================================================================
+// CODE LENS
+// ================================================================================================
 
 // Refresh codeLens for every change in the input stream
 // Implementation of `code-lens` goes here

@@ -52,86 +52,46 @@ export function findIdentifierAtPosition(ctx: ParseTree, line: number, pos: numb
 	return null;
 }
 
-
-// export function findIdentifierAtPosition(parentContext: ParserRuleContext, line: number, charPosInLine: number): ParserRuleContext | null
-// {
-// 	var startLine: number = parentContext.start.line;
-// 	var stopLine: number = startLine;
-
-// 	var startPosInLine: number = parentContext.start.charPositionInLine;
-// 	var stopPosInLine: number = startPosInLine + 1;
-	
-// 	var startIndex : number =  parentContext.start.startIndex;
-// 	var stopIndex: number = parentContext.start.stopIndex;
-
-	
-// 	if(parentContext.stop)
-// 	{
-// 		stopLine = parentContext.stop.line;
-// 		stopPosInLine = parentContext.stop.charPositionInLine + 1;
-// 		stopIndex = parentContext.stop.stopIndex;
-// 	}
-// 	var length : number = stopIndex - startIndex + 1;
-
-// 	if (line < startLine || line > stopLine)
-// 		return null;
-	
-// 	if(line === startLine && charPosInLine < startPosInLine)
-// 		return null;
-
-// 	if(line === stopLine && charPosInLine > startPosInLine+length)
-// 		return null;
-
-
-// 	// If we reach this point
-// 	let result : ParserRuleContext | null = null;
-
-// 	// But we can have more precision exploring it's children
-// 	for (var i: number = 0; i < parentContext.childCount; i++) 
-// 	{
-//         var childContext: ParserRuleContext = parentContext.getChild(i) as ParserRuleContext;
-// 		if(childContext==null)
-// 			continue;
-// 		if (childContext instanceof TerminalNode) 
-// 		{
-// 			const token: Token = childContext.symbol;
-// 			// if (token.type === Token.EOF)
-// 			// 	continue;
-// 			if(token.type !== ProcessingLexer.IDENTIFIER)
-// 				continue;
-
-// 			if (line != token.line)
-// 				continue;
-			
-// 			var lenght : number = token.stopIndex - token.startIndex + 1;
-// 			if(line === token.line && (charPosInLine >= token.charPositionInLine) && (charPosInLine <= token.charPositionInLine+lenght) )
-// 				result = childContext;
-// 		}
-// 		else
-// 		{
-// 			let childResult : ParserRuleContext | null = findIdentifierAtPosition(childContext, line, charPosInLine);
-// 			if(childResult != null)
-// 				result = childResult;
-// 		}
-// 		if(result!=null)
-// 			break;
-//     }
-
-// 	return result;
-		
-// }
-
-export async function findFromSymbolsAtPosition(symbols: symbols.BaseSymbol[], line: number, pos: number): Promise<symbols.BaseSymbol | undefined> 
+export function findScopeAtPositionFromSymbols(symbols: symbols.BaseSymbol[], line: number, pos: number): symbols.BaseSymbol | undefined 
 {
 	let result : symbols.BaseSymbol | undefined;
 	for( let i : number = 0; i < symbols.length; i++ )
 	{
 		let sym : symbols.BaseSymbol = symbols[i];
-		result = await findFromSymbolAtPosition(sym, line, pos);
+		result = findScopeAtPosition(sym, line, pos);
 		if(result)
 			break
 	}
 	return result;
+}
+
+export function findScopeAtPosition(sym: symbols.BaseSymbol, line: number, pos: number): symbols.BaseSymbol | undefined 
+{
+	let ctx : ParseTree | undefined = sym.context;
+	if(!ctx)
+		return;
+
+	if (ctx instanceof TerminalNode)
+	{
+		if(checkTerminalNodeBounds(ctx, line, pos))
+			return sym;
+	}
+	else if (ctx instanceof ParserRuleContext)
+	{
+		if( checkTreeNodeBounds(ctx, line, pos) )
+		{
+			if(sym instanceof symbols.ScopedSymbol)
+			{
+				let scoped : symbols.ScopedSymbol = sym;
+				let result : symbols.BaseSymbol | undefined =  findScopeAtPositionFromSymbols(scoped.children, line, pos);
+				return result ? result : scoped;
+			}
+			else
+				return sym;
+		}
+	}
+
+	return;
 }
 
 function checkTerminalNodeBounds(ctx : TerminalNode, line : number, pos : number) : boolean
@@ -157,30 +117,6 @@ function checkTreeNodeBounds(ctx : ParserRuleContext, line : number, pos : numbe
 		return false;
 
 	return true;
-}
-
-export async function findFromSymbolAtPosition(sym: symbols.BaseSymbol, line: number, pos: number): Promise<symbols.BaseSymbol | undefined> 
-{
-	let ctx : ParseTree | undefined = sym.context;
-	if(!ctx)
-		return;
-
-	if (ctx instanceof TerminalNode)
-	{
-		if(checkTerminalNodeBounds(ctx, line, pos))
-			return sym;
-	}
-	else if (ctx instanceof ParserRuleContext)
-	{
-		if( checkTreeNodeBounds(ctx, line, pos) && (sym instanceof symbols.ScopedSymbol) )
-		{
-			let scoped : symbols.ScopedSymbol = sym;
-			let result : symbols.BaseSymbol | undefined =  await findFromSymbolsAtPosition(scoped.children, line, pos);
-			return result ? result : scoped;
-		}
-	}
-
-	return;
 }
 
 export function calcRangeFromParseTree(ctx: ParseTree) : ls.Range

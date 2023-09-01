@@ -1,6 +1,4 @@
-import * as parser from './parser'
 import * as vscode from 'vscode-languageserver/node';
-//import * as jp from 'java-ast/dist/parser/JavaParser';
 import * as pp from './grammer/ProcessingParser';
 import { ParserRuleContext, Token } from 'antlr4ts';
 import { ParseTree } from 'antlr4ts/tree/ParseTree'
@@ -58,8 +56,7 @@ export class DocumentSymbols
 		}
 		else if(node instanceof pp.MethodDeclarationContext) 
 		{
-			let methodName : string = node.IDENTIFIER().text;
-			methodName += "(" + DocumentSymbols.ParseParamsAsString(node.formalParameters()) + ")";
+			let methodName : string = DocumentSymbols.ParseMethodDeclarationAsString(node.IDENTIFIER().text, node.formalParameters());
 			const res : string = node.typeTypeOrVoid().text;
 			return DocumentSymbols.CreateSymbol(node, offset, vscode.SymbolKind.Method, methodName, res );
 		}
@@ -98,6 +95,11 @@ export class DocumentSymbols
 		return vscode.DocumentSymbol.create(symbolName, details, kind, symbolRange, symbolRange, children);
 	}
 
+	static ParseMethodDeclarationAsString(name : string, paramsContext : pp.FormalParametersContext) : string
+	{
+		return name + "(" + DocumentSymbols.ParseParamsAsString(paramsContext) + ")";
+	}
+
 	static ParseParamsAsString(paramsContext : pp.FormalParametersContext) : string
 	{
 		let result : string = "";
@@ -124,7 +126,6 @@ export class DocumentSymbols
 					result += ", ";
 				result += lastParam.typeType().text;
 				result += "...";
-
 			}
 			result += " ";
 		}

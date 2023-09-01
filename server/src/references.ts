@@ -1,73 +1,106 @@
-import * as server from './server'
 import * as sketch from './sketch'
-import { Location, ReferenceParams } from 'vscode-languageserver'
+import * as parseUtils from './astutils'
+import * as log from './scripts/syslogs'
+import * as symbols from 'antlr4-c3'
+import * as definitions from './definition'
+import { AbstractParseTreeVisitor, ParseTree, TerminalNode } from 'antlr4ts/tree'
+import { ProcessingParserVisitor } from './grammer/ProcessingParserVisitor';
+import { Location, Range } from 'vscode-languageserver'
+import * as pp from './grammer/ProcessingParser'
+import { ParserRuleContext } from 'antlr4ts'
 
-export function scheduleLookUpReference(_referenceParams: ReferenceParams): Location[] | null
+
+export async function scheduleLookUpReference(pdeName : string, line : number, pos : number): Promise<Location[] | null>
 {
-	let resultant: Location[] | null
-	let currentContent = sketch.getPdeContentFromUri(_referenceParams.textDocument.uri)
-	if (!currentContent) {
-		return null
-	}
-	let splitDefine = currentContent.split(`\n`)
-	let currentLine = splitDefine[_referenceParams.position.line]
-	let currentReferenceMap = sketch.lineMap(currentLine)
-	let tokenArray = sketch.getTokenArray();
-	let adjustOffset = sketch.getLineOffset()
+	let resultant: Location[] = [];
+	
+	let pdeInfo : sketch.PdeContentInfo | undefined = sketch.getPdeContentInfo(pdeName);
+	if(!pdeInfo || !pdeInfo.syntaxTokens)
+		return null;
 
-	let multipleTokenOccurenceLocations: Location[] = new Array()
-	let _multipleTokenCount = 0
+	let containerSymbol : symbols.BaseSymbol | undefined = parseUtils.findScopeAtPositionFromSymbols(pdeInfo.symbols, line, pos);
+	if(!containerSymbol || !containerSymbol.context)
+		return null;
+	
+	let parseNode : ParseTree | null = parseUtils.findIdentifierAtPosition(containerSymbol.context, line, pos);
+	if(!parseNode || !(parseNode instanceof TerminalNode))
+		return null;
+	
+	let focusedDecl : symbols.BaseSymbol | undefined;
 
-	// let lineAdjustment = 0
+	if(containerSymbol.context === parseNode.parent)
+		focusedDecl = containerSymbol;
+	else
+		focusedDecl = await definitions.resolveSymbolDeclaration(parseNode, containerSymbol);
 
-	// if(preprocessing.methodPattern.exec(currentLine)){
-	// 	lineAdjustment = 6 // "public " -> 6 characters added during pre-processing
-	// }
+	if(!focusedDecl)
+		return null;
 
-	currentReferenceMap.forEach(function(word){
-		// params.position.character -> can be of any character, even a character within a word
-		if((word[1] <= _referenceParams.position.character) && (_referenceParams.position.character <= word[2]))
+	let idName : string = parseNode.text;
+	let visitor : ReferencesVisitor = new ReferencesVisitor();
+
+	for (let pdeInfo of sketch.getAllPdeInfos()) 
+	{
+		if(!pdeInfo.refs)
+			continue;
+
+		let pdeUri : string = sketch.getUriFromPdeName(pdeInfo.name);
+		let result : Range[] | undefined = pdeInfo.refs.addSymbolUsageArray(focusedDecl)
+		if(result)
 		{
-			tokenArray.forEach(function(tokenPair)
-			{
-				if(tokenPair[0].text == word[0])
-				{
-					let lineNumberJavaFile = word[1]-adjustOffset
-					let refLine : number = 0;
-					let docUri : string = '';
-					let transformMap = sketch.getTransformationMap()
-					if (transformMap.get(lineNumberJavaFile)) 
-					{
-						refLine = transformMap.get(lineNumberJavaFile)!.lineNumber
-						let docName =  transformMap.get(lineNumberJavaFile)!.fileName
-						docUri = sketch.getInfo().uri+docName
-					}
-
-					let charOffset = sketch.getCharacterOffset(lineNumberJavaFile, word[1])
-
-					multipleTokenOccurenceLocations[_multipleTokenCount] = {
-						uri: docUri,
-						range: {
-							start: {
-								line: refLine-1,
-								character: word[2] - charOffset
-							},
-							end: {
-								line: refLine-1,
-								character: word[2] + word[0].length - charOffset
-							}
-						}
-					}
-					_multipleTokenCount += 1
-				}
-			})
+			for(let candidate of result)
+				resultant.push(Location.create(pdeUri, candidate));
 		}
-	})
+		// if(!pdeInfo.syntaxTokens)
+		// 	continue;
 
-	if(multipleTokenOccurenceLocations.length > 0){
-		resultant = multipleTokenOccurenceLocations
-	} else {
-		resultant = null
+		// let pdeUri : string = sketch.getUriFromPdeName(pdeInfo.name);
+		// let result : Range[] = visitor.searchFor(idName, pdeInfo.syntaxTokens);
+		// for(let candidate of result)
+		// {
+		// 	let candidateDecl : symbols.BaseSymbol | undefined = await definitions.lookUpSymbolDefinition(pdeInfo.symbols, candidate.start.line+1, candidate.start.character+1);
+		// 	if(!candidateDecl)
+		// 	{
+		// 		console.error(`unable to find the right declaration for identifier at ${pdeName}. (${(line+1)}:${pos+1})`, log.severity.ERROR);
+		// 		continue;
+		// 	}
+		// 	if(candidateDecl === focusedDecl)
+		// 		resultant.push(Location.create(pdeUri, candidate));
+		// }
 	}
-	return resultant
+
+	return resultant;
+}
+
+export class ReferencesVisitor extends AbstractParseTreeVisitor<Range[]> implements ProcessingParserVisitor<Range[]>
+{
+	private searched : string | null = null;
+	private resultsFound : Range[] = [];
+
+	constructor() { super(); }
+	protected defaultResult(): Range[] { return this.resultsFound; }
+
+	public searchFor(word : string, ctx : ParserRuleContext) : Range[]
+	{
+		this.searched = word;
+		this.resultsFound = [];
+		this.visit(ctx);
+		return this.defaultResult();
+	}
+
+	visitTerminal(node: TerminalNode): Range[] 
+	{
+		if( node.text === this.searched )
+			this.resultsFound.push(this.getRange(node));
+
+		return this.defaultResult();
+	}
+
+	public getRange(ctx : TerminalNode) : Range
+	{
+		let line : number = ctx.symbol.line;
+		let pos : number = ctx.symbol.charPositionInLine;
+		let length : number = ctx.symbol.stopIndex - ctx.symbol.startIndex + 1;
+		return Range.create( line-1, pos, line-1, pos+length);
+	}
 }

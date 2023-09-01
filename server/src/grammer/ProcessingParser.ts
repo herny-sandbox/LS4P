@@ -7176,7 +7176,7 @@ export class ProcessingParser extends Parser {
 				_la = this._input.LA(1);
 			}
 
-			        this.notifyErrorListeners("Type names are not allowed as variable names: "+(_localctx._primitiveType != null ? this._input.getTextFromRange(_localctx._primitiveType._start, _localctx._primitiveType._stop) : undefined));
+			    this.notifyErrorListeners("Type names are not allowed as variable names: "+(_localctx._primitiveType != null ? this._input.getTextFromRange(_localctx._primitiveType._start, _localctx._primitiveType._stop) : undefined));
 			      
 			}
 		}
