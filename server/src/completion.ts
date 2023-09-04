@@ -340,8 +340,8 @@ export async function collectCandidates(pdeName: string, line: number, posInLine
 	if(!pdeInfo || !pdeInfo.syntaxTokens)
 		return [];
 
-	let parseContext : ParseTree | null = parseUtils.findIdentifierAtPosition(pdeInfo.syntaxTokens, pdeInfo.linesOffset + line, posInLine);
-	if(!parseContext || !(parseContext instanceof TerminalNode))
+	let parseContext : TerminalNode | null = parseUtils.findIdentifierAtPosition(pdeInfo.syntaxTokens, pdeInfo.linesOffset + line, posInLine);
+	if(!parseContext)
 		return [];
 
 	const token: Token = parseContext.symbol;

@@ -1,58 +1,61 @@
 import { ProcessingParserVisitor } from './grammer/ProcessingParserVisitor';
 import { AbstractParseTreeVisitor, ParseTree, TerminalNode } from 'antlr4ts/tree'
 import { ParserRuleContext } from 'antlr4ts';
-import * as symbols from 'antlr4-c3'
+import * as symb from 'antlr4-c3'
 import * as pp from './grammer/ProcessingParser';
 import { LocationLink } from 'vscode-languageserver/node';
 import * as log from './scripts/syslogs'
 import { DocumentSymbols } from "./documentSymbols"
 import { PdeContentInfo } from "./sketch";
+import * as psymb from "./antlr-sym"
+import * as jarSymbols from './JarSymbols'
+import * as parseUtils from './astutils'
 
-function getPdeName(symb: any) : string | undefined
+function getPdeName(anySymbol: any) : string | undefined
 {
-	return symb.pdeName;
+	return anySymbol.pdeName;
 }
 
-export function findPdeName(symb : symbols.BaseSymbol) : string | undefined
+export function findPdeName(baseSymbol : symb.BaseSymbol) : string | undefined
 {
-	let result : string | undefined = getPdeName(symb);
+	let result : string | undefined = getPdeName(baseSymbol);
 	if( result ) 
 		return result;
-	if(!symb.parent)
+	if(!baseSymbol.parent)
 		return;
-	return findPdeName(symb.parent);
+	return findPdeName(baseSymbol.parent);
 }
 
-export function findFirstClassOrInterfaceUp(symb : symbols.BaseSymbol) : symbols.ClassSymbol | symbols.InterfaceSymbol | undefined
+export function findFirstClassOrInterfaceUp(baseSymbol : symb.BaseSymbol) : psymb.PClassSymbol | psymb.PInterfaceSymbol | undefined
 {
-	if( symb instanceof symbols.ClassSymbol || symb instanceof symbols.InterfaceSymbol )
-		return symb;
-	else if(symb.parent)
-		return findFirstClassOrInterfaceUp(symb.parent);
+	if( baseSymbol instanceof psymb.PClassSymbol || baseSymbol instanceof psymb.PInterfaceSymbol )
+		return baseSymbol;
+	else if(baseSymbol.parent)
+		return findFirstClassOrInterfaceUp(baseSymbol.parent);
 
 	return;
 }
 
-export function resolveSymbolType(name:string, symb : symbols.BaseSymbol) : symbols.BaseSymbol
+export function resolveSymbolType(name:string, contextSymbol : symb.BaseSymbol) : symb.BaseSymbol
 {
-	let res : symbols.BaseSymbol | undefined = symb.resolveSync(name);
-	if(res instanceof symbols.VariableSymbol && res.type)
+	let res : symb.BaseSymbol | undefined = contextSymbol.resolveSync(name);
+	if(res instanceof symb.VariableSymbol && res.type)
 	{
-		if( res.type.reference == symbols.ReferenceKind.Reference )
-			res = symb.resolveSync(res.type.name);
+		if( res.type.reference == symb.ReferenceKind.Reference )
+			res = contextSymbol.resolveSync(res.type.name);
 	}
-	return res ? res : symb;
+	return res ? res : contextSymbol;
 }
 
-export function resolveVariableDeclaration(name:string, symb : symbols.BaseSymbol) : symbols.VariableSymbol | undefined
+export function resolveVariableDeclaration(name:string, contextSymbol : symb.BaseSymbol) : symb.VariableSymbol | undefined
 {
-	let res : symbols.BaseSymbol | undefined = symb.resolveSync(name);
-	if(res instanceof symbols.VariableSymbol)
+	let res : symb.BaseSymbol | undefined = contextSymbol.resolveSync(name);
+	if(res instanceof symb.VariableSymbol)
 		return res;
 	return;
 }
 
-export function resolveExpresionParamsAsString(paramListContext : pp.ExpressionListContext | undefined, symbolContext : symbols.BaseSymbol) : string
+export function resolveExpresionParamsAsString(paramListContext : pp.ExpressionListContext | undefined, contextSymbol : symb.BaseSymbol) : string
 {
 	let result : string = "";
 	if(paramListContext)
@@ -61,9 +64,9 @@ export function resolveExpresionParamsAsString(paramListContext : pp.ExpressionL
 		if(paramsList.length > 0)
 		{
 			result += " ";
-			result += resolveExpresionType(paramsList[0], symbolContext);
+			result += resolveExpresionType(paramsList[0], contextSymbol);
 			for(let i=1; i < paramsList.length; i++)
-				result += ", " + resolveExpresionType(paramsList[i], symbolContext);
+				result += ", " + resolveExpresionType(paramsList[i], contextSymbol);
 			result += " ";
 		}
 	}
@@ -71,7 +74,7 @@ export function resolveExpresionParamsAsString(paramListContext : pp.ExpressionL
 	return result;
 }
 
-export function resolveExpresionType(expressionContext : pp.ExpressionContext, symbolContext : symbols.BaseSymbol) : string
+export function resolveExpresionType(expressionContext : pp.ExpressionContext, contextSymbol : symb.BaseSymbol) : string
 {
 	
 	let prim : pp.PrimaryContext | undefined = expressionContext.primary();
@@ -80,11 +83,11 @@ export function resolveExpresionType(expressionContext : pp.ExpressionContext, s
 		let literal : pp.LiteralContext | undefined = prim.literal();
 		if(prim.THIS())
 		{
-			return findFirstClassOrInterfaceUp(symbolContext)?.name??"<unknown>";
+			return findFirstClassOrInterfaceUp(contextSymbol)?.name??"<unknown>";
 		}
 		else if(prim.IDENTIFIER())
 		{
-			let variab : symbols.VariableSymbol | undefined = resolveVariableDeclaration(prim.text, symbolContext);
+			let variab : symb.VariableSymbol | undefined = resolveVariableDeclaration(prim.text, contextSymbol);
 			if(variab && variab.type)
 				return variab.type.name;
 		}
@@ -105,27 +108,39 @@ export function resolveExpresionType(expressionContext : pp.ExpressionContext, s
 	return "<UnknownType>";
 }
 
-export class SymbolTableVisitor extends AbstractParseTreeVisitor<symbols.SymbolTable> implements ProcessingParserVisitor<symbols.SymbolTable>
+export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTable> implements ProcessingParserVisitor<symb.SymbolTable>
 {
-	private visitingSymbols : symbols.BaseSymbol[] | null = null;
-	private visitorRootSymbol : symbols.ScopedSymbol | null = null;
-	private mainClass : symbols.ClassSymbol;
-	protected scope : symbols.ScopedSymbol;
+	private visitingSymbols : symb.BaseSymbol[] | null = null;
+	private visitorRootSymbol : symb.ScopedSymbol | null = null;
+	private mainClass : psymb.PClassSymbol;
+	protected scope : symb.ScopedSymbol;
 	protected pdeInfo: PdeContentInfo | undefined;
 	public symbolTable;
 
 	constructor(mainName : string)
 	{
 		super();
-		this.symbolTable = new symbols.SymbolTable(mainName, { allowDuplicateSymbols: true });
-		this.mainClass = this.symbolTable.addNewSymbolOfType(symbols.ClassSymbol, undefined, mainName, [], new Array<symbols.ClassSymbol | symbols.InterfaceSymbol> ());
+		this.symbolTable = new psymb.PSymbolTable(mainName, { allowDuplicateSymbols: true });
+
+		jarSymbols.loadDefaultLibraries();
+		jarSymbols.tryAddDependency(this.symbolTable, "java.lang");
+		jarSymbols.tryAddDependency(this.symbolTable, "processing.core");
+		jarSymbols.tryAddDependency(this.symbolTable, "processing.awt");
+		jarSymbols.tryAddDependency(this.symbolTable, "processing.data");
+		jarSymbols.tryAddDependency(this.symbolTable, "processing.event");
+		jarSymbols.tryAddDependency(this.symbolTable, "processing.javafx");
+		jarSymbols.tryAddDependency(this.symbolTable, "processing.opengl");
+		this.symbolTable.addImport("java.util")
+
+		this.mainClass = new psymb.PClassSymbol(mainName, psymb.PUtils.createClassType("processing.core.PApplet"));
+		this.symbolTable.addSymbol(this.mainClass);
 		this.scope = this.mainClass;
 	}
 
-	public getMainClass() : symbols.ClassSymbol { return this.mainClass; }
-	protected defaultResult(): symbols.SymbolTable { return this.symbolTable; }
+	public getMainClass() : psymb.PClassSymbol { return this.mainClass; }
+	protected defaultResult(): symb.SymbolTable { return this.symbolTable; }
 
-	public visitPdeLinked(pdeInfo: PdeContentInfo) : symbols.SymbolTable
+	public visitPdeLinked(pdeInfo: PdeContentInfo) : symb.SymbolTable
 	{
 		this.visitorRootSymbol = this.scope;
 		this.visitingSymbols = pdeInfo.symbols;
@@ -139,11 +154,11 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symbols.SymbolT
 		return this.defaultResult();
 	}
 
-	public removeRootSymbols(symbs : symbols.BaseSymbol[])
+	public removeRootSymbols(symbs : symb.BaseSymbol[])
 	{
 		while(symbs.length > 0)
 		{
-			let s : symbols.BaseSymbol | undefined = symbs.pop();
+			let s : symb.BaseSymbol | undefined = symbs.pop();
 			if(s)
 				this.scope.removeSymbol(s);
 		}
@@ -156,8 +171,8 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symbols.SymbolT
 		{
 			try
 			{
-				let symbolType : symbols.Type | undefined = undefined;
-				this.addChildSymbol(ctx, new symbols.VariableSymbol(terminalNode.text, null, symbolType));
+				let symbolType : symb.Type | undefined = undefined;
+				this.addChildSymbol(ctx, new symb.VariableSymbol(terminalNode.text, null, symbolType));
 			}
 			catch(e)
 			{
@@ -175,21 +190,21 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symbols.SymbolT
 
 	visitEnhancedForControl = (ctx: pp.EnhancedForControlContext) => 
 	{
-		let symbolType : symbols.Type = this.evaluateSymbolType(ctx.typeType());
+		let symbolType = parseUtils.evaluateTypeTypeToSymbolType(ctx.typeType());
 		this.addTypedSymbol(symbolType, ctx.variableDeclaratorId());
 		return this.defaultResult();
 	}
 
 	visitLocalVariableDeclaration = (ctx: pp.LocalVariableDeclarationContext) => 
 	{
-		let symbolType : symbols.Type = this.evaluateSymbolType(ctx.typeType());
+		let symbolType = parseUtils.evaluateTypeTypeToSymbolType(ctx.typeType());
 		this.addTypedSymbols(symbolType, ctx.variableDeclarators());
 		return this.defaultResult();
 	}
 	
 	visitFormalParameter = (ctx: pp.FormalParameterContext) => 
 	{
-		let symbolType : symbols.Type = this.evaluateSymbolType(ctx.typeType());
+		let symbolType = parseUtils.evaluateTypeTypeToSymbolType(ctx.typeType());
 		this.addTypedSymbol(symbolType, ctx.variableDeclaratorId(), true);
 		
 		return this.defaultResult();
@@ -198,18 +213,18 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symbols.SymbolT
 	visitFieldDeclaration = (ctx: pp.FieldDeclarationContext) => 
 	{
 		let fileTypeCtx = ctx.typeType();
-		let symbolType : symbols.Type = this.evaluateSymbolType(fileTypeCtx);
+		let symbolType = parseUtils.evaluateTypeTypeToSymbolType(fileTypeCtx);
 		this.addTypedSymbols(symbolType, ctx.variableDeclarators());
 		return this.defaultResult();
 	}
 
 	visitClassDeclaration = (ctx: pp.ClassDeclarationContext) => 
 	{
-		let ext : symbols.ClassSymbol [] = [];
-		let impl : Array<symbols.ClassSymbol | symbols.InterfaceSymbol> = new Array<symbols.ClassSymbol | symbols.InterfaceSymbol> ();
+		let ext : psymb.PClassSymbol | undefined;
+		let impl : psymb.PInterfaceSymbol [] = [];
 		let classIdentifier = ctx.IDENTIFIER();
 		let className = classIdentifier.text;
-		let classSymbol = new symbols.ClassSymbol(className, ext, impl)
+		let classSymbol = new psymb.PClassSymbol(className, ext, impl)
 		this.pdeInfo?.refs?.registerDefinition(classIdentifier, classSymbol );
 		return this.addScope(ctx, classSymbol, () => this.visitChildren(ctx.classBody()));
 	}
@@ -217,17 +232,15 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symbols.SymbolT
 	visitClassCreatorRest = (ctx: pp.ClassCreatorRestContext) => 
 	{
 		let fakeSymbolName : string = "classRest"+ctx.start.startIndex;
-		let ext : symbols.ClassSymbol [] = [];
-		let impl : Array<symbols.ClassSymbol | symbols.InterfaceSymbol> = new Array<symbols.ClassSymbol | symbols.InterfaceSymbol> ();
-		return this.addScope(ctx, new symbols.ClassSymbol(fakeSymbolName, ext, impl), () => this.visitChildren(ctx));
+		let ext : psymb.PClassSymbol;
+		let impl : Array<psymb.PClassSymbol | psymb.PInterfaceSymbol> = new Array<psymb.PClassSymbol | psymb.PInterfaceSymbol> ();
+		return this.addScope(ctx, new psymb.PClassSymbol(fakeSymbolName), () => this.visitChildren(ctx));
 	}
 
 	visitEnumDeclaration = (ctx: pp.EnumDeclarationContext) => 
 	{
 		let signatureName : string = ctx.IDENTIFIER().text;
-		let ext : symbols.ClassSymbol [] = [];
-		let impl : Array<symbols.ClassSymbol | symbols.InterfaceSymbol> = new Array<symbols.ClassSymbol | symbols.InterfaceSymbol> ();
-		return this.addScope(ctx, new symbols.ClassSymbol(signatureName, ext, impl), () => this.visitChildren(ctx));
+		return this.addScope(ctx, new psymb.PClassSymbol(signatureName), () => this.visitChildren(ctx));
 	}
 
 	visitMethodDeclaration = (ctx: pp.MethodDeclarationContext) => 
@@ -236,10 +249,10 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symbols.SymbolT
 		//signatureName += "(" + DocumentSymbols.ParseParamsAsString(ctx.formalParameters()) + ")";
 		let returnTypeOrVoid : pp.TypeTypeOrVoidContext = ctx.typeTypeOrVoid();
 		let returnTypeCtx = returnTypeOrVoid.typeType()
-		let returnType : symbols.Type | undefined;
+		let returnType : symb.Type | undefined;
 		if(returnTypeCtx)
-			returnType = this.evaluateSymbolType(returnTypeCtx);
-		let method : symbols.MethodSymbol = new symbols.MethodSymbol(signatureName, returnType);
+			returnType = parseUtils.evaluateTypeTypeToSymbolType(returnTypeCtx);
+		let method : symb.MethodSymbol = new symb.MethodSymbol(signatureName, returnType);
 		this.pdeInfo?.refs?.registerDefinition(ctx.IDENTIFIER(), method );
 		return this.addScope(ctx, method, () => this.visitChildren(ctx));
 	};
@@ -249,20 +262,20 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symbols.SymbolT
 		let signatureName : string = ctx.IDENTIFIER().text;
 		signatureName += "(" + DocumentSymbols.ParseParamsAsString(ctx.formalParameters()) + ")";
 
-		return this.addScope(ctx, new symbols.MethodSymbol(signatureName), () => this.visitChildren(ctx));
+		return this.addScope(ctx, new symb.MethodSymbol(signatureName), () => this.visitChildren(ctx));
 	}
 
 	visitBlock = (ctx: pp.BlockContext) => 
 	{
 		let fakeSymbolName : string = "block"+ctx.start.startIndex;
-		let newSymbol : symbols.ScopedSymbol = new symbols.ScopedSymbol(fakeSymbolName);
+		let newSymbol : symb.ScopedSymbol = new symb.ScopedSymbol(fakeSymbolName);
 		return this.addScope(ctx, newSymbol, () => this.visitChildren(ctx));
 	};
 	
 	visitForLoop = (ctx: pp.ForLoopContext) => 
 	{
 		let fakeSymbolName : string = "for"+ctx.start.startIndex;
-		let newSymbol : symbols.ScopedSymbol = new symbols.ScopedSymbol(fakeSymbolName);
+		let newSymbol : symb.ScopedSymbol = new symb.ScopedSymbol(fakeSymbolName);
 		return this.addScope(ctx, newSymbol, () => this.visitChildren(ctx));
 	};
 
@@ -273,7 +286,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symbols.SymbolT
 	// PROTECTED HELPER FUNCTIONS
 	// =============================================================
 
-	protected addScope(ctx: ParseTree, newSymbol: symbols.ScopedSymbol, action: () => symbols.SymbolTable): symbols.SymbolTable 
+	protected addScope(ctx: ParseTree, newSymbol: symb.ScopedSymbol, action: () => symb.SymbolTable): symb.SymbolTable 
 	{
 		
 		try {
@@ -283,7 +296,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symbols.SymbolT
 			try {
 				return action();
 			} finally {
-				this.scope = newSymbol.parent as symbols.ScopedSymbol;
+				this.scope = newSymbol.parent as symb.ScopedSymbol;
 			}
 		} 
 		catch(e) 
@@ -294,7 +307,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symbols.SymbolT
 		return this.defaultResult();
 	}
 
-	protected addChildSymbol(ctx: ParseTree, newSymbol: symbols.BaseSymbol)
+	protected addChildSymbol(ctx: ParseTree, newSymbol: symb.BaseSymbol)
 	{
 		newSymbol.context = ctx;
 		this.scope.addSymbol(newSymbol);
@@ -304,72 +317,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symbols.SymbolT
 
 	}
 
-	protected parseTypeToSymbolType(classOrInterface : pp.ClassOrInterfaceTypeContext | undefined, primitive : pp.PrimitiveTypeContext | undefined) : symbols.TypeKind
-	{
-		if(primitive)
-		{
-			if(primitive.BOOLEAN())
-				return symbols.TypeKind.Boolean;
-			if(primitive.CHAR())
-				return symbols.TypeKind.Char;
-			if(primitive.BYTE())
-				return symbols.TypeKind.Integer;
-			if(primitive.SHORT())
-				return symbols.TypeKind.Integer;
-			if(primitive.INT())
-				return symbols.TypeKind.Integer;
-			if(primitive.LONG())
-				return symbols.TypeKind.Number;
-			if(primitive.FLOAT())
-				return symbols.TypeKind.Float;
-			if(primitive.DOUBLE())
-				return symbols.TypeKind.Float;
-			if(primitive.colorPrimitiveType())
-				return symbols.TypeKind.Class;
-		}
-		else if(classOrInterface)
-		{
-			return symbols.TypeKind.Class;
-		}
-		return symbols.TypeKind.Boolean;
-	}
-
-	protected evaluateSymbolType(typeContext : pp.TypeTypeContext) : symbols.Type
-	{
-		let classOrInterface : pp.ClassOrInterfaceTypeContext | undefined = typeContext.classOrInterfaceType();
-		let primitive : pp.PrimitiveTypeContext | undefined =  typeContext.primitiveType();
-
-		let symbolType : symbols.Type = {  
-			name : typeContext.text,
-			kind : this.parseTypeToSymbolType(classOrInterface, primitive),
-			baseTypes : [],
-			reference : classOrInterface ? symbols.ReferenceKind.Reference : symbols.ReferenceKind.Instance
-		};
-		return symbolType;
-	}
-
-
-	public checkTypeFromClassOrInterface(symbolTypeName : string, classOrInterface : symbols.ClassSymbol | symbols.InterfaceSymbol) : boolean
-	{
-		if( classOrInterface.name === symbolTypeName )
-			return true;
-		for( let ext of classOrInterface.extends )
-		{
-			if(this.checkTypeFromClassOrInterface(symbolTypeName, ext))
-				return true;
-		}
-		if(classOrInterface instanceof symbols.ClassSymbol)
-		{
-			for( let impl of classOrInterface.implements )
-			{
-				if(this.checkTypeFromClassOrInterface(symbolTypeName, impl))
-					return true;
-			}
-		}
-		return false;
-	}
-
-	protected addTypedSymbols(symbolType : symbols.Type, ctx: pp.VariableDeclaratorsContext )
+	protected addTypedSymbols(symbolType : symb.Type | undefined, ctx: pp.VariableDeclaratorsContext )
 	{
 		let variableDeclarators : pp.VariableDeclaratorContext [] = ctx.variableDeclarator();
 		for( let i:number=0; i < variableDeclarators.length; i++ )
@@ -379,7 +327,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symbols.SymbolT
 		}
 	}
 
-	protected addTypedSymbol(symbolType : symbols.Type, ctx: pp.VariableDeclaratorIdContext, isParameter : boolean = false )
+	protected addTypedSymbol(symbolType : symb.Type | undefined, ctx: pp.VariableDeclaratorIdContext, isParameter : boolean = false )
 	{
 		let terminalNode = ctx.IDENTIFIER();
 		if(!terminalNode)
@@ -390,11 +338,11 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symbols.SymbolT
 
 		try
 		{
-			let typedSymbol : symbols.BaseSymbol;
+			let typedSymbol : symb.BaseSymbol;
 			if(isParameter)
-				typedSymbol = new symbols.ParameterSymbol(terminalNode.text, null, symbolType);
+				typedSymbol = new symb.ParameterSymbol(terminalNode.text, null, symbolType);
 			else
-				typedSymbol = new symbols.VariableSymbol(terminalNode.text, null, symbolType);
+				typedSymbol = new symb.VariableSymbol(terminalNode.text, null, symbolType);
 
 			this.pdeInfo?.refs?.registerDefinition(terminalNode, typedSymbol );
 			this.addChildSymbol(ctx, typedSymbol);
@@ -405,9 +353,9 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symbols.SymbolT
 		}
 	}
 
-	protected registerPdeName(symb: any, pdeName:string)
+	protected registerPdeName(relatedSymbol: any, pdeName:string)
 	{
-		symb.pdeName = pdeName;
+		relatedSymbol.pdeName = pdeName;
 	}
 
 

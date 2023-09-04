@@ -59,12 +59,10 @@ connection.onInitialize((params: InitializeParams) => {
 		capabilities.textDocument.publishDiagnostics &&
 		capabilities.textDocument.publishDiagnostics.relatedInformation
 	);
-
 	if(params.workspaceFolders && params.workspaceFolders.length > 0)
-		sketch.prepareSketch(params.workspaceFolders[0].uri);
+		forcedDelayedStart(params.workspaceFolders[0].uri);
 
-	if(sketchRefreshInProgress==false)
-		notifySketchChanged();
+
 
 	const result: InitializeResult = 
 	  {
@@ -211,6 +209,14 @@ async function notifySketchChanged()
 	sketchRefreshInProgress = false
 }
 
+async function forcedDelayedStart(projectUri: string)
+{
+	//await sleep(2000);
+
+	sketch.prepareSketch(projectUri);
+	tryNotifySketchChanged();
+}
+
 function sleep(ms: number) {
 	return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -268,7 +274,7 @@ connection.onReferences( async (params: ReferenceParams): Promise<Location[] | n
 // Refresh codeLens for every change in the input stream
 // Implementation of `code-lens` goes here
 connection.onCodeLens( (_codeLensParams: CodeLensParams): CodeLens[] | null => {
-		// return lens.scheduleLookUpLens(_codeLensParams)
+		//return lens.scheduleLookUpLens(_codeLensParams)
 		return null
 	}
 )
@@ -318,7 +324,7 @@ connection.onCompletionResolve( (item: CompletionItem): CompletionItem =>
 // Implementation for Hover request
 connection.onHover(	(params: TextDocumentPositionParams): Hover | null => 
 {
-	let hoverResult: Hover | null = null;
+	//let hoverResult: Hover | null = null;
 	//let compileErrors : sketch.CompileError[] = sketch.getCompileErrors();
 	
 	// if (compileErrors.length == 0) {
@@ -330,7 +336,9 @@ connection.onHover(	(params: TextDocumentPositionParams): Hover | null =>
 	// 	})
 	// }
 	//log.write("Hover Invoked, result: "+hoverResult?.contents, log.severity.EVENT)
-	return hoverResult;
+	//return hoverResult;
+	const pdeName : string = path.basename(sketch.getPathFromUri(params.textDocument.uri));
+	return hover.scheduleHoverInfo(pdeName, params.position.line+1, params.position.character);
 });
 
 // ================================================================================================

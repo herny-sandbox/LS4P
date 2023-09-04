@@ -4,41 +4,31 @@ import { ParserRuleContext } from 'antlr4ts'
 import { Location, Range, Diagnostic, DiagnosticSeverity, PublishDiagnosticsParams } from 'vscode-languageserver'
 import * as symbols from 'antlr4-c3'
 import * as pp from './grammer/ProcessingParser';
-import * as defs from './definition'
 import * as parseUtils from './astutils'
-import { identity } from 'rxjs';
+import * as psymb from "./antlr-sym"
 
-export class UsageVisitor extends AbstractParseTreeVisitor<symbols.BaseSymbol | undefined> implements ProcessingParserVisitor<symbols.BaseSymbol | undefined>
+export class UsageVisitor extends AbstractParseTreeVisitor<symbols.Type | undefined> implements ProcessingParserVisitor<symbols.Type | undefined>
 {
-	private mainClass : symbols.ClassSymbol;
-	private definitionMap : Map<ParseTree, symbols.BaseSymbol> = new Map<ParseTree, symbols.BaseSymbol>();
+	private mainClass : psymb.PClassSymbol;
+	private definitionMap : Map<TerminalNode, symbols.BaseSymbol> = new Map<TerminalNode, symbols.BaseSymbol>();
 	private usageMap : Map<symbols.BaseSymbol, Range[]> = new Map<symbols.BaseSymbol, Range[]>();
 	public diagnostics : Diagnostic[] = [];
 	//private contextSymbol : symbols.BaseSymbol | null = null;
-	constructor(mainClass : symbols.ClassSymbol) { super(); this.mainClass = mainClass; }
-	protected defaultResult(): symbols.BaseSymbol | undefined { return this.mainClass; }
+	constructor(mainClass : psymb.PClassSymbol) { super(); this.mainClass = mainClass; }
+	protected defaultResult(): symbols.Type | undefined { return this.mainClass; }
 
-	public analize(ctx : ParserRuleContext) : UsageVisitor
-	{
-		// this.diagnostics = [];
-		// this.definitionMap.clear();
-		// this.usageMap.clear();
-		this.visit(ctx);
-		return this;
-	}
-
-	public addSymbolUsageArray( decl : symbols.BaseSymbol ) : Range[] | undefined
+	public getUsageReferencesFor( decl : symbols.BaseSymbol ) : Range[] | undefined
 	{
 		return this.usageMap.get(decl);
 	}
 
-	public findNodeSymbolDefinition( node : ParseTree )  : symbols.BaseSymbol | undefined
+	public findNodeSymbolDefinition( node : TerminalNode )  : symbols.BaseSymbol | undefined
 	{
 		return this.definitionMap.get(node);
 	}
 
 
-	visitEnhancedForControl(ctx: pp.EnhancedForControlContext) : symbols.BaseSymbol | undefined
+	visitEnhancedForControl(ctx: pp.EnhancedForControlContext) : symbols.Type | undefined
 	{
 		this.registerDefinitionForDeclarationType(ctx.typeType());
 		this.visitChildren(ctx.variableDeclaratorId());
@@ -46,25 +36,25 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symbols.BaseSymbol | 
 		return;
 	}
 
-	visitLocalVariableDeclaration(ctx: pp.LocalVariableDeclarationContext) : symbols.BaseSymbol | undefined 
+	visitLocalVariableDeclaration(ctx: pp.LocalVariableDeclarationContext) : symbols.Type | undefined 
 	{
 		this.registerDefinitionForDeclarationType(ctx.typeType());
 		return this.visitChildren(ctx.variableDeclarators());
 	}
 	
-	visitFormalParameter(ctx: pp.FormalParameterContext) : symbols.BaseSymbol | undefined
+	visitFormalParameter(ctx: pp.FormalParameterContext) : symbols.Type | undefined
 	{
 		this.registerDefinitionForDeclarationType(ctx.typeType());
 		return this.visitChildren(ctx.variableDeclaratorId());
 	}
 
-	visitFieldDeclaration(ctx: pp.FieldDeclarationContext) : symbols.BaseSymbol | undefined
+	visitFieldDeclaration(ctx: pp.FieldDeclarationContext) : symbols.Type | undefined
 	{
 		this.registerDefinitionForDeclarationType(ctx.typeType());
 		return this.visitChildren(ctx.variableDeclarators());
 	}
 
-	visitMethodDeclaration(ctx: pp.MethodDeclarationContext) : symbols.BaseSymbol | undefined
+	visitMethodDeclaration(ctx: pp.MethodDeclarationContext) : symbols.Type | undefined
 	{
 		//let identif = ctx.IDENTIFIER();
 		//let signatureName : string = identif.text;
@@ -80,52 +70,46 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symbols.BaseSymbol | 
 		return;
 	};
 
-	visitExpression(ctx: pp.ExpressionContext) : symbols.BaseSymbol | undefined
+	visitExpression(ctx: pp.ExpressionContext) : symbols.Type | undefined
 	{
 		const line = ctx.start.line;
 		const pos = ctx.start.charPositionInLine;
-		let currentScope : symbols.BaseSymbol | undefined =  parseUtils.findScopeAtPositionFromSymbols(this.mainClass.children, line, pos+1);
+		let currentScope : symbols.ScopedSymbol | undefined =  parseUtils.findScopeAtPositionFromSymbols(this.mainClass.children, line, pos+1);
 		if(!currentScope || !currentScope.context)
 			return;
 
 		let methodCall : pp.MethodCallContext | undefined = ctx.methodCall();
-		let expression : pp.ExpressionContext[] = ctx.expression();
+		let expressions : pp.ExpressionContext[] = ctx.expression();
 		let primary : pp.PrimaryContext | undefined = ctx.primary();
 		let identif : TerminalNode | undefined = ctx.IDENTIFIER();
 		let creator : pp.CreatorContext | undefined = ctx.creator();
+		let expression : pp.ExpressionContext | undefined;
+		if(expressions.length>0)
+			expression = expressions[0];
+
+		let dot = ctx.DOT();
+
 		if(methodCall)
-		{
-			let methodID =  methodCall.IDENTIFIER();
-			let thisCall = methodCall.THIS();
-			let superCall = methodCall.SUPER();
-			if(methodCall.functionWithPrimitiveTypeName())
-				this.visitChildren(ctx);
-			else if(methodID)
-			{
-				let contextSymbol : symbols.BaseSymbol | undefined = currentScope;
-				let methodDef : symbols.BaseSymbol | undefined;
-				if(expression && expression.length==1)
-					contextSymbol = this.visitExpression(expression[0]);
-				if(contextSymbol!==undefined)
-					methodDef = defs.resolveMethodCall(methodID.text, methodCall.expressionList(), contextSymbol ? contextSymbol : currentScope, currentScope);
-				this.registerDefinition(methodID, methodDef);
-				return methodDef;
-			}
-			else
-				this.visitChildren(ctx);
-		}
+			return this.visitAndRegisterMethodCall(methodCall, expression, currentScope);
+
+		else if(identif)
+			return this.visitAndRegisterVariable(identif, expression, currentScope);
+
 		else if(primary)
 		{
-			if(primary.THIS())
-				return this.findFirstClassOrInterfaceUp(currentScope);
+			let thisCtx = primary.THIS();
+			let identif = primary.IDENTIFIER();
+
+			if(thisCtx)
+			{
+				let result = this.findFirstClassOrInterfaceUp(currentScope)
+				this.registerDefinition(thisCtx, result);
+				return result;
+			}
 	
-			else if(primary.IDENTIFIER())
-				return this.resolveSymbolType(primary.text, currentScope);
-	
-		}
-		else if(identif)
-		{
-			return this.resolveSymbolType(identif.text, currentScope);
+			else if(identif)
+				return this.visitAndRegisterVariable(identif, expression, currentScope);
+
 		}
 		else if( creator )
 		{
@@ -172,39 +156,132 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symbols.BaseSymbol | 
 				//result = symbolContainer;
 			}
 		}
+		else if(expressions)
+		{
+			if( !dot )
+			{
+				for(let i=0; i < expressions.length; i++)
+					this.visitExpression(expressions[i]);
+			}
+		}
 		else
 			this.visitChildren(ctx);
 	}
 
-	visitTerminal(node: TerminalNode) : symbols.BaseSymbol | undefined
+	visitTerminal(node: TerminalNode) : symbols.Type | undefined
 	{
 		if(node.symbol.type == pp.ProcessingParser.IDENTIFIER)
 		{
 			let focusedDecl : symbols.BaseSymbol | undefined = this.findNodeSymbolDefinition(node);
-	// 		let containerSymbol = parseUtils.findScopeAtPositionFromSymbols(this.mainClass.children, node.symbol.line, node.symbol.charPositionInLine);
-	// 		if(containerSymbol===undefined)
-	// 			containerSymbol = this.mainClass;
-			
-	// 		if(containerSymbol.context === node.parent)
-	// 			focusedDecl = containerSymbol;
-	// 		else
-	// 			focusedDecl = defs.resolveSymbolDeclaration(node, containerSymbol);
 			if(focusedDecl===undefined)
 				this.registerDefinition(node, focusedDecl);
 			return;
 		}
 	}
 
-	public findFirstClassOrInterfaceUp(symb : symbols.BaseSymbol) : symbols.ClassSymbol | symbols.InterfaceSymbol | undefined
+	visitAndRegisterMethodCall(methodCall: pp.MethodCallContext, expression: pp.ExpressionContext|undefined, currentScope: symbols.ScopedSymbol) : symbols.Type | undefined
 	{
-		if( symb instanceof symbols.ClassSymbol || symb instanceof symbols.InterfaceSymbol )
-			return symb;
-		else if(symb.parent)
-			return this.findFirstClassOrInterfaceUp(symb.parent);
+		let methodID =  methodCall.IDENTIFIER();
+		let thisCall = methodCall.THIS();
+		let superCall = methodCall.SUPER();
+		
+		if(methodID)
+		{
+			if(expression)
+			{
+				let expressionType = this.visitExpression(expression);
+				if(expressionType)
+				{
+					let callContext = currentScope.resolveSync(expressionType.name, false);
+					if(callContext && callContext instanceof symbols.ScopedSymbol)
+						currentScope = callContext;
+				}
+			}
+			
+			let methodName = methodID.text;
+			let candidates : symbols.BaseSymbol [];
+			let expressionList = methodCall.expressionList();
+			candidates = currentScope.getAllSymbolsSync(symbols.MethodSymbol);
+			candidates = candidates.filter((x) => { return x.name == methodName })
+			let match = this.checkCandidatesMatch(candidates, expressionList, currentScope, true);
+			if(!match)
+				match = this.checkCandidatesMatch(candidates, expressionList, currentScope, false);
+			
+			this.registerDefinition(methodID, match);
+			return match?.returnType;
+		}
+		else
+			this.visitChildren(methodCall);
+	}
+
+	visitAndRegisterVariable(identifier: TerminalNode, expression: pp.ExpressionContext|undefined, currentScope: symbols.ScopedSymbol) : symbols.Type | undefined
+	{
+		if(expression)
+		{
+			let expressionType = this.visitExpression(expression);
+			if(expressionType)
+			{
+				let callContext = currentScope.resolveSync(expressionType.name, false);
+				if(callContext && callContext instanceof symbols.ScopedSymbol)
+					currentScope = callContext;
+			}
+		}
+
+		let varName = identifier.text;
+		let res : symbols.BaseSymbol | undefined = currentScope.resolveSync(varName);
+		this.registerDefinition(identifier, res);
+		if(res instanceof symbols.VariableSymbol && res.type)
+			return res.type;
+	}
+
+	checkCandidatesMatch(candidates: symbols.BaseSymbol[], expressionList: pp.ExpressionListContext | undefined, callContainer: symbols.BaseSymbol, perfectMatch:boolean=false) 
+	{
+		let finalCandidates: symbols.MethodSymbol[] = []
+		for (let candidate of candidates) {
+			if (!(candidate instanceof symbols.MethodSymbol))
+				continue
+
+			if (expressionList) {
+				let params = candidate.getNestedSymbolsOfTypeSync(symbols.ParameterSymbol)
+				if (!this.compareMethodParameters(params, expressionList, callContainer, perfectMatch))
+					continue
+			}
+			finalCandidates.push(candidate)
+		}
+		return finalCandidates.length == 1 ? finalCandidates[0] : undefined
+	}
+
+	compareMethodParameters(symbolParams : symbols.ParameterSymbol [], contextParams : pp.ExpressionListContext, symbolContext : symbols.BaseSymbol, perfectMatch:boolean=false) : boolean
+	{
+		let paramList : pp.ExpressionContext [] | undefined = contextParams.expression();
+		for(let i : number = 0; i < symbolParams.length; i++)
+		{
+			if(i < paramList.length )
+			{
+				let expressionType = parseUtils.evaluateExpressionType(paramList[i], symbolContext);
+				let paramType = symbolParams[i].type;
+				if( !psymb.PUtils.compareTypes(paramType, expressionType, symbolContext, perfectMatch))
+					return false;
+				// if( !checkParameterSymbolExpression(paramType, paramList[i], symbolContext, perfectMatch) )
+				// 	return false;
+			}
+			else if(!symbolParams[i].value)
+				return false;
+			
+		}
+		return true;
+	}
+
+	public findFirstClassOrInterfaceUp(scopedSymbol : symbols.BaseSymbol) : psymb.PClassSymbol | psymb.PInterfaceSymbol | undefined
+	{
+		if( scopedSymbol instanceof psymb.PClassSymbol || scopedSymbol instanceof psymb.PInterfaceSymbol )
+			return scopedSymbol;
+		else if(scopedSymbol.parent)
+			return this.findFirstClassOrInterfaceUp(scopedSymbol.parent);
 		return;
 	}
 
-	public resolveSymbolType(name:string, symb : symbols.BaseSymbol) : symbols.BaseSymbol
+	public resolveSymbolType(name:string, symb : symbols.BaseSymbol) : symbols.BaseSymbol | undefined
 	{
 		let res : symbols.BaseSymbol | undefined = symb.resolveSync(name);
 		if(res instanceof symbols.VariableSymbol && res.type)
@@ -212,7 +289,7 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symbols.BaseSymbol | 
 			if( res.type.reference == symbols.ReferenceKind.Reference )
 				res = symb.resolveSync(res.type.name);
 		}
-		return res ? res : symb;
+		return res;
 	}
 
 	public getRange(ctx : TerminalNode) : Range
@@ -231,22 +308,35 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symbols.BaseSymbol | 
 		if(!currentScope || !currentScope.context)
 			return;
 
+		this.registerTypeDefinitionWithScope(typeCtx, currentScope);
+	}
+
+	private registerTypeDefinitionWithScope(typeCtx : pp.TypeTypeContext, currentScope : symbols.BaseSymbol)
+	{
 		let classOrInterface = typeCtx.classOrInterfaceType();
 		if(classOrInterface)
 		{
 			let identifiers = classOrInterface.IDENTIFIER();
+			let typeArgumentsCtx = classOrInterface.typeArguments();
 			if(	identifiers.length > 0)
 			{
 				let identif = identifiers[0];
 				let typeDefinition = this.resolveSymbolType(identif.text, currentScope);
 				this.registerDefinition(identif, typeDefinition );
 			}
+			for(let i=0; i < typeArgumentsCtx.length; i++)
+			{
+				let args = typeArgumentsCtx[0].typeArgument();
+				if(args.length==0 )
+					continue;
+				let typeType = args[0].typeType();
+				if(typeType)
+					this.registerTypeDefinitionWithScope(typeType, currentScope);
+			}
 		}
-	
-
 	}
 
-	public registerDefinition(node: TerminalNode, declaredSymbol : symbols.BaseSymbol | undefined)
+	public registerDefinition(node: TerminalNode, declaredSymbol : symbols.BaseSymbol | undefined) : symbols.BaseSymbol | undefined
 	{
 		if(declaredSymbol !== undefined)
 		{
@@ -266,5 +356,6 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symbols.BaseSymbol | 
 			}
 			this.diagnostics.push(diagnostic);
 		}
+		return declaredSymbol;
 	}
 }

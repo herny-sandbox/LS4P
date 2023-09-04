@@ -22,22 +22,19 @@ export async function scheduleLookUpReference(pdeName : string, line : number, p
 	if(!containerSymbol || !containerSymbol.context)
 		return null;
 	
-	let parseNode : ParseTree | null = parseUtils.findIdentifierAtPosition(containerSymbol.context, line, pos);
-	if(!parseNode || !(parseNode instanceof TerminalNode))
+	let parseNode : TerminalNode | null = parseUtils.findIdentifierAtPosition(containerSymbol.context, line, pos);
+	if(!parseNode)
 		return null;
 	
 	let focusedDecl : symbols.BaseSymbol | undefined;
 
 	if(containerSymbol.context === parseNode.parent)
 		focusedDecl = containerSymbol;
-	else
-		focusedDecl = await definitions.resolveSymbolDeclaration(parseNode, containerSymbol);
+	else if(pdeInfo.refs)
+		focusedDecl = pdeInfo.refs.findNodeSymbolDefinition(parseNode);
 
 	if(!focusedDecl)
 		return null;
-
-	let idName : string = parseNode.text;
-	let visitor : ReferencesVisitor = new ReferencesVisitor();
 
 	for (let pdeInfo of sketch.getAllPdeInfos()) 
 	{
@@ -45,28 +42,12 @@ export async function scheduleLookUpReference(pdeName : string, line : number, p
 			continue;
 
 		let pdeUri : string = sketch.getUriFromPdeName(pdeInfo.name);
-		let result : Range[] | undefined = pdeInfo.refs.addSymbolUsageArray(focusedDecl)
+		let result : Range[] | undefined = pdeInfo.refs.getUsageReferencesFor(focusedDecl)
 		if(result)
 		{
 			for(let candidate of result)
 				resultant.push(Location.create(pdeUri, candidate));
 		}
-		// if(!pdeInfo.syntaxTokens)
-		// 	continue;
-
-		// let pdeUri : string = sketch.getUriFromPdeName(pdeInfo.name);
-		// let result : Range[] = visitor.searchFor(idName, pdeInfo.syntaxTokens);
-		// for(let candidate of result)
-		// {
-		// 	let candidateDecl : symbols.BaseSymbol | undefined = await definitions.lookUpSymbolDefinition(pdeInfo.symbols, candidate.start.line+1, candidate.start.character+1);
-		// 	if(!candidateDecl)
-		// 	{
-		// 		console.error(`unable to find the right declaration for identifier at ${pdeName}. (${(line+1)}:${pos+1})`, log.severity.ERROR);
-		// 		continue;
-		// 	}
-		// 	if(candidateDecl === focusedDecl)
-		// 		resultant.push(Location.create(pdeUri, candidate));
-		// }
 	}
 
 	return resultant;

@@ -12,7 +12,6 @@ import { DocumentUri, Range } from 'vscode-languageserver'
 import { ReferencesVisitor } from './references';
 import * as dm from './definitionsMap'
 import * as server from './server'
-import * as jarSymbols from './JarSymbols'
 
 const fs = require('fs')
 const pathM = require('path')
@@ -106,10 +105,6 @@ export function initialize(workspacePath: string)
 	jrePath = `${__dirname.substring(0,__dirname.length-11)}/jre/bin`;
 
 	symbolTableVisitor = new SymbolTableVisitor(name);
-	jarSymbols.ImportDefaultLibraries(symbolTableVisitor.symbolTable);
-	let pappletSymbol : symbols.ClassSymbol | undefined = jarSymbols.GetClass("processing.core.PApplet");
-	if(pappletSymbol)
-		symbolTableVisitor.getMainClass().extends.push(pappletSymbol);
 	
 	try 
 	{
@@ -684,7 +679,7 @@ export function updatePdeContent(pdeName : string, newContent : string, linesCou
 	symbolTableVisitor.removeRootSymbols(pdeInfo.symbols);
 	symbolTableVisitor.visitPdeLinked(pdeInfo);
 
-	pdeInfo.refs.analize(pdeInfo.syntaxTokens);
+	pdeInfo.refs.visit(pdeInfo.syntaxTokens);
 
 	let fileUri = sketchInfo.uri+pdeInfo.name
 	server.connection.sendDiagnostics({uri: fileUri, diagnostics: pdeInfo.refs.diagnostics})
@@ -703,7 +698,7 @@ function addPdeContent(pdeName : string, newContent : string) : PdeContentInfo
 	result.refs = new dm.UsageVisitor(symbolTableVisitor.getMainClass());
 	result.syntaxTokens = parser.parse(newContent) as ParserRuleContext;
 	symbolTableVisitor.visitPdeLinked(result);
-	result.refs.analize(result.syntaxTokens);
+	result.refs.visit(result.syntaxTokens);
 	
 	return result;
 }
