@@ -32,7 +32,7 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symbols.Type | undefi
 	{
 		this.registerDefinitionForDeclarationType(ctx.typeType());
 		this.visitChildren(ctx.variableDeclaratorId());
-		this.visitChildren(ctx.expression());
+		this.visitExpression(ctx.expression());
 		return;
 	}
 
@@ -77,7 +77,11 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symbols.Type | undefi
 		let currentScope : symbols.ScopedSymbol | undefined =  parseUtils.findScopeAtPositionFromSymbols(this.mainClass.children, line, pos+1);
 		if(!currentScope || !currentScope.context)
 			return;
+		this.visitAndRegisterExpression(ctx, currentScope);
+	}
 
+	visitAndRegisterExpression(ctx: pp.ExpressionContext, currentScope: symbols.ScopedSymbol) : symbols.Type | undefined
+	{
 		let methodCall : pp.MethodCallContext | undefined = ctx.methodCall();
 		let expressions : pp.ExpressionContext[] = ctx.expression();
 		let primary : pp.PrimaryContext | undefined = ctx.primary();
@@ -141,10 +145,8 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symbols.Type | undefi
 								this.registerDefinition(identifiers[0], genericTypeSymbol);
 							}
 						}					
-						
-							
 					}
-					
+				
 				}
 				//if(currentScope!==undefined)
 				//	methodDef = defs.resolveMethodCall(className, paramsList, contextSymbol ? contextSymbol : currentScope, currentScope);
@@ -187,25 +189,27 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symbols.Type | undefi
 		
 		if(methodID)
 		{
+			let callScope = currentScope;
 			if(expression)
 			{
-				let expressionType = this.visitExpression(expression);
+				let expressionType = this.visitAndRegisterExpression(expression, currentScope);
 				if(expressionType)
 				{
 					let callContext = currentScope.resolveSync(expressionType.name, false);
 					if(callContext && callContext instanceof symbols.ScopedSymbol)
-						currentScope = callContext;
+						callScope = callContext;
 				}
 			}
-			
+			let localOnly = expression !== undefined;
 			let methodName = methodID.text;
 			let candidates : symbols.BaseSymbol [];
-			let expressionList = methodCall.expressionList();
-			candidates = currentScope.getAllSymbolsSync(symbols.MethodSymbol);
-			candidates = candidates.filter((x) => { return x.name == methodName })
-			let match = this.checkCandidatesMatch(candidates, expressionList, currentScope, true);
+			let actualParams = this.visitAndRegisterExpressionList(methodCall.expressionList(), currentScope);
+			candidates = psymb.PUtils.getAllSymbolsSync(callScope, symbols.MethodSymbol, methodName, localOnly)
+			//candidates = currentScope.getAllSymbolsSync(symbols.MethodSymbol, false);
+			//candidates = candidates.filter((x) => { return x.name == methodName })
+			let match = this.checkCandidatesMatch(candidates, actualParams, currentScope, true);
 			if(!match)
-				match = this.checkCandidatesMatch(candidates, expressionList, currentScope, false);
+				match = this.checkCandidatesMatch(candidates, actualParams, currentScope, false);
 			
 			this.registerDefinition(methodID, match);
 			return match?.returnType;
@@ -214,27 +218,50 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symbols.Type | undefi
 			this.visitChildren(methodCall);
 	}
 
+	visitAndRegisterExpressionList(expressionList: pp.ExpressionListContext|undefined, currentScope: symbols.ScopedSymbol) : symbols.Type []
+	{
+		let results : symbols.Type [] = [];
+		if(expressionList)
+		{
+			let expressions : pp.ExpressionContext [] | undefined = expressionList.expression();
+			if(expressions)
+			{
+				for(let i : number = 0; i < expressions.length; i++)
+				{
+					let expressionType = this.visitAndRegisterExpression(expressions[i], currentScope);
+					if(!expressionType)
+						expressionType = psymb.PUtils.createUnknownType("unknown");
+					results.push(expressionType);
+				}
+				
+			}
+
+		}
+		return results;
+	}
+
 	visitAndRegisterVariable(identifier: TerminalNode, expression: pp.ExpressionContext|undefined, currentScope: symbols.ScopedSymbol) : symbols.Type | undefined
 	{
+		let varScope = currentScope;
 		if(expression)
 		{
-			let expressionType = this.visitExpression(expression);
+			let expressionType = this.visitAndRegisterExpression(expression, currentScope);
 			if(expressionType)
 			{
 				let callContext = currentScope.resolveSync(expressionType.name, false);
 				if(callContext && callContext instanceof symbols.ScopedSymbol)
-					currentScope = callContext;
+					varScope = callContext;
 			}
 		}
-
+		let localOnly = varScope != currentScope;
 		let varName = identifier.text;
-		let res : symbols.BaseSymbol | undefined = currentScope.resolveSync(varName);
+		let res : symbols.BaseSymbol | undefined = varScope.resolveSync(varName, localOnly);
 		this.registerDefinition(identifier, res);
 		if(res instanceof symbols.VariableSymbol && res.type)
 			return res.type;
 	}
 
-	checkCandidatesMatch(candidates: symbols.BaseSymbol[], expressionList: pp.ExpressionListContext | undefined, callContainer: symbols.BaseSymbol, perfectMatch:boolean=false) 
+	checkCandidatesMatch(candidates: symbols.BaseSymbol[], expressionList: symbols.Type[], callContainer: symbols.BaseSymbol, perfectMatch:boolean=false) 
 	{
 		let finalCandidates: symbols.MethodSymbol[] = []
 		for (let candidate of candidates) {
@@ -251,21 +278,19 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symbols.Type | undefi
 		return finalCandidates.length == 1 ? finalCandidates[0] : undefined
 	}
 
-	compareMethodParameters(symbolParams : symbols.ParameterSymbol [], contextParams : pp.ExpressionListContext, symbolContext : symbols.BaseSymbol, perfectMatch:boolean=false) : boolean
+	compareMethodParameters(requiredParams : symbols.ParameterSymbol [], userParams : symbols.Type[], symbolContext : symbols.BaseSymbol, perfectMatch:boolean=false) : boolean
 	{
-		let paramList : pp.ExpressionContext [] | undefined = contextParams.expression();
-		for(let i : number = 0; i < symbolParams.length; i++)
+		for(let i : number = 0; i < requiredParams.length; i++)
 		{
-			if(i < paramList.length )
+			if(i < userParams.length )
 			{
-				let expressionType = parseUtils.evaluateExpressionType(paramList[i], symbolContext);
-				let paramType = symbolParams[i].type;
-				if( !psymb.PUtils.compareTypes(paramType, expressionType, symbolContext, perfectMatch))
+				let paramType = requiredParams[i].type;
+				if( !psymb.PUtils.compareTypes(paramType, userParams[i], symbolContext, perfectMatch))
 					return false;
 				// if( !checkParameterSymbolExpression(paramType, paramList[i], symbolContext, perfectMatch) )
 				// 	return false;
 			}
-			else if(!symbolParams[i].value)
+			else if(!requiredParams[i].value)
 				return false;
 			
 		}

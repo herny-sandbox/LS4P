@@ -6,6 +6,8 @@ import {
 	IScopedSymbol,
 	VariableSymbol,
 	SymbolTable,
+	SymbolConstructor,
+	ScopedSymbol,
 } from "antlr4-c3";
 import { PClassSymbol } from "./PClassSymbol"
 
@@ -27,7 +29,6 @@ let typeKindNames = [
 
 export class PUtils 
 {
-
 	public static createClassType(className:string, baseTypes:Type[]=[]) : Type
 	{
 		return {  
@@ -109,6 +110,29 @@ export class PUtils
 				}
 			}
 		}
+	}
+
+	public static getAllSymbolsSync<T extends BaseSymbol, Args extends unknown[]>(ctx: BaseSymbol, t: SymbolConstructor<T, Args>, name?:string, localOnly?: boolean): BaseSymbol[] 
+	{
+        const result = [];
+
+		if(ctx instanceof ScopedSymbol)
+		{
+			for (const child of ctx.children) 
+			{
+				const isNameMatch = !name || (child.name == name);
+				const isRightType = (child instanceof t );
+				if (isRightType && isNameMatch)
+					result.push(child);
+			}
+		}
+			
+        if (!localOnly && ctx.parent) 
+		{
+			const parentSymbols = PUtils.getAllSymbolsSync(ctx.parent, t, name, false);
+			result.push(...parentSymbols);
+        }
+        return result;
 	}
 
 	public static getFirstParentMatch<T extends IScopedSymbol>(ctx:BaseSymbol, comparer:(a:IScopedSymbol)=>T | undefined): T | undefined
