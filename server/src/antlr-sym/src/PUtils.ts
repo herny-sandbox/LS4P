@@ -9,57 +9,88 @@ import {
 	SymbolConstructor,
 	ScopedSymbol,
 } from "antlr4-c3";
-import { PClassSymbol } from "./PClassSymbol"
+import { PClassSymbol} from "./PClassSymbol"
+import { PFormalParamSymbol } from "./PFormalParamSymbol"
 
-let typeKindNames = [
+export enum PPrimitiveKind {
+    Unknown = 0,
+    Byte = 1,
+    Char = 2,
+    Double = 3,
+    Float = 4,
+    Int = 5,
+    Long = 6,
+    Short = 7,
+    Boolean = 8,
+	Color = 9,
+}
+
+let primitiveKindNames = [
     "void",
-    "int",
+    "byte",
+    "char",
+    "double",
     "float",
     "int",
-    "string",
-    "char",
+    "long",
+    "short",
     "boolean",
-    "class",
-    "interface",
-    "ArrayList",
-    "Map",
-    "enum",
-    "alias"
+    "color"
 ]
+
+const defaultStringClass = "java.lang.String"
+const defaultObjectClass = "java.util.Object"
+const defaultNullName = "null"
+
+export class CallContext
+{
+	public callerType : Type | undefined;
+	public callerSymbol : BaseSymbol | undefined;
+	public genericsDict : Map<string, Type> = new Map<string, Type>();
+}
 
 export class PUtils 
 {
 	public static createClassType(className:string, baseTypes:Type[]=[]) : Type
 	{
-		return {  
-			name : className,
-			kind : TypeKind.Class,
-			baseTypes : baseTypes,
-			reference : ReferenceKind.Reference
-		};
+		return PUtils.setAsClassType(PUtils.createTypeUnknown(), className, baseTypes);
 	}
 
 	public static createInterfaceType(className:string, baseTypes:Type[]=[]) : Type
 	{
-		return {  
-			name : className,
-			kind : TypeKind.Interface,
-			baseTypes : baseTypes,
-			reference : ReferenceKind.Reference
-		};
+		return PUtils.setAsInterfaceType(PUtils.createTypeUnknown(), className, baseTypes); 
 	}
 
-	public static createPrimitiveType(kind:TypeKind, customName ?:string) : Type
+	public static createPrimitiveType(kind:PPrimitiveKind) : Type
 	{
-		return {  
-			name : customName ? customName : typeKindNames[kind],
-			kind : kind,
-			baseTypes : [],
-			reference : ReferenceKind.Instance
-		};
+		return PUtils.setAsPrimitiveType(PUtils.createTypeUnknown(), kind); 
 	}
 
-	public static createUnknownType(typeName:string, baseTypes:Type[]=[]) : Type
+	public static createStringType() : Type
+	{
+		return PUtils.setAsClassType(PUtils.createTypeUnknown(), defaultStringClass); 
+	}
+
+	public static createNullType() : Type
+	{
+		return PUtils.setAsNullType(PUtils.createTypeUnknown()); 
+	}
+
+	public static createArrayType(baseType:Type) : Type
+	{
+		return PUtils.setAsArrayType(PUtils.createTypeUnknown(), baseType); 
+	}
+
+	public static createVoidType() : Type
+	{
+		return PUtils.createClassType("void");  
+	}
+	public static createGenericType(name:string, extendType: Type|undefined)
+	{
+		return PUtils.setAsGenericType(PUtils.createTypeUnknown(), name, extendType);
+	}
+
+	public static createTypeUnknown(typeName:string="<unknown>", baseTypes:Type[]=[]) : Type
 	{
 		return {  
 			name : typeName,
@@ -67,6 +98,75 @@ export class PUtils
 			baseTypes : baseTypes,
 			reference : ReferenceKind.Irrelevant
 		};
+	}
+
+	public static setAsNullType(type: Type) : Type
+	{
+		type.name = defaultNullName;
+		type.kind = TypeKind.Unknown,
+		type.baseTypes = [],
+		type.reference = ReferenceKind.Reference
+		return type;	}
+
+	public static setAsClassType(type: Type, className:string, baseTypes:Type[]=[]) : Type
+	{
+		type.name = className;
+		type.kind = TypeKind.Class,
+		type.baseTypes = baseTypes,
+		type.reference = ReferenceKind.Reference
+		return type;
+	}
+
+	public static setAsInterfaceType(type: Type, interfName:string, baseTypes:Type[]=[]) : Type
+	{
+		type.name = interfName;
+		type.kind = TypeKind.Interface,
+		type.baseTypes = baseTypes,
+		type.reference = ReferenceKind.Reference
+		return type;
+	}
+
+	public static setAsPrimitiveType(type: Type, kind:PPrimitiveKind) : Type
+	{
+		type.name = primitiveKindNames[kind];
+		type.kind = TypeKind.Integer, // all primitives are going to be marked as integer
+		type.baseTypes = [],
+		type.reference = ReferenceKind.Instance
+		return type;
+	}
+
+	public static setAsArrayType(type: Type, baseType:Type) : Type
+	{
+		type.name = "Array";
+		type.kind = TypeKind.Array,
+		type.baseTypes = [baseType],
+		type.reference = ReferenceKind.Reference
+		return type;
+	}
+
+	public static setAsGenericType(type: Type, genericName:string, extendType?:Type ): Type
+	{
+		type.name = genericName;
+		type.kind = TypeKind.Alias,
+		type.baseTypes = [],
+		type.reference = ReferenceKind.Reference;
+		if(extendType)
+			type.baseTypes.push(extendType)
+		return type;
+	}
+
+	public static setAsTypeUnknown(type: Type, typeName:string="<unknown>", baseTypes:Type[]=[]) : Type
+	{
+		type.name = typeName;
+		type.kind = TypeKind.Unknown,
+		type.baseTypes = baseTypes,
+		type.reference = ReferenceKind.Irrelevant;
+		return type;
+	}
+
+	public static setAsVoidType(type: Type) : Type
+	{
+		return PUtils.setAsTypeUnknown(type, "void");  
 	}
 
 	public static getParentClass(ctx:BaseSymbol): PClassSymbol | undefined
@@ -112,7 +212,7 @@ export class PUtils
 		}
 	}
 
-	public static getAllSymbolsSync<T extends BaseSymbol, Args extends unknown[]>(ctx: BaseSymbol, t: SymbolConstructor<T, Args>, name?:string, localOnly?: boolean): BaseSymbol[] 
+	public static getAllSymbolsSync<T extends BaseSymbol, Args extends unknown[]>(ctx: IScopedSymbol, t: SymbolConstructor<T, Args>, name?:string, localOnly?: boolean): T[] 
 	{
         const result = [];
 
@@ -126,6 +226,18 @@ export class PUtils
 					result.push(child);
 			}
 		}
+		if(ctx instanceof PClassSymbol)
+		{
+			if(ctx.extends)
+			{
+				let extSymbol : BaseSymbol | undefined = ctx.resolveSync(ctx.extends.name, false);
+				if(extSymbol && extSymbol instanceof PClassSymbol)
+				{
+					const parentSymbols = PUtils.getAllSymbolsSync(extSymbol, t, name, true);
+					result.push(...parentSymbols);
+				}
+			}
+		}
 			
         if (!localOnly && ctx.parent) 
 		{
@@ -135,17 +247,50 @@ export class PUtils
         return result;
 	}
 
-	public static getFirstParentMatch<T extends IScopedSymbol>(ctx:BaseSymbol, comparer:(a:IScopedSymbol)=>T | undefined): T | undefined
+	public static resolveSymbolSync<T extends BaseSymbol, Args extends unknown[]>(ctx: BaseSymbol, t: SymbolConstructor<T, Args>, name?:string, localOnly?: boolean): T | undefined
 	{
-		let result :  T | undefined; 
-		if(ctx.parent)
+        let result : T | undefined;
+
+		if(ctx instanceof ScopedSymbol)
 		{
-			result = comparer(ctx.parent)
-			if(result)
-				return result;
-			result = PUtils.getFirstParentMatch(ctx.parent, comparer);
-		} 
-		return result;
+			for (const child of ctx.children) 
+			{
+				const isNameMatch = !name || (child.name == name);
+				const isRightType = (child instanceof t );
+				if (isRightType && isNameMatch)
+					return child;
+			}
+		}
+		if(ctx instanceof PClassSymbol)
+		{
+			if(ctx.extends)
+			{
+				let extSymbol : BaseSymbol | undefined = ctx.resolveSync(ctx.extends.name, false);
+				if(extSymbol && extSymbol instanceof PClassSymbol)
+				{
+					const parentSymbol = PUtils.resolveSymbolSync(extSymbol, t, name, true);
+					if(parentSymbol)
+						return parentSymbol;
+				}
+			}
+		}
+			
+        if (!localOnly && ctx.parent) 
+		{
+			const parentSymbol = PUtils.resolveSymbolSync(ctx.parent, t, name, false);
+			if(parentSymbol)
+				return parentSymbol;
+       }
+        return undefined;
+	}
+
+	public static getFirstParentMatch<T extends BaseSymbol, Args extends unknown[]>(t: SymbolConstructor<T, Args>, ctx: BaseSymbol): T | undefined 
+	{
+		if (!ctx.parent)
+			return;
+		if(ctx.parent instanceof t)
+			return ctx.parent;
+		return PUtils.getFirstParentMatch(t, ctx.parent);
 	}
 
 	public static resolveVariableDeclaration(name:string, symb : BaseSymbol) : VariableSymbol | undefined
@@ -156,79 +301,47 @@ export class PUtils
 		return;
 	}
 
-	public static compareTypes(symbolType : Type | undefined, expressionType : Type | undefined, symbolContext : BaseSymbol, perfectMatch:boolean=false) : boolean
+	public static comparePrimitiveKind(symbolType : Type, primKind : PPrimitiveKind)
 	{
-		if(symbolType===undefined || expressionType === undefined)
-			return false;
-		if(symbolType.kind != expressionType.kind )
-			return false;
+		return symbolType.kind == TypeKind.Integer && symbolType.name == primitiveKindNames[primKind];
+	}
 
-		if(symbolType.kind == TypeKind.Class)
-			return PUtils.compareClassTypes(symbolType, expressionType, symbolContext, perfectMatch);
+	public static convertSymbolTypeToString(symbolType : Type | undefined, full:boolean=false) : string
+	{
+		if(!symbolType)
+			return "<unknown>";
+
+		if(symbolType.kind == TypeKind.Array)
+		{
+			if(symbolType.baseTypes.length==1)
+				return PUtils.convertSymbolTypeToString(symbolType.baseTypes[0], full) + "[]"
+			else
+				return "<unknown> []"
+		}
+		else if(symbolType.kind == TypeKind.Class || symbolType.kind == TypeKind.Interface)
+		{
+			let result : string;
+			if(full)
+				result = symbolType.name;
+			else
+				result = symbolType.name.substring(symbolType.name.lastIndexOf(".")+1);
+
+			if(symbolType.baseTypes.length > 0)
+				result += "<";
+			for(let i=0; i < symbolType.baseTypes.length; i++ )
+			{
+				if(i > 0)
+					result += ", ";
+				result += PUtils.convertSymbolTypeToString(symbolType.baseTypes[i], full)
+			}
+			if(symbolType.baseTypes.length > 0)
+				result += ">";
+
+			return result;
+		}
 		else
-			return PUtils.comparePrimitiveNames(expressionType.name, symbolType.name, perfectMatch)
-	}
-
-	static comparePrimitiveNames(expressionTypeName: string, requiredName:string, perfectMatch:boolean=false) : boolean
-	{
-		if( expressionTypeName == requiredName )
-			return true;
-		if(perfectMatch)
-			return false;
-
-		if(requiredName==="int")
-			return expressionTypeName == "char";
-		if(requiredName==="float")
-			return expressionTypeName == "int" || expressionTypeName == "char";
-		if(requiredName==="double")
-			return expressionTypeName == "float" || expressionTypeName == "int" || expressionTypeName == "char";
-		if(requiredName=="boolean")
-			return expressionTypeName == "int" || expressionTypeName == "char";
-		
-		return false;
-	}
-
-	static compareClassTypes(symbolType : Type, expressionType : Type, symbolContext : BaseSymbol, perfectMatch:boolean=false) : boolean
-	{
-		if(expressionType.name == symbolType.name)
-			return true;
-		// If the types doesn't match and we are seeking for a perfect match then just fail
-		if(perfectMatch)
-			return false;
-
-		//if perfectMatch is not required then we still need to check with the class inheritance
-		let classDef = symbolContext.resolveSync(expressionType.name, false);
-		if(!classDef || !(classDef instanceof PClassSymbol))
-		 	return false;
-		return PUtils.checkClassInheritanceType(symbolType, classDef, symbolContext, perfectMatch);
-	}
-
-	static checkClassInheritanceType(symbolType : Type, classSymbol:PClassSymbol, symbolContext : BaseSymbol, perfectMatch:boolean=false) : boolean
-	{
-		let result : boolean = false;
-		if(classSymbol.name===symbolType.name)
-			return true;
-
-		if(classSymbol.extends)
-			result = PUtils.compareClassTypes(symbolType, classSymbol.extends, symbolContext, perfectMatch );
-		if(result)
-			return true;
-		// {
-		// 	let extSymbol : BaseSymbol | undefined = classSymbol.parent.resolveSync(classSymbol.extends.name, false);
-		// 	if(extSymbol && extSymbol instanceof PClassSymbol)
-		// 		result = extSymbol.resolveInheritance(name);
-		// }
-	// 	if(!result)
-	// 	{
-	// 		for(let i=0; i < this.implements.length; i++)
-	// 		{
-	// 			let implSymbol : BaseSymbol | undefined = super.resolveSync(this.implements[i].name, false);
-	// 			if(implSymbol && implSymbol instanceof PInterfaceSymbol)
-	// 				result = implSymbol.resolveInheritance(name);
-	// 			if( result )
-	// 				break;
-	// 		}
-	// 	}
-		return false;
+			return symbolType.name;
 	}
 }
+
+export const rootClassType = PUtils.createClassType("java.lang.Object");

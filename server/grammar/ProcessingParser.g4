@@ -15,7 +15,7 @@ parser grammar ProcessingParser;
   public static final int COMMENTS = 2;
 }
 
-// import Java grammar
+// import Processing grammar
 options { tokenVocab=ProcessingLexer; }
 
 // main entry point, select sketch type
@@ -658,7 +658,7 @@ variableDeclaratorId
 // prevent from types being used as variable names
 warnTypeAsVariableName
     : primitiveType ('[' ']')* {
-        notifyErrorListeners("Type names are not allowed as variable names: "+$primitiveType.text);
+        this.notifyErrorListeners("Type names are not allowed as variable names: "+$primitiveType.text);
       }
     ;
 

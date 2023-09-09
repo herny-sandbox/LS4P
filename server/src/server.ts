@@ -34,7 +34,6 @@ import * as reference from './references';
 import * as log from './scripts/syslogs';
 import * as sketch from './sketch';
 import * as path from 'path';
-import * as parseUtils from './astutils'
 
 export let connection = createConnection(ProposedFeatures.all);
 //const processingSketch = new ProcessingSketch();
@@ -300,18 +299,13 @@ connection.onCompletion( async (params: CompletionParams): Promise<CompletionIte
 	const posInLine : number = params.position.character;
 	const context : CompletionContext | undefined = params.context;
 
-	return await completion.collectCandidates(pdeName, line, posInLine, context)
-	//let pdeContent : string = sketch.getPdeContentFromUri(params.textDocument.uri) ?? "";
-	//return completion.decideCompletionMethods(params, pdeContent);
+	return await completion.collectCandidates(pdeName, line+1, posInLine, context?.triggerKind??1)
 });
 
 // Completion Resolved suspended for now -> TODO: Refactoring required with real data points
 connection.onCompletionResolve( (item: CompletionItem): CompletionItem => 
 {
-	// use `item.label`
-	item.detail = 'Field Details';
-	item.documentation = 'Hover to know Field Details';
-	return item;
+	return completion.fillCompletionItemDetails(item);
 });
 
 

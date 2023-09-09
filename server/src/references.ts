@@ -18,18 +18,18 @@ export async function scheduleLookUpReference(pdeName : string, line : number, p
 	if(!pdeInfo || !pdeInfo.syntaxTokens)
 		return null;
 
-	let containerSymbol : symbols.BaseSymbol | undefined = parseUtils.findScopeAtPositionFromSymbols(pdeInfo.symbols, line, pos);
-	if(!containerSymbol || !containerSymbol.context)
+	let scopeAtPos : symbols.BaseSymbol | undefined = parseUtils.findScopeAtPositionFromSymbols(pdeInfo.symbols, line, pos);
+	if(!scopeAtPos || !scopeAtPos.context)
 		return null;
 	
-	let parseNode : TerminalNode | null = parseUtils.findIdentifierAtPosition(containerSymbol.context, line, pos);
+	let parseNode : TerminalNode | null = parseUtils.findIdentifierAtPosition(scopeAtPos.context, line, pos);
 	if(!parseNode)
 		return null;
 	
 	let focusedDecl : symbols.BaseSymbol | undefined;
 
-	if(containerSymbol.context === parseNode.parent)
-		focusedDecl = containerSymbol;
+	if(scopeAtPos.context === parseNode.parent)
+		focusedDecl = scopeAtPos;
 	else if(pdeInfo.refs)
 		focusedDecl = pdeInfo.refs.findNodeSymbolDefinition(parseNode);
 

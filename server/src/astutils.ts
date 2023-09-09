@@ -42,13 +42,45 @@ export function findIdentifierAtPosition(ctx: ParseTree, line: number, pos: numb
 	}
 	else if (ctx instanceof ParserRuleContext)
 	{
-		if( checkTreeNodeBounds(ctx, line, pos)  )
+		if( checkRuleNodeBounds(ctx, line, pos)  )
 		{
 			if(ctx.children)
 				return findIdentifierInRuleArray(ctx.children, line, pos);
 		}
 	}
+	return null;
+}
 
+export function findParseTreeInRuleArray(contexts: ParseTree[], line: number, charPosInLine: number): ParseTree | null
+{
+	let result : ParseTree | null = null;
+	for(let i : number = 0; i < contexts.length; i++ )
+	{
+		result = findParseTreeAtPosition(contexts[i], line, charPosInLine)
+		if(result!=null)
+			return result;
+	}
+	return null;
+}
+
+export function findParseTreeAtPosition(ctx: ParseTree, line: number, pos: number): ParseTree | null
+{
+	if (ctx instanceof TerminalNode)
+	{
+		// Dont't try to analize if it's not a identifier
+		if(checkTerminalNodeBounds(ctx, line, pos))
+			return ctx;
+	}
+	else if (ctx instanceof ParserRuleContext)
+	{
+		if( checkRuleNodeBounds(ctx, line, pos)  )
+		{
+			let result = null;
+			if(ctx.children)
+				result = findParseTreeInRuleArray(ctx.children, line, pos);
+			return result ? result : ctx;
+		}
+	}
 	return null;
 }
 
@@ -81,7 +113,7 @@ export function findScopeAtPosition(sym: symb.ScopedSymbol, line: number, pos: n
 	}
 	else if (ctx instanceof ParserRuleContext)
 	{
-		if( checkTreeNodeBounds(ctx, line, pos) )
+		if( checkRuleNodeBounds(ctx, line, pos) )
 		{
 			if(sym instanceof symb.ScopedSymbol)
 			{
@@ -97,6 +129,15 @@ export function findScopeAtPosition(sym: symb.ScopedSymbol, line: number, pos: n
 	return;
 }
 
+function checkParseNodeBounds(ctx : ParseTree, line : number, pos : number) : boolean
+{
+	if (ctx instanceof TerminalNode)
+		return checkTerminalNodeBounds(ctx, line, pos);
+	else if(ctx instanceof ParserRuleContext)
+		return checkRuleNodeBounds(ctx, line, pos);
+	return false;
+}
+
 function checkTerminalNodeBounds(ctx : TerminalNode, line : number, pos : number) : boolean
 {
 	const token: Token = ctx.symbol;
@@ -104,7 +145,7 @@ function checkTerminalNodeBounds(ctx : TerminalNode, line : number, pos : number
 	return line === token.line && (pos >= token.charPositionInLine) && (pos <= token.charPositionInLine+lenght);
 }
 
-function checkTreeNodeBounds(ctx : ParserRuleContext, line : number, pos : number) : boolean
+function checkRuleNodeBounds(ctx : ParserRuleContext, line : number, pos : number) : boolean
 {
 	const start : Token = ctx.start;
 	const stop : Token = ctx.stop ?? ctx.start;
@@ -116,7 +157,7 @@ function checkTreeNodeBounds(ctx : ParserRuleContext, line : number, pos : numbe
 	if(line === start.line && pos < start.charPositionInLine)
 		return false;
 
-	if(line === stop.line && pos > stop.charPositionInLine+tokenLength)
+	if(line === stop.line && pos > start.charPositionInLine+tokenLength)
 		return false;
 
 	return true;
@@ -202,116 +243,126 @@ export function flushRecords(){
 }
 
 
-export function evaluateExpressionType(expCtx: pp.ExpressionContext, symbolContext: symb.BaseSymbol)  : symb.Type | undefined
-{
-	let primary : pp.PrimaryContext | undefined = expCtx.primary();
-	let methodCall : pp.MethodCallContext | undefined = expCtx.methodCall();
-	let typeCast : pp.TypeTypeContext |undefined = expCtx.typeType()
-	if( primary )
-	{
-		let literal : pp.LiteralContext | undefined = primary.literal();
-		if(primary.THIS())
-			return psymb.PUtils.getParentClass(symbolContext);
 
-		else if(primary.IDENTIFIER())
-			return psymb.PUtils.resolveVariableDeclaration(primary.text, symbolContext)?.type;
-
-		else if(literal)
-		{
-			if(literal.integerLiteral())
-				return psymb.PUtils.createPrimitiveType(symb.TypeKind.Integer);
-			else if(literal.floatLiteral())
-				return psymb.PUtils.createPrimitiveType(symb.TypeKind.Float);
-			else if(literal.CHAR_LITERAL())
-				return psymb.PUtils.createPrimitiveType(symb.TypeKind.Char);
-			else if(literal.stringLiteral())
-				return psymb.PUtils.createPrimitiveType(symb.TypeKind.String);
-			else if(literal.BOOL_LITERAL())
-				return psymb.PUtils.createPrimitiveType(symb.TypeKind.Boolean);
-		}
-	}
-	if(methodCall)
-	{
-		// let identifier = methodCall.IDENTIFIER();
-		// if(identifier)
-		// {
-		// 	let symbolMethod : symbols.MethodSymbol | undefined = await resolveSymbolDeclaration(identifier, symbolContext);
-		// 	if((symbolMethod !== undefined) && (symbolMethod.returnType!==undefined) )
-		// 	{
-
-		// 	}
-		// }
-	}
-	if(typeCast)
-		return evaluateTypeTypeToSymbolType(typeCast);
-}
-
-export function evaluateTypeTypeToSymbolType(typeContext : pp.TypeTypeContext) : symb.Type | undefined
+export function evaluateTypeTypeToSymbolType(typeContext : pp.TypeTypeContext, scope: symb.ScopedSymbol) : symb.Type | undefined
 {
 	let result : symb.Type | undefined
 
 	let classOrInterface : pp.ClassOrInterfaceTypeContext | undefined = typeContext.classOrInterfaceType();
 	let primitive : pp.PrimitiveTypeContext | undefined =  typeContext.primitiveType();
+	let arrayMultiSize : TerminalNode [] = typeContext.LBRACK();
 
 	if(primitive)
-		return evaluatePrimitiveTypeToSymbolType(primitive);
+		result = evaluatePrimitiveTypeToSymbolType(primitive);
 	else if(classOrInterface)
-		return evaluateClassOrInterfaceTypeToSymbolType(classOrInterface);
+		result = evaluateClassOrInterfaceTypeToSymbolType(classOrInterface, scope);
+
+	if(arrayMultiSize.length > 0)
+	{
+		if(!result)
+			result = psymb.PUtils.createTypeUnknown("<unknown>");
+		
+		let arraySize = arrayMultiSize.length;
+		while(arraySize>0)
+		{
+			result = psymb.PUtils.createArrayType(result);
+			arraySize--;
+		}
+	}
+	 
 	return result;
 }
 
-export function evaluateClassOrInterfaceTypeToSymbolType(classOrInterface : pp.ClassOrInterfaceTypeContext) : symb.Type | undefined
+export function evaluateClassOrInterfaceTypeToSymbolType(classOrInterface : pp.ClassOrInterfaceTypeContext, scope: symb.ScopedSymbol) : symb.Type | undefined
 {
 	let identifs = classOrInterface.IDENTIFIER();
 	let genericArguments = classOrInterface.typeArguments();
 	if(identifs.length == 0)
 		return;
 
-	//let objSymbol = symbolContext.resolveSync(classOrInterface.IDENTIFIER()[0].text, false);
-
+	let typeName = identifs[0].text;
 	let baseTypes : symb.Type[] = [];
-	buildTypeArgumentsToSymbolTypes(genericArguments, baseTypes);
-	return psymb.PUtils.createClassType(identifs[0].text, baseTypes );
+
+	let sourceSymbolType = scope.resolveSync(typeName, false);
+
+	if(sourceSymbolType)
+	{
+		if( !psymb.PUtils.getFirstParentMatch(psymb.PSymbolTable, sourceSymbolType) )
+			typeName = sourceSymbolType.qualifiedName(psymb.PNamespaceSymbol.delimiter, true, false);
+	}
+	else
+		console.error(`Unable to find symbol for ${typeName} (<unknown>.pde:${classOrInterface.start.line})`);
+
+	if( sourceSymbolType instanceof symb.ScopedSymbol )
+	{
+		let genericParams = sourceSymbolType.getAllSymbolsSync(psymb.PFormalParamSymbol, true); 
+		for(let i=0; i< genericParams.length; i++)
+		{
+			let param = genericParams[i];
+			baseTypes.push( psymb.PUtils.createGenericType(param.name, param.type) );
+		}
+	}
+	if(genericArguments.length > 0)
+		buildTypeArgumentsToSymbolTypes(genericArguments[0].typeArgument(), baseTypes, scope);
+
+
+	return psymb.PUtils.createClassType( typeName, baseTypes );
 }
 
-export function buildTypeArgumentsToSymbolTypes(typeArguments : pp.TypeArgumentsContext[], result: symb.Type[])
+export function buildTypeArgumentsToSymbolTypes(args : pp.TypeArgumentContext[], result: symb.Type[], scope: symb.ScopedSymbol)
 {
-	for(let i=0; i<typeArguments.length; i++)
+	for(let j=0; j<args.length; j++)
 	{
-		let args = typeArguments[i].typeArgument();
-		for(let j=0; j<args.length; j++)
-		{
-			let typeCtx = args[j].typeType();
-			if(typeCtx)
-			{
-				let baseType = evaluateTypeTypeToSymbolType(typeCtx);
-				if(baseType)
-					result.push(baseType);
-			}
-		}
+		let currentAlias = result[j];
+		let typeCtx = args[j].typeType();
+		if(!typeCtx)
+			continue;
+
+		let baseType = evaluateTypeTypeToSymbolType(typeCtx, scope);
+		if(!baseType)
+			continue;
+		if(currentAlias.baseTypes.length==0)
+			currentAlias.baseTypes.push(baseType);
+		else
+		currentAlias.baseTypes[0] = baseType;
 	}
 } 
 
 export function evaluatePrimitiveTypeToSymbolType(primitive : pp.PrimitiveTypeContext) : symb.Type
 {
 	if(primitive.BOOLEAN())
-		return psymb.PUtils.createPrimitiveType(symb.TypeKind.Boolean);
+		return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Boolean);
 	if(primitive.CHAR())
-		return psymb.PUtils.createPrimitiveType(symb.TypeKind.Char);
+		return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Char);
 	if(primitive.BYTE())
-		return psymb.PUtils.createPrimitiveType(symb.TypeKind.Char);
+		return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Byte);
 	if(primitive.SHORT())
-		return psymb.PUtils.createPrimitiveType(symb.TypeKind.Integer);
+		return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Short);
 	if(primitive.INT())
-		return psymb.PUtils.createPrimitiveType(symb.TypeKind.Integer);
+		return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Int);
 	if(primitive.LONG())
-		return psymb.PUtils.createPrimitiveType(symb.TypeKind.Integer);
+		return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Long);
 	if(primitive.FLOAT())
-		return psymb.PUtils.createPrimitiveType(symb.TypeKind.Float);
+		return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Float);
 	if(primitive.DOUBLE())
-		return psymb.PUtils.createPrimitiveType(symb.TypeKind.Float);
+		return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Double);
 	if(primitive.colorPrimitiveType())
-		return psymb.PUtils.createClassType("color")
+		return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Color)
 
-	return psymb.PUtils.createUnknownType(primitive.text);
+	return psymb.PUtils.createTypeUnknown(primitive.text);
+}
+
+function getPdeName(anySymbol: any) : string | undefined
+{
+	return anySymbol.pdeName;
+}
+
+export function findPdeName(baseSymbol : symb.BaseSymbol) : string | undefined
+{
+	let result : string | undefined = getPdeName(baseSymbol);
+	if( result ) 
+		return result;
+	if(!baseSymbol.parent)
+		return;
+	return findPdeName(baseSymbol.parent);
 }

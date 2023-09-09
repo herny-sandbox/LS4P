@@ -8,9 +8,6 @@ import {
 	ScopedSymbol 
 } from "antlr4-c3";
 import { PInterfaceSymbol } from "./PInterfaceSymbol"
-import { PUtils } from "./PUtils"
-
-const rootType = PUtils.createClassType("java.lang.Object");
 
 /** Classes and structs. */
 export class PClassSymbol extends ScopedSymbol implements Type 
@@ -28,8 +25,8 @@ export class PClassSymbol extends ScopedSymbol implements Type
 		this.extends = ext;
 		this.implements = impl;
 		this.genericParams = genParam;
-		if(!this.extends && name != rootType.name)
-			this.extends = rootType;
+		// if(!this.extends && name != rootClassType.name)
+		// 	this.extends = rootClassType;
 	}
 
     get baseTypes() { return this.genericParams; }

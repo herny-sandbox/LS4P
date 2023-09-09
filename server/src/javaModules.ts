@@ -4,6 +4,12 @@ import * as AdmZip from 'adm-zip';
 import * as javaTools from 'java-class-tools'
 //import * as JavaClassParser from 'java-class-parser';
 import * as psymb from "./antlr-sym"
+import * as antlr from 'antlr4ts';
+import { ClassReader } from "@xmcl/asm"
+
+import { JavaClassParser } from './grammer/JavaClassParser';
+import { JavaClassLexer } from './grammer/JavaClassLexer';
+import { ClassBuilderFromJava, MethodBuilderFromJava } from "./symbolsFromJava"
 
 const fs = require('fs');
 
@@ -93,8 +99,13 @@ function importModuleInfo(moduleDeclPath:string, classesRoute:string, modType:st
 				try
 				{
 					let className : string = classFileName.substring(0, classFileName.length-6);
-					let ast : javaTools.JavaClassFile = reader.read(fullClassPath);
-					AddClassSymbol(ast, className, libTable);
+
+					const visitor = new ClassBuilderFromJava(libTable, className);
+					const classData: Buffer = fs.readFileSync(fullClassPath);
+					new ClassReader(classData).accept(visitor);
+
+					//let ast : javaTools.JavaClassFile = reader.read(fullClassPath);
+					//AddClassSymbol(ast, className, libTable);
 				}
 				catch(e)
 				{
@@ -121,13 +132,15 @@ function AddClassSymbol(classType: javaTools.JavaClassFile, className : string, 
 	if(classType.super_class!=0)
 	{
 		const superClassName = getNameFromConstantClassInfo(classType, classType.super_class);
-		ext = psymb.PUtils.createClassType(superClassName);
+		let fixedName = superClassName.replace(/\//g, '.');
+		ext = psymb.PUtils.createClassType(fixedName);
 		//console.log(`class: ${className}:${superClassName}`)
 	}
 	for(let i=0; i < classType.interfaces_count; i++)
 	{
 		const superInterfName = getNameFromConstantClassInfo(classType, classType.interfaces[i]);
-		impl.push( psymb.PUtils.createInterfaceType(superInterfName) );
+		let fixedName = superInterfName.replace(/\//g, '.');
+		impl.push( psymb.PUtils.createInterfaceType(fixedName) );
 	}
 	const thisClassName = getNameFromConstantClassInfo(classType, classType.this_class);
 	//console.log(`class: ${className}:${thisClassName}`)
@@ -150,8 +163,21 @@ function AddClassSymbol(classType: javaTools.JavaClassFile, className : string, 
 			let superGenericParams : symb.Type[] = [];
 			if(genericSignature[index] == 'L')
 				index += ext.name.length+1;
-			buildGenericParams(genericSignature, index, superGenericParams);
+			index = buildGenericParams(genericSignature, index, superGenericParams);
+			index++; // skipping the ';'
 			ext.baseTypes = superGenericParams;
+		}
+		if(impl)
+		{
+			for(let i=0; i < impl.length; i++)
+			{
+				let superGenericParams : symb.Type[] = [];
+				if(genericSignature[index] == 'L')
+					index += impl[i].name.length+1;
+				index = buildGenericParams(genericSignature, index, superGenericParams);
+				index++; // skipping the ';'
+				impl[i].baseTypes = superGenericParams;
+			}
 		}
 	}
 
@@ -163,29 +189,70 @@ function AddClassSymbol(classType: javaTools.JavaClassFile, className : string, 
 
 	for( let i=0; i < methods.length; i++ )
 	{
+		let method = methods[i];
+		let methodDescriptor : string = "";
+		let methodName : string = "";
 		try
 		{
-			let methodName = getNameFromConstantPool(classType, methods[i].name_index);
-			if(methodName=="<clinit>")
+			methodName = getNameFromConstantPool(classType, method.name_index);
+			if(methodName=="<clinit>") // class constructor (static)
 				continue;
-			if(methodName=="<init>")
+			if(methodName=="<init>") // instance constructor
 				methodName = className;
-			const methodDescriptor = getNameFromConstantPool(classType, methods[i].descriptor_index );
-			let returnTypeName = methodDescriptor.substring( methodDescriptor.indexOf(')')+1 );
 
-			let returnType : symb.Type = createDefaultType()
-			typeDescriptorToSymbolType(returnTypeName, returnType, 0);
-			let methodSymbol : symb.MethodSymbol = new symb.MethodSymbol(methodName, returnType );
+			// for now, we will ignore private and protected members
+			if( (method.access_flags & (javaTools.Modifier.PRIVATE|javaTools.Modifier.PROTECTED)) != 0 )
+				continue;
+
+			let isPublic = (method.access_flags & javaTools.Modifier.PUBLIC) != 0;
+			let isStatic = (method.access_flags & javaTools.Modifier.STATIC) != 0;
+			let isConstructor = methodName == className;
+			if(!isPublic)
+				continue;
+				
+			methodDescriptor = getNameFromConstantPool(classType, method.descriptor_index );
+	
+			let methodGenericSignature : string | undefined;
+			for(let i=0; i < method.attributes_count; i++)
+			{
+				methodGenericSignature = getMethodGenericSignature(classType, method.attributes[i]);
+				if(methodGenericSignature)
+					break;
+			}
+
+			let methodBuilder = new MethodBuilderFromJava(methodName, isConstructor);
+			let methodSymbol = methodBuilder.defaultResult();
 			classSymbol.addSymbol( methodSymbol );
-			let methodParamsStartIndex = methodDescriptor.indexOf('(')+1;
-			let methodParamsEndIndex = methodDescriptor.indexOf(')');
-			let methodParamsDescriptor = methodDescriptor.substring( methodParamsStartIndex, methodParamsEndIndex );
-			if(methodParamsDescriptor.length > 0)
-				buildParamsFromDescriptor(methodParamsDescriptor, methodSymbol);
+			if(methodGenericSignature)
+				methodDescriptor = methodGenericSignature;
+
+				
+			// let parser : JavaClassParser | undefined = parse(className, methodDescriptor);
+			// if(parser)
+			// 	methodBuilder.visit(parser.mainMethodDescriptor());
+
+			//}
+			// 	methodDescriptor = methodGenericSignature;
+				
+			// let returnTypeName = methodDescriptor.substring( methodDescriptor.indexOf(')')+1 );
+
+			// let returnType : symb.Type | undefined;
+			// if(!isConstructor) 
+			// {
+			// 	returnType = createDefaultType();
+			// 	typeDescriptorToSymbolType(returnTypeName, returnType, 0);
+			// }
+			// let methodSymbol : symb.MethodSymbol = new symb.MethodSymbol(methodName, returnType );
+			// classSymbol.addSymbol( methodSymbol );
+			// let methodParamsStartIndex = methodDescriptor.indexOf('(')+1;
+			// let methodParamsEndIndex = methodDescriptor.indexOf(')');
+			// let methodParamsDescriptor = methodDescriptor.substring( methodParamsStartIndex, methodParamsEndIndex );
+			// if(methodParamsDescriptor.length > 0)
+			// 	buildParamsFromDescriptor(methodParamsDescriptor, methodSymbol);
 		}
 		catch(e)
 		{
-			console.error(`Unable to parse class ${className} method: ${i} `);
+			console.error(`Unable to parse class ${className} method: ${i} (${methodName}) -> ${methodDescriptor}\n${e}`);
 		}
 	}
 	
@@ -205,7 +272,24 @@ function AddClassSymbol(classType: javaTools.JavaClassFile, className : string, 
 			console.error(`Unable to parse class ${className} field: ${i} `);
 		}
 	}
+}
 
+export function parse(className:string, content : string) : JavaClassParser | undefined
+{
+	//let consoleOriginal = console
+	try 
+	{
+		const chars = antlr.CharStreams.fromString(content);
+		const lexer = new JavaClassLexer(chars);
+		const tokens = new antlr.CommonTokenStream(lexer);
+		return new JavaClassParser(tokens);
+	}
+	catch(e)
+	{
+		//console = consoleOriginal
+		console.error("JavaClass Parsing failed for"+className);
+		console.error(e)
+	}
 }
 
 function getNameFromConstantClassInfo(classType:any, index:number) : string
@@ -227,6 +311,15 @@ function getGenericSignatureFromConstantPool(classType:any, signatureAttrib:any)
 	if( !signatureAttrib.signature_index )
 		return;
 	const nameInConstantPool = classType.constant_pool[signatureAttrib.signature_index];
+	const name = String.fromCharCode.apply(null, nameInConstantPool.bytes);
+	return name;
+}
+
+function getMethodGenericSignature(classType:any, signatureCode:any) : string | undefined
+{
+	if( !signatureCode.signature_index )
+		return;
+	const nameInConstantPool = classType.constant_pool[signatureCode.signature_index];
 	const name = String.fromCharCode.apply(null, nameInConstantPool.bytes);
 	return name;
 }
@@ -276,6 +369,15 @@ function typeDescriptorToSymbolType( fullDescr : string, result : symb.Type, ind
 		result.reference = symb.ReferenceKind.Instance;
 		return index+1;
 	}
+	else if(typeDescr == 'T')
+	{
+		index++;
+		let indexEnd = fullDescr.indexOf(';', index);
+		result.name = fullDescr.substring(index, indexEnd);
+		result.kind = symb.TypeKind.Alias;
+		result.reference = symb.ReferenceKind.Irrelevant;
+		return indexEnd+1;
+	}
 	else if(typeDescr == 'J')
 	{
 		result.name = "long";
@@ -286,8 +388,14 @@ function typeDescriptorToSymbolType( fullDescr : string, result : symb.Type, ind
 	else if(typeDescr == 'L')
 	{
 		let indexEnd = fullDescr.indexOf(';', index);
-		let typeDescr = fullDescr.substring(index+1, indexEnd );
+		let indexGen = fullDescr.indexOf('<', index);
+		let descEnd = indexGen >= 0 && indexGen < indexEnd ? indexGen : indexEnd;
+
+		let typeDescr = fullDescr.substring(index+1, descEnd );
 		let classType = typeDescr.replace(/\//g, ".");
+
+		indexEnd = buildGenericParams(fullDescr, descEnd, result.baseTypes);
+
 		result.name = classType;
 		result.kind = symb.TypeKind.Class;
 		result.reference = symb.ReferenceKind.Reference;
@@ -322,8 +430,7 @@ function buildGenericParams(genericParamsDescr: string, index:number, result: sy
 	if(typeDescr != '<')
 		return index;
 	index++;
-	let indexEnd = genericParamsDescr.indexOf('>', index);
-	while(index < indexEnd)
+	while(genericParamsDescr[index] != ">")
 	{
 		let baseTypes : symb.Type[] = [];
 		let genericType : symb.Type = createDefaultType();
@@ -337,8 +444,17 @@ function buildGenericParams(genericParamsDescr: string, index:number, result: sy
 			index = typeDescriptorToSymbolType(genericParamsDescr, baseType, indexSep+1);
 			baseTypes.push(baseType);
 		}
+		else if(genericParamsDescr[index]=="*")
+		{
+			genDescrName = "*";
+			index++;
+		}
 		else
 		{
+			if(genericParamsDescr[index]=="+")
+				index++;
+
+			index = typeDescriptorToSymbolType(genericParamsDescr, genericType, index+1);
 			indexSep = genericParamsDescr.indexOf(';', index);
 			genDescrName = genericParamsDescr.substring(index+1, indexSep );
 			index = indexSep+1;
@@ -350,7 +466,7 @@ function buildGenericParams(genericParamsDescr: string, index:number, result: sy
 
 		result.push(genericType);
 	}
-	return indexEnd+1;
+	return index+1;
 }
 
 function buildParamsFromDescriptor(methodParamsDescriptor: string, methodSymbol: symb.MethodSymbol) 
@@ -364,6 +480,13 @@ function buildParamsFromDescriptor(methodParamsDescriptor: string, methodSymbol:
 		index = typeDescriptorToSymbolType(methodParamsDescriptor, symbolType, index);
 		methodSymbol.addSymbol( new symb.ParameterSymbol("", null, symbolType) );
 	}
+
+	// let superGenericParams : symb.Type[] = [];
+	// if(genericSignature[index] == 'L')
+	// 	index += ext.name.length+1;
+	// index = buildGenericParams(genericSignature, index, superGenericParams);
+	// index++; // skipping the ';'
+	// ext.baseTypes = superGenericParams;
 }
 
 function createDefaultType(typeName:string="") : symb.Type
