@@ -18,20 +18,16 @@ export class PClassSymbol extends ScopedSymbol implements Type
     readonly extends: Type | undefined;
     /** Typescript allows a class to implement a class, not only interfaces. */
     readonly implements: Type[] = [];
-	readonly genericParams: Type[] = [];
-    constructor(name: string, ext?: Type|undefined, impl: Type[]=[], genParam:Type[]=[])
+   constructor(name: string, ext?: Type|undefined, impl: Type[]=[])
 	{
 		super(name);
 		this.extends = ext;
 		this.implements = impl;
-		this.genericParams = genParam;
-		// if(!this.extends && name != rootClassType.name)
-		// 	this.extends = rootClassType;
 	}
 
-    get baseTypes() { return this.genericParams; }
+    get baseTypes() { return this.implements; }
     get kind() { return TypeKind.Class; }
-	get isGeneric() { return this.genericParams.length > 0; }
+
 	/**
 		 * @param includeInherited Not used.
 		 *

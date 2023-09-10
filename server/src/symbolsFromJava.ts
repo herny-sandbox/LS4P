@@ -11,7 +11,7 @@ let debugFieldName:string="";
 
 export class ClassBuilderFromJava extends ClassVisitor
 {
-	protected classSymbol : psymb.PClassSymbol | undefined;
+	protected classSymbol : symb.ScopedSymbol | undefined;
 	protected libTable : psymb.PLibraryTable;
 	protected name:string;
 	public constructor(libTable : psymb.PLibraryTable, name:string) {
@@ -26,6 +26,7 @@ export class ClassBuilderFromJava extends ClassVisitor
 	{
 		let isPublic = (access & Opcodes.ACC_PUBLIC) != 0;
 		let isStatic = (access & Opcodes.ACC_STATIC) != 0;
+		let isInterface = (access & Opcodes.ACC_INTERFACE) != 0;
 
 		if(!isPublic)
 			return;
@@ -46,8 +47,11 @@ export class ClassBuilderFromJava extends ClassVisitor
 			impl.push( psymb.PUtils.createInterfaceType(fixedName) );
 		}
 
-		let genericParams : symb.Type[] = [];
-		this.classSymbol = new psymb.PClassSymbol(this.name, ext, impl, genericParams);
+		if(isInterface)
+			this.classSymbol = new psymb.PInterfaceSymbol(this.name, impl);
+		else
+			this.classSymbol = new psymb.PClassSymbol(this.name, ext, impl);
+
 		this.libTable.getOrCreateNamespaceFor(pathName, "/").addSymbol(this.classSymbol);
 		if(signature)
 		{
@@ -167,19 +171,19 @@ class DebugSignatureVisitor extends SignatureVisitor
 
 class ClassSignatureVisitor extends DebugSignatureVisitor
 {
-	protected classSymbol : psymb.PClassSymbol;
+	protected scopedSymbol : symb.ScopedSymbol;
 	protected scopedType : symb.Type | undefined;
 	protected interfaceIndex : number = 0;
 	protected formalTypes : symb.Type [] | undefined;
 
-	public constructor(classSymbol : psymb.PClassSymbol) {
+	public constructor(classSymbol : symb.ScopedSymbol) {
         super(Opcodes.ASM5);
-		this.classSymbol = classSymbol;
+		this.scopedSymbol = classSymbol;
     }
 	public visitFormalTypeParameter(name: string) 
 	{
 		this.formalTypes = [];
-		this.classSymbol.addSymbol(new psymb.PFormalParamSymbol(name, this.formalTypes));
+		this.scopedSymbol.addSymbol(new psymb.PFormalParamSymbol(name, this.formalTypes));
 	}
 	public visitClassBound(): SignatureVisitor 
 	{
@@ -201,14 +205,23 @@ class ClassSignatureVisitor extends DebugSignatureVisitor
 	}
 	public visitSuperclass(): SignatureVisitor 
 	{
-		let ext = this.classSymbol.extends;
+		let ext : symb.Type | undefined;
+		if( this.scopedSymbol instanceof psymb.PClassSymbol)
+			ext = this.scopedSymbol.extends;
 		if(!ext)
 			ext = psymb.PUtils.createDefaultObjectType();
 		return new TypeSignatureVisitor(ext);
  	}
 	public visitInterface(): SignatureVisitor 
 	{
-		let interf = this.classSymbol.implements[this.interfaceIndex];
+		let interf : symb.Type | undefined;
+		if( this.scopedSymbol instanceof psymb.PClassSymbol)
+			interf = this.scopedSymbol.implements[this.interfaceIndex];
+		else if( this.scopedSymbol instanceof psymb.PInterfaceSymbol)
+			interf = this.scopedSymbol.extends[this.interfaceIndex];
+		else 
+			interf = psymb.PUtils.createDefaultObjectType();
+
 		this.interfaceIndex++;
 		return new TypeSignatureVisitor(interf);
 	}

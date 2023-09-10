@@ -12,12 +12,20 @@ export class PNamespaceSymbol extends NamespaceSymbol
 
 	resolveSync(name: string, localOnly?: boolean | undefined): BaseSymbol | undefined 
 	{
-		//console.log(`[${this.name}] trying to resolve: ${name}`);
+		let thisQualifiedName = this.qualifiedName();
+		// if(this.name=="core")
+		// 	console.log(`[${this.name}] resolveSync(${name}, ${localOnly}) `);
 		if(this.name == name)
 			return this;
-		if( !name.startsWith(this.name) )
-			return;
-		let subname = name.substring(this.name.length+PNamespaceSymbol.delimiter.length);
-		return super.resolveSync(subname, localOnly);
+		if(name.startsWith(thisQualifiedName))
+		{
+			let subname = name.substring(thisQualifiedName.length+PNamespaceSymbol.delimiter.length);
+			return super.resolveSync(subname, localOnly);
+		}
+		else if( name.startsWith(this.name) )
+		{
+			let subname = name.substring(this.name.length+PNamespaceSymbol.delimiter.length);
+			return super.resolveSync(subname, localOnly);
+		}
 	}
 }
