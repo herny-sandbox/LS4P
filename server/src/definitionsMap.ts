@@ -141,10 +141,17 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 		{
 			let symbType = this.visitAndRegisterExpression(expressions[0], currentScope);
 			this.visitAndRegisterExpression(expressions[1], currentScope);
+
+			if(!symbType)
+			{
+				this.notifyCompileError("Unable to evaluate expression: "+expressions[0].text, expressions[0]);
+				symbType = psymb.PUtils.createTypeUnknown();
+			}
+
+			symbType = psymb.PUtils.cloneType(symbType);
+			symbType.reference = symb.ReferenceKind.Instance;
 			if(symbType && symbType.kind == symb.TypeKind.Array && symbType.baseTypes.length > 0)
 				symbType = symbType.baseTypes[0];
-			if(!symbType)
-				symbType = psymb.PUtils.createTypeUnknown();
 			return symbType;
 		}
 		else if(methodCall)													// | methodCall
@@ -370,7 +377,7 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 	visitAndRegisterMethodCall(expression: pp.ExpressionContext|undefined, dot:TerminalNode|undefined, methodCall: pp.MethodCallContext, currentScope: symb.ScopedSymbol) : symb.Type | undefined
 	{
 		let methodID =  methodCall.IDENTIFIER();
-		let thisCall = methodCall.THIS();
+		let thisCall = methodCall.THIS();5
 		let superCall = methodCall.SUPER();
 	
 		let callScope: symb.IScopedSymbol = currentScope;
@@ -395,12 +402,13 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 		{
 			let localOnly = expression !== undefined;
 			let methodName = methodID.text;
-			let expressionParams = this.visitAndRegisterExpressionList(methodCall.expressionList(), currentScope);
-			let candidates = psymb.PUtils.getAllSymbolsSync(callScope, symb.MethodSymbol, methodName, localOnly);
-			
+
 			let callContext : psymb.CallContext = new psymb.CallContext();
 			callContext.callerType = expressionType;
 			callContext.callerSymbol = callScope;
+
+			let expressionParams = this.visitAndRegisterExpressionList(methodCall.expressionList(), currentScope);
+			let candidates = psymb.PUtils.getAllSymbolsSync(callScope, symb.MethodSymbol, methodName, localOnly);
 
 			let match = this.checkCandidatesMatch(callContext, candidates, expressionParams, currentScope, true);
 			if(!match)
@@ -413,7 +421,7 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 			if(!match.returnType || match.returnType.name == "void")
 				return;
 			if(match.returnType.kind == symb.TypeKind.Alias)
-				return this.convertAliasType(match.returnType, callContext);
+				return parseUtils.convertAliasType(match.returnType, callContext);
 			else
 				return match.returnType;
 		}
@@ -505,8 +513,12 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 		let localOnly = varScope != currentScope;
 		let res : symb.BaseSymbol | undefined = varScope.resolveSync(varName, localOnly);
 		this.registerDefinition(identifier, res);
+		if(res instanceof psymb.PClassSymbol )
+			return res;
+		if(res instanceof psymb.PInterfaceSymbol )
+			return res;
 		if(res instanceof symb.VariableSymbol && res.type)
-			return res.type;
+			return psymb.PUtils.cloneTypeAsInstance(res.type);
 	}
 
 	checkCandidatesMatch(callContext : psymb.CallContext, candidates: symb.MethodSymbol[], expressionList: symb.Type[], callContainer: symb.BaseSymbol, perfectMatch:boolean=false) 
@@ -534,7 +546,7 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 					return false;
 
 				if(paramType.kind == symb.TypeKind.Alias)
-					paramType = this.convertAliasType(paramType, callContext);
+					paramType = parseUtils.convertAliasType(paramType, callContext);
 
 				if( !this.compareTypes(paramType, userParams[i], symbolContext, perfectMatch))
 					return false;
@@ -543,28 +555,6 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 				return false;
 		}
 		return userParams.length <= requiredParams.length;
-	}
-
-	convertAliasType( type: symb.Type, callContext : psymb.CallContext ) : symb.Type
-	{
-		if( !callContext.callerSymbol || !callContext.callerType  )
-		{
-			console.error("Unable to resolve Generic Alias: "+type.name)
-			return type;
-		}
-		
-		for( let baseType of callContext.callerType.baseTypes )
-		{
-			if(baseType.name == type.name)
-				return baseType.baseTypes[0];
-		}
-		console.error("Unable to resolve generic type: "+type.name);
-		// let paramDef = psymb.PUtils.resolveSymbolSync(callContext.callerSymbol, psymb.PFormalParamSymbol, type.name, false);
-		// if(paramDef)
-		// {
-
-		// }
-		return type;
 	}
 
 	compareTypes(symbolType : symb.Type | undefined, expressionType : symb.Type | undefined, symbolContext : symb.BaseSymbol, perfectMatch:boolean=false) : boolean

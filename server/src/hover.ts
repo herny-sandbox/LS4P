@@ -2,8 +2,8 @@ import * as log from './scripts/syslogs'
 import * as lsp from 'vscode-languageserver'
 import * as server from './server'
 import * as sketch from './sketch'
-import { Hover, MarkedString } from 'vscode-languageserver';
-import * as symbols from 'antlr4-c3'
+import { Hover, MarkedString, MarkupContent } from 'vscode-languageserver';
+import * as symb from 'antlr4-c3'
 import * as parseUtils from './astutils'
 import * as ast from 'antlr4ts/tree'
 import * as psymb from "./antlr-sym"
@@ -55,10 +55,10 @@ export function scheduleHoverInfo(pdeName: string, line: number, pos : number): 
 	if(!pdeInfo || !pdeInfo.syntaxTokens)
 		return null;
 
-	let definition : symbols.BaseSymbol | undefined;
+	let definition : symb.BaseSymbol | undefined;
 	//let definition : symbols.BaseSymbol | undefined = await lookUpSymbolDefinition(pdeInfo.symbols, line, pos);
 	// Finds for the symbol (block or scope) that contains our searched identifier
-	let symbolContainer : symbols.BaseSymbol | undefined =  parseUtils.findScopeAtPositionFromSymbols(pdeInfo.symbols, line, pos);
+	let symbolContainer : symb.BaseSymbol | undefined =  parseUtils.findScopeAtPositionFromSymbols(pdeInfo.symbols, line, pos);
 	if(!symbolContainer || !symbolContainer.context)
 		return null;
 	
@@ -74,77 +74,54 @@ export function scheduleHoverInfo(pdeName: string, line: number, pos : number): 
 	else
 		definition = pdeInfo.refs?.findNodeSymbolDefinition(parseNode);
 	
+	let contextType : symb.Type | undefined;
+	if(pdeInfo.refs)
+		contextType = pdeInfo.refs.findNodeContextTypeDefinition(parseNode);
+
 	let hover : Hover | null = null;
+
+	let callContext : psymb.CallContext = new psymb.CallContext();
+	callContext.callerType = contextType;
+	callContext.callerSymbol = definition;
 
 	if(definition)
 	{
 		hover = {
-			contents: formatHoverContent(definition),
+			contents: formatHoverContent(definition, callContext),
 			range: parseUtils.calcRangeFromParseTree(parseNode)
 		}
 	}
 	return hover;
 }
 
-export function scheduleHover(params: lsp.TextDocumentPositionParams, errorLine: number = -10): lsp.Hover | null 
-{
-	if(errorLine - 1 == params.position.line)
-		return null;
-
-	let currentContent = sketch.getPdeContentFromUri(params.textDocument.uri)
-	if (!currentContent)
-		return null;
-
-	let splitHover = currentContent.split(`\n`);
-	let currentLine = splitHover[params.position.line];
-	let hover : Hover | null = null;
-	let hoverMap = sketch.lineMap(currentLine);
-
-	hoverMap.forEach(function(word){
-		// params.position.character -> can be of any character, even a character within a word
-		if((word[1] <= params.position.character) && (params.position.character <= word[2])){
-			insightMap.forEach(function(value){
-				if(value[0] == word[0]){
-					hover = {
-						contents:MarkedString.fromPlainText(value[1]),
-						range: {
-							start: {
-								line: params.position.line,
-								character: word[1]
-							},
-							end: {
-								line: params.position.line,
-								character: word[2]
-							}
-						}
-					}
-				}
-			})
-		}
-	})
-	return hover;
-}
-
-function formatHoverContent(baseSymbol : symbols.BaseSymbol ) : string
+function formatHoverContent(baseSymbol : symb.BaseSymbol, callContext : psymb.CallContext ) : MarkupContent
 {
 	let result = "";
 	if(baseSymbol instanceof psymb.PClassSymbol)
 		result += "(class) ";
-	if(baseSymbol instanceof symbols.MethodSymbol)
+	else if(baseSymbol instanceof symb.MethodSymbol)
 		result += "(function) ";
-	if(baseSymbol instanceof symbols.FieldSymbol)
+	else if(baseSymbol instanceof symb.FieldSymbol)
 		result += "(field) ";
-	if(baseSymbol instanceof symbols.VariableSymbol)
+	else if(baseSymbol instanceof symb.VariableSymbol)
 		result += "(var) ";
-
-	if(baseSymbol instanceof symbols.MethodSymbol)
-		result += `[${baseSymbol.returnType?baseSymbol.returnType.name:"void"}] `;
-	if(baseSymbol instanceof symbols.VariableSymbol)
-		result += `[${baseSymbol.type?baseSymbol.type.name:"<unknown>"}] `;
+	
+	if(baseSymbol instanceof symb.MethodSymbol)
+	{
+		if(baseSymbol.returnType)
+		{
+			if(baseSymbol.returnType.kind == symb.TypeKind.Alias)
+				result +=  extractClassName(parseUtils.convertAliasType(baseSymbol.returnType, callContext).name) + " ";
+			else
+				result += typeTypeToString(baseSymbol.returnType) + " ";
+		} 
+	}
+	if(baseSymbol instanceof symb.VariableSymbol)
+		result += typeTypeToString(baseSymbol.type) + " ";
 
 	result += baseSymbol.name;
 
-	if(baseSymbol instanceof symbols.MethodSymbol)
+	if(baseSymbol instanceof symb.MethodSymbol)
 	{
 		result += "(";
 		let params = baseSymbol.getAllSymbolsSync(ParameterSymbol_1.ParameterSymbol, true);
@@ -153,10 +130,57 @@ function formatHoverContent(baseSymbol : symbols.BaseSymbol ) : string
 			if(i>0)
 				result += ", ";
 			let param = params[i];
-			if( param instanceof symbols.ParameterSymbol )
-				result += param.type?.name;
+			if( param instanceof symb.ParameterSymbol && param.type)
+			{
+				if(param.type.kind == symb.TypeKind.Alias)
+					result +=  extractClassName(parseUtils.convertAliasType(param.type, callContext).name);
+				else
+					result += typeTypeToString(param.type);
+			}
 		}
 		result += ")";
 	}
+
+	let markupResult = {
+		kind : lsp.MarkupKind.Markdown,
+		value : result
+	};
+	return markupResult;
+}
+
+function typeTypeToString(type: symb.Type | undefined) : string
+{
+	if(!type)
+		return "";
+	
+	if(type.kind == symb.TypeKind.Array)
+		return typeTypeToString(type.baseTypes[0]) + "[]";
+	if(type.kind == symb.TypeKind.Alias)
+	{
+		if(type.baseTypes.length==1)
+			return typeTypeToString(type.baseTypes[0]);
+		else 
+			return type.name;
+	}
+		
+
+	let result = extractClassName(type.name);
+	if(type.baseTypes.length > 0)
+	{
+		result += '{';
+		for(let i=0; i<type.baseTypes.length;i++)
+		{
+			if(i>0)
+				result += ", ";
+			result += typeTypeToString(type.baseTypes[i]);
+		}
+		result += '}';
+	}
 	return result;
+}
+
+function extractClassName(fullName:string) : string
+{
+	let lastIndex = fullName.lastIndexOf('.');
+	return fullName.substring(lastIndex+1);
 }

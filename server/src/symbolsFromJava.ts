@@ -1,8 +1,4 @@
-
-import { JavaClassParserVisitor } from './grammer/JavaClassParserVisitor';
-import { AbstractParseTreeVisitor, ParseTree, TerminalNode } from 'antlr4ts/tree'
-import { ArrayTypeContext, ArrayTypeSignatureContext, BaseTypeContext, ClassTypeSignatureContext, FieldTypeContext, MethodTypeSignatureContext, ObjectTypeContext, ParameterDescriptorContext, ReturnDescriptorContext, TypeSignatureContext, TypeVariableSignatureContext } from './grammer/JavaClassParser';
-import { ClassVisitor, Opcodes, FieldVisitor } from "@xmcl/asm"
+import { ClassVisitor, Opcodes } from "@xmcl/asm"
 import { SignatureReader }  from './grammer/SignatureReader'
 import { SignatureVisitor }  from './grammer/SignatureVisitor'
 import * as symb from 'antlr4-c3'
@@ -174,71 +170,47 @@ class ClassSignatureVisitor extends DebugSignatureVisitor
 	protected classSymbol : psymb.PClassSymbol;
 	protected scopedType : symb.Type | undefined;
 	protected interfaceIndex : number = 0;
+	protected formalTypes : symb.Type [] | undefined;
+
 	public constructor(classSymbol : psymb.PClassSymbol) {
         super(Opcodes.ASM5);
 		this.classSymbol = classSymbol;
     }
-
 	public visitFormalTypeParameter(name: string) 
 	{
-		this.scopedType = psymb.PUtils.createTypeUnknown();
-		this.classSymbol.addSymbol(new psymb.PFormalParamSymbol(name, this.scopedType));
+		this.formalTypes = [];
+		this.classSymbol.addSymbol(new psymb.PFormalParamSymbol(name, this.formalTypes));
 	}
-  
 	public visitClassBound(): SignatureVisitor 
 	{
-		if(this.scopedType)
-		{
-			this.scopedType.kind = symb.TypeKind.Class;
-			this.scopedType.reference = symb.ReferenceKind.Reference;
-			return new TypeSignatureVisitor(this.scopedType);
-		}
-	  		
-		return this;
-	}
-	public visitIdentifier(name: string)
-	{
-		if(this.scopedType)
-		{
-			let fixedName = name.replace(/\//g, psymb.PNamespaceSymbol.delimiter);
-			this.scopedType.name = fixedName;
-		}
-	}
-
-	public visitSuperclass(): SignatureVisitor 
-	{
-		this.scopedType = this.classSymbol.extends;
-		if(this.scopedType)
-			return new TypeSignatureVisitor(this.scopedType);
-  		return this;
-	}
-	public visitTypeVariable(name: string) 
-	{
-		if(this.scopedType)
-		{
-			let fixedName = name.replace(/\//g, psymb.PNamespaceSymbol.delimiter);
-			psymb.PUtils.setAsGenericType(this.scopedType, fixedName);
-		}
+		let formalType = psymb.PUtils.createDefaultObjectType();
+		formalType.kind = symb.TypeKind.Class;
+		formalType.reference = symb.ReferenceKind.Reference;
+		if(this.formalTypes)
+			this.formalTypes.push(formalType);
+		return new TypeSignatureVisitor(formalType);
 	}
 	public visitInterfaceBound(): SignatureVisitor 
 	{
-		if(this.scopedType)
-		{
-			this.scopedType.kind = symb.TypeKind.Interface;
-			this.scopedType.reference = symb.ReferenceKind.Reference;
-			return new TypeSignatureVisitor(this.scopedType);
-		}
-		return this;
+		let formalType = psymb.PUtils.createTypeUnknown();
+		formalType.kind = symb.TypeKind.Interface;
+		formalType.reference = symb.ReferenceKind.Reference;
+		if(this.formalTypes)
+			this.formalTypes.push(formalType);
+		return new TypeSignatureVisitor(formalType);
 	}
-
+	public visitSuperclass(): SignatureVisitor 
+	{
+		let ext = this.classSymbol.extends;
+		if(!ext)
+			ext = psymb.PUtils.createDefaultObjectType();
+		return new TypeSignatureVisitor(ext);
+ 	}
 	public visitInterface(): SignatureVisitor 
 	{
-		this.scopedType = this.classSymbol.implements[this.interfaceIndex];
-		this.scopedType.kind = symb.TypeKind.Interface;
+		let interf = this.classSymbol.implements[this.interfaceIndex];
 		this.interfaceIndex++;
-		if(this.scopedType)
-			return new TypeSignatureVisitor(this.scopedType);
-		return this;
+		return new TypeSignatureVisitor(interf);
 	}
 	public visitEnd(): SignatureVisitor
 	{
@@ -249,8 +221,7 @@ class ClassSignatureVisitor extends DebugSignatureVisitor
 class MethodSignatureVisitor extends DebugSignatureVisitor
 {
 	protected methodSymbol : symb.MethodSymbol;
-	protected lastFocusedType : symb.Type | undefined;
-
+	protected formalTypes : symb.Type [] | undefined;
 	public constructor(methodSymbol : symb.MethodSymbol) {
         super(Opcodes.ASM5);
 		this.methodSymbol = methodSymbol;
@@ -258,65 +229,38 @@ class MethodSignatureVisitor extends DebugSignatureVisitor
 
 	public visitFormalTypeParameter(name: string) 
 	{
-		this.lastFocusedType = psymb.PUtils.createTypeUnknown();
-		this.methodSymbol.addSymbol(new psymb.PFormalParamSymbol(name, this.lastFocusedType));
+		this.formalTypes = [];
+		this.methodSymbol.addSymbol(new psymb.PFormalParamSymbol(name, this.formalTypes));
 	}
-
+	public visitClassBound(): SignatureVisitor 
+	{
+		let formalType = psymb.PUtils.createDefaultObjectType();
+		formalType.kind = symb.TypeKind.Class;
+		formalType.reference = symb.ReferenceKind.Reference;
+		if(this.formalTypes)
+			this.formalTypes.push(formalType);
+		return new TypeSignatureVisitor(formalType);
+	}
+	public visitInterfaceBound(): SignatureVisitor 
+	{
+		let formalType = psymb.PUtils.createDefaultObjectType();
+		formalType.kind = symb.TypeKind.Interface;
+		formalType.reference = symb.ReferenceKind.Reference;
+		if(this.formalTypes)
+			this.formalTypes.push(formalType);
+		return new TypeSignatureVisitor(formalType);
+	}
 	public visitParameterType() : SignatureVisitor
 	{
-		this.lastFocusedType = psymb.PUtils.createTypeUnknown();
-		this.methodSymbol.addSymbol(new symb.ParameterSymbol("", null, this.lastFocusedType));
-		return new TypeSignatureVisitor(this.lastFocusedType);
+		let paramType = psymb.PUtils.createTypeUnknown();
+		this.methodSymbol.addSymbol(new symb.ParameterSymbol("", null, paramType));
+		return new TypeSignatureVisitor(paramType);
 	}
 	public visitReturnType(): SignatureVisitor 
 	{
 		if(!this.methodSymbol.returnType) // It's a constructor
 			return new TypeSignatureVisitor(psymb.PUtils.createTypeUnknown()); // We continue with a placeholder
 		return new TypeSignatureVisitor(this.methodSymbol.returnType);
-	}
-	public visitClassBound(): SignatureVisitor 
-	{
-		if(this.lastFocusedType)
-		{
-			this.lastFocusedType.reference = symb.ReferenceKind.Reference;
-			return new TypeSignatureVisitor(this.lastFocusedType);
-		}
-	  		
-		return this;
-	}
-	public visitIdentifier(name: string)
-	{
-		if(this.lastFocusedType)
-		{
-			let fixedName = name.replace(/\//g, psymb.PNamespaceSymbol.delimiter);
-			this.lastFocusedType.name = fixedName;
-		}
-	}
-
-	// public visitSuperclass(): SignatureVisitor 
-	// {
-	// 	// this.scopedType = this.methodSymbol.extends;
-	// 	// if(this.scopedType)
-	// 	// 	return new TypeSignatureVisitor(this.scopedType);
-  	// 	return this;
-	// }
-	public visitTypeVariable(name: string) 
-	{
-		if(this.lastFocusedType)
-		{
-			let fixedName = name.replace(/\//g, psymb.PNamespaceSymbol.delimiter);
-			psymb.PUtils.setAsGenericType(this.lastFocusedType, fixedName);
-		}
-	}
-	public visitInterfaceBound(): SignatureVisitor 
-	{
-		if(this.lastFocusedType)
-		{
-			this.lastFocusedType.kind = symb.TypeKind.Interface;
-			this.lastFocusedType.reference = symb.ReferenceKind.Reference;
-			return new TypeSignatureVisitor(this.lastFocusedType);
-		}
-		return this;
 	}
 
 	public visitExceptionType(): SignatureVisitor 
@@ -335,20 +279,12 @@ class MethodSignatureVisitor extends DebugSignatureVisitor
 class TypeSignatureVisitor extends DebugSignatureVisitor
 {
 	protected targetType : symb.Type;
-	protected argBaseType : symb.Type | undefined;
+	//protected argBaseType : symb.Type | undefined;
 	public constructor(targetType : symb.Type) {
         super(Opcodes.ASM5);
 		this.targetType = targetType;
     }
 	public visitSuperclass(): SignatureVisitor { return this; }
-	public visitUnboundedTypeArgument() 
-	{
-		this.argBaseType =  psymb.PUtils.createTypeUnknown();
-		this.argBaseType.name="?";
-		this.argBaseType.kind = symb.TypeKind.Unknown;
-		this.argBaseType.reference = symb.ReferenceKind.Reference;
-		this.targetType.baseTypes.push(this.argBaseType);
-	}
 	public visitIdentifier(name: string)
 	{
 		let fixedName = name.replace(/\//g, psymb.PNamespaceSymbol.delimiter);
@@ -356,15 +292,18 @@ class TypeSignatureVisitor extends DebugSignatureVisitor
 		this.targetType.kind = symb.TypeKind.Class;
 		this.targetType.reference = symb.ReferenceKind.Reference;
 	}
-	public visitArrayType(): SignatureVisitor 
+	public visitUnboundedTypeArgument() 
 	{
-		let baseType = psymb.PUtils.createTypeUnknown();
-		psymb.PUtils.setAsArrayType(this.targetType, baseType);
-		return new TypeSignatureVisitor(baseType);
+		let baseType =  psymb.PUtils.createTypeUnknown();
+		baseType.name="?";
+		baseType.kind = symb.TypeKind.Alias;
+		baseType.reference = symb.ReferenceKind.Reference;
+		this.targetType.baseTypes.push(baseType);
 	}
 	public visitTypeArgument(wildcard:string) : SignatureVisitor 
 	{
 		let baseType =  psymb.PUtils.createTypeUnknown();
+		baseType.name = wildcard;
 		baseType.kind = symb.TypeKind.Alias;
 		baseType.reference = symb.ReferenceKind.Reference;
 		this.targetType.baseTypes.push(baseType);
@@ -373,8 +312,20 @@ class TypeSignatureVisitor extends DebugSignatureVisitor
 	public visitTypeVariable(name: string) 
 	{
 		let fixedName = name.replace(/\//g, psymb.PNamespaceSymbol.delimiter);
-		psymb.PUtils.setAsGenericType(this.targetType, fixedName);
+		//this.argBaseType = psymb.PUtils.createTypeUnknown();
+		this.targetType.name = fixedName;
+		this.targetType.kind = symb.TypeKind.Alias;
+		this.targetType.reference = symb.ReferenceKind.Reference;
 	}
+
+	public visitArrayType(): SignatureVisitor 
+	{
+		let baseType = psymb.PUtils.createTypeUnknown();
+		psymb.PUtils.setAsArrayType(this.targetType, baseType);
+		return new TypeSignatureVisitor(baseType);
+	}
+
+
 	public visitBaseType(descriptor: string) 
 	{ 
 		if(descriptor == 'V')
@@ -407,171 +358,5 @@ class TypeSignatureVisitor extends DebugSignatureVisitor
 	
 	public override visitEnd() 
 	{
-	}
-}
-
-export class MethodBuilderFromJava extends AbstractParseTreeVisitor<symb.MethodSymbol> implements JavaClassParserVisitor<symb.MethodSymbol>
-{
-	private methodSymbol : symb.MethodSymbol;
-	private workingType : symb.Type | undefined;
-	private isConstructor : boolean = false;
-
-	constructor(methodName: string, isConstructor:boolean=false)
-	{
-		super();
-		this.methodSymbol = new symb.MethodSymbol(methodName, undefined );
-		this.isConstructor = isConstructor;
-	}
-
-	public defaultResult(): symb.MethodSymbol { return this.methodSymbol; }
-
-	visitParameterDescriptor(ctx: ParameterDescriptorContext) 
-	{
-		let fieldType = ctx.fieldType();
-
-		this.workingType = psymb.PUtils.createTypeUnknown();
-		this.methodSymbol.addSymbol( new symb.ParameterSymbol("", null, this.workingType) );
-		this.visit(fieldType)
-		
-		return this.defaultResult();
-	}
-
-	visitReturnDescriptor(ctx: ReturnDescriptorContext)
-	{
-		if(this.isConstructor)
-			return this.defaultResult();
-
-		if(ctx.voidDescriptor())
-		{
-			this.methodSymbol.returnType = psymb.PUtils.createVoidType();
-		}
-		else
-		{
-			let fieldType = ctx.fieldType();
-			if(fieldType)
-			{
-				this.workingType = psymb.PUtils.createTypeUnknown();
-				this.methodSymbol.returnType = this.workingType;
-				this.visit(fieldType);
-			}
-
-		}
-		return this.defaultResult();
-	}
-
-	visitBaseType(ctx: BaseTypeContext)
-	{
-		if(this.workingType)
-		{
-			if(ctx.BYTE())
-				psymb.PUtils.setAsPrimitiveType(this.workingType, psymb.PPrimitiveKind.Byte);
-			else if(ctx.CHAR())
-				psymb.PUtils.setAsPrimitiveType(this.workingType, psymb.PPrimitiveKind.Char);
-			else if(ctx.DOUBLE())
-				psymb.PUtils.setAsPrimitiveType(this.workingType, psymb.PPrimitiveKind.Double);
-			else if(ctx.FLOAT())
-				psymb.PUtils.setAsPrimitiveType(this.workingType, psymb.PPrimitiveKind.Float);
-			else if(ctx.INT())
-				psymb.PUtils.setAsPrimitiveType(this.workingType, psymb.PPrimitiveKind.Int);
-			else if(ctx.LONG())
-				psymb.PUtils.setAsPrimitiveType(this.workingType, psymb.PPrimitiveKind.Long);
-			else if(ctx.SHORT())
-				psymb.PUtils.setAsPrimitiveType(this.workingType, psymb.PPrimitiveKind.Short);
-			else if(ctx.BOOLEAN())
-				psymb.PUtils.setAsPrimitiveType(this.workingType, psymb.PPrimitiveKind.Boolean);
-		}
-		return this.defaultResult();
-	}
-
-	visitObjectType(ctx: ObjectTypeContext)
-	{
-		if(this.workingType)
-		{
-			let classPath = ctx.className();
-			let finalName = classPath.text.replace(/\//g, psymb.PNamespaceSymbol.delimiter);
-			psymb.PUtils.setAsClassType(this.workingType, finalName);
-		}
-		return this.defaultResult();
-	}
-
-	visitArrayType(ctx: ArrayTypeContext) 
-	{
-		if(this.workingType)
-		{
-			let savedtype = this.workingType;
-			this.workingType = psymb.PUtils.createTypeUnknown();
-			psymb.PUtils.setAsArrayType(savedtype, this.workingType);
-			this.visit( ctx.fieldType() );
-			this.workingType = savedtype;
-		}
-		return this.defaultResult();
-	}
-
-	visitMethodTypeSignature(ctx: MethodTypeSignatureContext)
-	{
-		let formalTypes = ctx.formalTypeParameters();
-		let typeParams = ctx.typeSignature();
-		let returnType = ctx.returnType();
-
-		for(let i=0; i < typeParams.length; i++ )
-		{
-			this.workingType = psymb.PUtils.createTypeUnknown();
-			this.methodSymbol.addSymbol( new symb.ParameterSymbol("", null, this.workingType) );
-			this.visit(typeParams[i])
-		}
-		if(!this.isConstructor)
-		{
-			if(returnType.voidDescriptor())
-				this.methodSymbol.returnType = psymb.PUtils.createVoidType();
-			else
-			{
-				let typeSignature = returnType.typeSignature();
-				if(typeSignature)
-				{
-					this.workingType = psymb.PUtils.createTypeUnknown();
-					this.methodSymbol.returnType = this.workingType;
-					this.visit(typeSignature);
-				}
-	
-			}
-		}
-		return this.defaultResult();
-	}
-
-	visitTypeVariableSignature(ctx: TypeVariableSignatureContext)
-	{
-		if(this.workingType)
-		{
-			let idName = ctx.GEN_ID().text;
-			psymb.PUtils.setAsGenericType(this.workingType, idName);
-		}
-		return this.defaultResult();
-	}
-
-	visitArrayTypeSignature(ctx: ArrayTypeSignatureContext)
-	{
-		if(this.workingType)
-		{
-			let savedtype = this.workingType;
-			this.workingType = psymb.PUtils.createTypeUnknown();
-			psymb.PUtils.setAsArrayType(savedtype, this.workingType);
-			this.visit( ctx.typeSignature() );
-			this.workingType = savedtype;
-		}
-		return this.defaultResult();
-	}
-
-	visitClassTypeSignature(ctx: ClassTypeSignatureContext)
-	{
-		if(this.workingType)
-		{
-			let finalName = "";
-			let packageName = "";
-			let classPath = ctx.simpleClassTypeSignature();
-			if(classPath)
-				packageName = classPath.text.replace(/\//g, psymb.PNamespaceSymbol.delimiter);
-			psymb.PUtils.setAsClassType(this.workingType, finalName);
-		}
-		return this.defaultResult();
 	}
 }

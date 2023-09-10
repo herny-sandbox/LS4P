@@ -12,6 +12,7 @@ export class PNamespaceSymbol extends NamespaceSymbol
 
 	resolveSync(name: string, localOnly?: boolean | undefined): BaseSymbol | undefined 
 	{
+		//console.log(`[${this.name}] trying to resolve: ${name}`);
 		if(this.name == name)
 			return this;
 		if( !name.startsWith(this.name) )

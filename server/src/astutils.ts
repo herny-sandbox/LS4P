@@ -299,7 +299,7 @@ export function evaluateClassOrInterfaceTypeToSymbolType(classOrInterface : pp.C
 		for(let i=0; i< genericParams.length; i++)
 		{
 			let param = genericParams[i];
-			baseTypes.push( psymb.PUtils.createGenericType(param.name, param.type) );
+			baseTypes.push( psymb.PUtils.createGenericType(param.name, param.extends) );
 		}
 	}
 	if(genericArguments.length > 0)
@@ -324,7 +324,7 @@ export function buildTypeArgumentsToSymbolTypes(args : pp.TypeArgumentContext[],
 		if(currentAlias.baseTypes.length==0)
 			currentAlias.baseTypes.push(baseType);
 		else
-		currentAlias.baseTypes[0] = baseType;
+			currentAlias.baseTypes[0] = psymb.PUtils.cloneType(baseType);
 	}
 } 
 
@@ -365,4 +365,22 @@ export function findPdeName(baseSymbol : symb.BaseSymbol) : string | undefined
 	if(!baseSymbol.parent)
 		return;
 	return findPdeName(baseSymbol.parent);
+}
+
+export function convertAliasType( type: symb.Type, callContext : psymb.CallContext ) : symb.Type
+{
+	if( !callContext.callerSymbol || !callContext.callerType  )
+	{
+		console.error("Unable to resolve Generic Alias: "+type.name)
+		return type;
+	}
+	
+	for( let baseType of callContext.callerType.baseTypes )
+	{
+		if(baseType.name == type.name)
+			return baseType.baseTypes[0];
+	}
+	console.error("Unable to resolve generic type: "+type.name);
+
+	return type;
 }

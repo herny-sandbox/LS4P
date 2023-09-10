@@ -70,6 +70,17 @@ export class PClassSymbol extends ScopedSymbol implements Type
 			if(extSymbol && extSymbol instanceof PClassSymbol)
 				result = extSymbol.resolveSync(name, true);
 		}
+		if(!result)
+		{
+			for(let i=0; i < this.implements.length; i++)
+			{
+				let implSymbol : BaseSymbol | undefined = super.resolveSync(this.implements[i].name, false);
+				if(implSymbol && implSymbol instanceof PInterfaceSymbol)
+					result = implSymbol.resolveSync(name);
+				if( result )
+					break;
+			}
+		}
 		return result;
 	}
 

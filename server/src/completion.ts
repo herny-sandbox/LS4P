@@ -432,12 +432,12 @@ export async function collectCandidates(pdeName: string, line: number, posInLine
 			{
 				let callContext = scopeAtPos.resolveSync(contextType.name, false);
 				if(callContext && callContext instanceof symb.ScopedSymbol)
-					members = await suggestMembers(callContext, true, symbols);
+					members = await suggestMembers(callContext, contextType, true, symbols);
 			}
 		}
 		else
 		{
-			members = await suggestMembers(scopeAtPos, false, symbols);
+			members = await suggestMembers(scopeAtPos, undefined, false, symbols);
 		}
 		for(let child of members )
 			completions.push(child);
@@ -463,12 +463,25 @@ export async function collectCandidates(pdeName: string, line: number, posInLine
 	return completions;
 }
 
-async function suggestMembers(scopeAtPos: symb.ScopedSymbol, localOnly:boolean=false, symbols: symb.BaseSymbol[]) : Promise<lsp.CompletionItem[]>
+async function suggestMembers(scopeAtPos: symb.ScopedSymbol, refType:symb.Type|undefined, localOnly:boolean=false, symbols: symb.BaseSymbol[]) : Promise<lsp.CompletionItem[]>
 {
 	let completions : lsp.CompletionItem[] = [];
+
+	let isAccessingByReference = false;
+	let isAccessingByInstance = true;
+
+	if(refType)
+	{
+		isAccessingByReference = refType.reference == symb.ReferenceKind.Reference;
+		isAccessingByInstance = refType.reference == symb.ReferenceKind.Instance;
+	}
+
 	let vars = psymb.PUtils.getAllSymbolsSync(scopeAtPos, symb.VariableSymbol, undefined, localOnly);
 	for(let child of vars )
 	{
+		if(isAccessingByReference && !child.modifiers.has(symb.Modifier.Static))
+			continue;
+
 		if(child instanceof symb.FieldSymbol)
 			completions.push(createCompletionItem(child.name, lsp.CompletionItemKind.Field, symbols.length));
 		else
@@ -478,22 +491,24 @@ async function suggestMembers(scopeAtPos: symb.ScopedSymbol, localOnly:boolean=f
 	let methods : symb.MethodSymbol [] = psymb.PUtils.getAllSymbolsSync(scopeAtPos, symb.MethodSymbol, undefined, localOnly);
 	for(let child of methods )
 	{
-		// if(child.returnType)
-		// 	completions.push(createCompletionItem(child.name, lsp.CompletionItemKind.Method, symbols.length));
-		// else
-		// 	completions.push(createCompletionItem(child.name, lsp.CompletionItemKind.Constructor, symbols.length));
+		if(isAccessingByReference && !child.modifiers.has(symb.Modifier.Static))
+			continue;
 		completions.push(createMethodCompletionItem(child, symbols.length));
 		symbols.push(child);
 	}
 	let classes : psymb.PClassSymbol [] = psymb.PUtils.getAllSymbolsSync(scopeAtPos, psymb.PClassSymbol, undefined, localOnly);
 	for(let child of classes )
 	{
+		if(isAccessingByReference && !child.modifiers.has(symb.Modifier.Static))
+			continue;
 		completions.push(createCompletionItem(child.name, lsp.CompletionItemKind.Class, symbols.length));
 		symbols.push(child);
 	}
 	let interfs : psymb.PInterfaceSymbol [] = psymb.PUtils.getAllSymbolsSync(scopeAtPos, psymb.PInterfaceSymbol, undefined, localOnly);
 	for(let child of interfs )
 	{
+		if(isAccessingByReference && !child.modifiers.has(symb.Modifier.Static))
+			continue;
 		completions.push(createCompletionItem(child.name, lsp.CompletionItemKind.Interface, symbols.length));
 		symbols.push(child);
 	}

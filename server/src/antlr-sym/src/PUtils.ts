@@ -39,7 +39,7 @@ let primitiveKindNames = [
 ]
 
 const defaultStringClass = "java.lang.String"
-const defaultObjectClass = "java.util.Object"
+const defaultObjectClass = "java.lang.Object"
 const defaultNullName = "null"
 
 export class CallContext
@@ -51,6 +51,10 @@ export class CallContext
 
 export class PUtils 
 {
+	public static createDefaultObjectType()
+	{
+		return PUtils.createClassType(defaultObjectClass);
+	}
 	public static createClassType(className:string, baseTypes:Type[]=[]) : Type
 	{
 		return PUtils.setAsClassType(PUtils.createTypeUnknown(), className, baseTypes);
@@ -85,17 +89,17 @@ export class PUtils
 	{
 		return PUtils.createClassType("void");  
 	}
-	public static createGenericType(name:string, extendType: Type|undefined)
+	public static createGenericType(name:string, boundTypes: Type[])
 	{
-		return PUtils.setAsGenericType(PUtils.createTypeUnknown(), name, extendType);
+		return PUtils.setAsGenericType(PUtils.createTypeUnknown(), name, boundTypes);
 	}
 
-	public static createTypeUnknown(typeName:string="<unknown>", baseTypes:Type[]=[]) : Type
+	public static createTypeUnknown(typeName:string="<unknown>") : Type
 	{
 		return {  
 			name : typeName,
 			kind : TypeKind.Unknown,
-			baseTypes : baseTypes,
+			baseTypes : [],
 			reference : ReferenceKind.Irrelevant
 		};
 	}
@@ -112,7 +116,7 @@ export class PUtils
 	{
 		type.name = className;
 		type.kind = TypeKind.Class,
-		type.baseTypes = baseTypes,
+		type.baseTypes = PUtils.cloneTypes(baseTypes),
 		type.reference = ReferenceKind.Reference
 		return type;
 	}
@@ -121,7 +125,7 @@ export class PUtils
 	{
 		type.name = interfName;
 		type.kind = TypeKind.Interface,
-		type.baseTypes = baseTypes,
+		type.baseTypes = PUtils.cloneTypes(baseTypes),
 		type.reference = ReferenceKind.Reference
 		return type;
 	}
@@ -144,24 +148,47 @@ export class PUtils
 		return type;
 	}
 
-	public static setAsGenericType(type: Type, genericName:string, extendType?:Type ): Type
+	private static setAsGenericType(type: Type, genericName:string, boundTypes:Type[] ): Type
 	{
 		type.name = genericName;
 		type.kind = TypeKind.Alias,
-		type.baseTypes = [],
+		type.baseTypes = PUtils.cloneTypes(boundTypes),
 		type.reference = ReferenceKind.Reference;
-		if(extendType)
-			type.baseTypes.push(extendType)
 		return type;
 	}
 
-	public static setAsTypeUnknown(type: Type, typeName:string="<unknown>", baseTypes:Type[]=[]) : Type
+	public static setAsTypeUnknown(type: Type, typeName:string="<unknown>") : Type
 	{
 		type.name = typeName;
 		type.kind = TypeKind.Unknown,
-		type.baseTypes = baseTypes,
+		type.baseTypes = [],
 		type.reference = ReferenceKind.Irrelevant;
 		return type;
+	}
+	public static cloneTypeAsInstance(type: Type) : Type
+	{
+		return {  
+			name : type.name,
+			kind : type.kind,
+			baseTypes : PUtils.cloneTypes(type.baseTypes),
+			reference : ReferenceKind.Instance,
+		};
+	}
+	public static cloneType(type: Type) : Type
+	{
+		return {  
+			name : type.name,
+			kind : type.kind,
+			baseTypes : PUtils.cloneTypes(type.baseTypes),
+			reference : type.reference
+		};
+	}
+	public static cloneTypes(types:Type[]) : Type[]
+	{
+		let baseTypes : Type[] = [];
+		for(let i=0; i < types.length; i++)
+			baseTypes.push(PUtils.cloneType(types[i]));
+		return baseTypes;
 	}
 
 	public static setAsVoidType(type: Type) : Type
@@ -343,5 +370,3 @@ export class PUtils
 			return symbolType.name;
 	}
 }
-
-export const rootClassType = PUtils.createClassType("java.lang.Object");
