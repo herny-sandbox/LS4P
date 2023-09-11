@@ -1,6 +1,5 @@
 import * as log from './scripts/syslogs'
 import * as lsp from 'vscode-languageserver';
-import { TextDocument } from 'vscode-languageserver-textdocument';
 import * as model from './grammer/terms/model'
 import * as sketch from './sketch'
 import * as pp from './grammer/ProcessingParser';
@@ -407,9 +406,7 @@ export async function collectCandidates(pdeName: string, line: number, posInLine
 	core.preferredRules = new Set([ ProcessingParser.IDENTIFIER ]);
 
 	
-	let contextType : symb.Type | undefined;
-	if(pdeInfo.refs)
-		contextType = pdeInfo.refs.findNodeContextTypeDefinition(parseNode);
+	let contextType = pdeInfo.findNodeContextTypeDefinition(parseNode);
 
 	// console.log(`Cursor at: ${parseNode.text}:${posInLine}`);
 	// console.log("Type: "+contextType?.name??"unknown");

@@ -63,7 +63,7 @@ export function tryAddDependency(mainTable : psymb.PSymbolTable, moduleName : st
 
 export function GetClass(classPath: string): psymb.PClassSymbol | undefined 
 {
-	let lastIndex = classPath.lastIndexOf(".");
+	let lastIndex = classPath.lastIndexOf(psymb.PNamespaceSymbol.delimiter);
 	let moduleName = classPath.substring(0, lastIndex);
 	let className = classPath.substring(lastIndex+1, classPath.length);
 	let moduleInfo = modulesMap.get(moduleName);

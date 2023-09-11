@@ -163,7 +163,7 @@ function checkRuleNodeBounds(ctx : ParserRuleContext, line : number, pos : numbe
 	return true;
 }
 
-export function calcRangeFromParseTree(ctx: ParseTree) : ls.Range
+export function calcRangeFromParseTree(ctx: ParseTree|undefined) : ls.Range
 {
 	if (ctx instanceof TerminalNode)
 	{
@@ -244,7 +244,7 @@ export function flushRecords(){
 
 
 
-export function evaluateTypeTypeToSymbolType(typeContext : pp.TypeTypeContext, scope: symb.ScopedSymbol) : symb.Type | undefined
+export function convertTypeTypeToSymbolType(typeContext : pp.TypeTypeContext, scope: symb.ScopedSymbol) : symb.Type
 {
 	let result : symb.Type | undefined
 
@@ -260,7 +260,7 @@ export function evaluateTypeTypeToSymbolType(typeContext : pp.TypeTypeContext, s
 	if(arrayMultiSize.length > 0)
 	{
 		if(!result)
-			result = psymb.PUtils.createTypeUnknown("<unknown>");
+			result = psymb.PUtils.createTypeUnknown("<unknown>"); 
 		
 		let arraySize = arrayMultiSize.length;
 		while(arraySize>0)
@@ -269,7 +269,20 @@ export function evaluateTypeTypeToSymbolType(typeContext : pp.TypeTypeContext, s
 			arraySize--;
 		}
 	}
-	 
+	if(!result)
+		result = psymb.PUtils.createTypeUnknown("<unknown>"); 
+	return result;
+}
+
+export function convertTypeListToSymbolTypeList(typeContext : pp.TypeListContext, scope: symb.ScopedSymbol, isClass:boolean=true) : symb.Type []
+{
+	let result : symb.Type[] = [];
+	let typesCtx = typeContext.typeType();
+	for(let i=0; i<typesCtx.length; i++)
+	{
+		let type = convertTypeTypeToSymbolType(typesCtx[i], scope, );
+		result.push(type);
+	}
 	return result;
 }
 
@@ -277,31 +290,10 @@ export function evaluateClassOrInterfaceTypeToSymbolType(classOrInterface : pp.C
 {
 	let identifs = classOrInterface.IDENTIFIER();
 	let genericArguments = classOrInterface.typeArguments();
-	if(identifs.length == 0)
-		return;
 
-	let typeName = identifs[0].text;
+	let typeName = buildFullClassName( identifs );
 	let baseTypes : symb.Type[] = [];
 
-	let sourceSymbolType = scope.resolveSync(typeName, false);
-
-	if(sourceSymbolType)
-	{
-		if( !psymb.PUtils.getFirstParentMatch(psymb.PSymbolTable, sourceSymbolType) )
-			typeName = sourceSymbolType.qualifiedName(psymb.PNamespaceSymbol.delimiter, true, false);
-	}
-	else
-		console.error(`Unable to find symbol for ${typeName} (<unknown>.pde:${classOrInterface.start.line})`);
-
-	if( sourceSymbolType instanceof symb.ScopedSymbol )
-	{
-		let genericParams = sourceSymbolType.getAllSymbolsSync(psymb.PFormalParamSymbol, true); 
-		for(let i=0; i< genericParams.length; i++)
-		{
-			let param = genericParams[i];
-			baseTypes.push( psymb.PUtils.createGenericType(param.name, param.extends) );
-		}
-	}
 	if(genericArguments.length > 0)
 		buildTypeArgumentsToSymbolTypes(genericArguments[0].typeArgument(), baseTypes, scope);
 
@@ -309,24 +301,33 @@ export function evaluateClassOrInterfaceTypeToSymbolType(classOrInterface : pp.C
 	return psymb.PUtils.createClassType( typeName, baseTypes );
 }
 
+export function buildFullClassName(identifs: TerminalNode[]) : string
+{
+	let result = identifs[0].text;
+	for(let i=1; i < identifs.length; i++)
+	{
+		result += '.';
+		result += identifs[i].text;
+	}
+	return result;
+}
+
 export function buildTypeArgumentsToSymbolTypes(args : pp.TypeArgumentContext[], result: symb.Type[], scope: symb.ScopedSymbol)
 {
 	for(let j=0; j<args.length; j++)
 	{
-		let currentAlias = result[j];
+		let baseType : symb.Type | undefined;
 		let typeCtx = args[j].typeType();
-		if(!typeCtx)
-			continue;
-
-		let baseType = evaluateTypeTypeToSymbolType(typeCtx, scope);
+		if(typeCtx)
+			baseType = convertTypeTypeToSymbolType(typeCtx, scope);
 		if(!baseType)
-			continue;
-		if(currentAlias.baseTypes.length==0)
-			currentAlias.baseTypes.push(baseType);
-		else
-			currentAlias.baseTypes[0] = psymb.PUtils.cloneType(baseType);
+			baseType = psymb.PUtils.createTypeUnknown();
+
+		result.push(baseType);
 	}
 } 
+
+
 
 export function evaluatePrimitiveTypeToSymbolType(primitive : pp.PrimitiveTypeContext) : symb.Type
 {
@@ -374,12 +375,24 @@ export function convertAliasType( type: symb.Type, callContext : psymb.CallConte
 		console.error("Unable to resolve Generic Alias: "+type.name)
 		return type;
 	}
-	
-	for( let baseType of callContext.callerType.baseTypes )
+	if(callContext.callerSymbol instanceof symb.ScopedSymbol)
 	{
-		if(baseType.name == type.name)
-			return baseType.baseTypes[0];
+		let genericParams = callContext.callerSymbol.getNestedSymbolsOfTypeSync(psymb.PFormalParamSymbol);
+		for(let i=0; i < genericParams.length; i++)
+		{
+			if(genericParams[i].name == type.name)
+			{
+				if( callContext.callerType.baseTypes.length >= i )
+					return callContext.callerType.baseTypes[i];
+			}
+		}
 	}
+	
+	// for( let baseType of callContext.callerType.baseTypes )
+	// {
+	// 	if(baseType.name == type.name)
+	// 		return baseType.baseTypes[0];
+	// }
 	console.error("Unable to resolve generic type: "+type.name);
 
 	return type;

@@ -72,11 +72,9 @@ export function scheduleHoverInfo(pdeName: string, line: number, pos : number): 
 	if(symbolContainer.context === parseNode.parent)
 		definition = symbolContainer;
 	else
-		definition = pdeInfo.refs?.findNodeSymbolDefinition(parseNode);
+		definition = pdeInfo.findNodeSymbolDefinition(parseNode);
 	
-	let contextType : symb.Type | undefined;
-	if(pdeInfo.refs)
-		contextType = pdeInfo.refs.findNodeContextTypeDefinition(parseNode);
+	let contextType = pdeInfo.findNodeContextTypeDefinition(parseNode);
 
 	let hover : Hover | null = null;
 
@@ -181,6 +179,6 @@ function typeTypeToString(type: symb.Type | undefined) : string
 
 function extractClassName(fullName:string) : string
 {
-	let lastIndex = fullName.lastIndexOf('.');
+	let lastIndex = fullName.lastIndexOf(psymb.PNamespaceSymbol.delimiter);
 	return fullName.substring(lastIndex+1);
 }

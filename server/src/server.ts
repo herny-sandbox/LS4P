@@ -180,7 +180,7 @@ documents.onDidChangeContent((change: { document: TextDocument; }) => {
 	log.write(`Content changed`, log.severity.EVENT);
 	const pdeName : string = path.basename(sketch.getPathFromUri(change.document.uri));
 	sketch.updatePdeContent(pdeName, change.document.getText(), change.document.lineCount);
-	//tryNotifySketchChanged();
+	tryNotifySketchChanged();
 });
 
 
@@ -198,8 +198,9 @@ async function notifySketchChanged()
 	sketchRefreshInProgress = true
 	await sleep(300);
 
-	sketch.startPreprocessing();
-	diagnostics.checkForSyntaxDiagnostics(globalSettings.maxNumberOfProblems);
+	sketch.rebuildReferences();
+	//sketch.startPreprocessing();
+	//diagnostics.checkForSyntaxDiagnostics(globalSettings.maxNumberOfProblems);
 	//try
 	//{
 		//sketch.build();

@@ -10,6 +10,18 @@ export class PNamespaceSymbol extends NamespaceSymbol
         super(name, inline, attributes);
     }
 
+	public containsName(fullname:string) : boolean
+	{
+		return fullname?.startsWith(this.name);
+	}
+
+	public consumeName(fullname:string|undefined) : string | undefined
+	{
+		if(!fullname)
+			return undefined;
+		return fullname.substring(this.name.length+1);
+	}
+
 	resolveSync(name: string, localOnly?: boolean | undefined): BaseSymbol | undefined 
 	{
 		let thisQualifiedName = this.qualifiedName();

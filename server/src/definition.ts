@@ -29,8 +29,8 @@ export async function scheduleLookUpDefinition(pdeName: string, line: number, po
 	// (means is also a declaration of some kind since we only record declarations)
 	if(scopeAtPos.context === parseNode.parent)
 		definition = scopeAtPos;
-	else if(pdeInfo.refs)
-		definition = pdeInfo.refs.findNodeSymbolDefinition(parseNode);
+	else
+		definition = pdeInfo.findNodeSymbolDefinition(parseNode);
 
 	if(!definition)
 	{

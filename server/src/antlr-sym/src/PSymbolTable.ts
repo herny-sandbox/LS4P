@@ -5,10 +5,12 @@ import {
 	SymbolTable,
 	ScopedSymbol,
 	SymbolTableOptions,
+	SymbolConstructor,
 	IScopedSymbol
 } from "antlr4-c3";
 import { PNamespaceSymbol } from "./PNamespaceSymbol"
 import { PClassSymbol } from "./PClassSymbol"
+import { PLibraryTable } from './PLibraryTable';
 const PClassSymbol_1 = require("./PClassSymbol");
 
 const fakeEmptyDependencies : Set<SymbolTable> = new Set<SymbolTable>();
@@ -22,7 +24,18 @@ export class PSymbolTable extends SymbolTable
 		super(name, options);
 	}
 
-	addImport(importPath: string) { this.imports.add(importPath); }
+	public getDependencies() : PLibraryTable[] 
+	{ 
+		let result : PLibraryTable[] = [];
+		for( let lib of this.dependencies)
+		{
+			if(lib instanceof PLibraryTable)
+				result.push(lib);
+		} 
+
+		return result;
+	}
+	public addImport(importPath: string) { this.imports.add(importPath); }
 
 	getImportShortcut(fullPath : string) : string | undefined
 	{
@@ -31,6 +44,17 @@ export class PSymbolTable extends SymbolTable
 			if( fullPath.startsWith(importPath) )
 				return fullPath.substring(importPath.length+1);
 		}
+	}
+
+	public ensureIsFullPath(name: string) : string
+	{
+		if(this.importDict==null)
+			this.rebuildImportDict();
+
+		let dotIndex = name.lastIndexOf(PNamespaceSymbol.delimiter);
+		if(dotIndex>=0)
+			return name;
+		return this.importDict?.get(name)??name;
 	}
 
 	rebuildImportDict()
@@ -62,6 +86,7 @@ export class PSymbolTable extends SymbolTable
 		let savedDependencies = this.dependencies;
 		this.dependencies = fakeEmptyDependencies;
 		let result = super.resolveSync(name, localOnly);
+		this.dependencies = savedDependencies;
 		if(!result)
 		{
 			let fullName = this.importDict?.get(name)
@@ -74,8 +99,6 @@ export class PSymbolTable extends SymbolTable
 					break;
 			}
 		}
-		this.dependencies = savedDependencies;
 		return result;
     }
-
 }

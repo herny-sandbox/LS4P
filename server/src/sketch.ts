@@ -2,16 +2,17 @@ import * as log from './scripts/syslogs'
 import * as parser from './parser'
 import * as pStandards from './grammer/terms/processingStandards'
 import * as preprocessor from './preprocessing'
-import { ParseTree } from 'antlr4ts/tree/ParseTree'
-//import { TextDocument } from 'vscode-languageserver-textdocument';
-import { ParserRuleContext } from 'antlr4ts';
-import { ProcessingSketchContext, StaticProcessingSketchContext } from "./grammer/ProcessingParser";
+import { ProcessingSketchContext } from "./grammer/ProcessingParser";
 import { SymbolTableVisitor } from './symbols';
-import * as symbols from 'antlr4-c3'
-import { DocumentUri, Range } from 'vscode-languageserver'
-import { ReferencesVisitor } from './references';
-import * as dm from './definitionsMap'
 import * as server from './server'
+import { ParseTree, TerminalNode } from 'antlr4ts/tree'
+import { ParserRuleContext } from 'antlr4ts';
+import * as symb from 'antlr4-c3'
+import * as dm from './definitionsMap'
+import * as lsp from 'vscode-languageserver'
+import { PSymbolTable, PClassSymbol, PUtils } from './antlr-sym';
+import * as javaModules from './javaModules'
+import * as parseUtils from './astutils'
 
 const fs = require('fs')
 const pathM = require('path')
@@ -28,7 +29,8 @@ let tokenArray: [ParseTree, ParseTree][];
 let jrePath:string = ''
 
 let symbolTableVisitor : SymbolTableVisitor;
-
+let mainSymbolTable : PSymbolTable;
+let mainClass : PClassSymbol;
 /** 
  * Map which maps the line in the java file to the line in the .pde file (tab). 
  * Index is the java file number.
@@ -55,31 +57,146 @@ export interface CompileError
 	lineNumber: number,
 	message: string
 }
-export interface PdeContentInfo
-{
-	name : string;
-	rawContent : string;
-	syntaxTokens : ParserRuleContext | null;
-	symbols : symbols.BaseSymbol [];
-	refs : dm.UsageVisitor | null;
 
-	processedTokens: ParserRuleContext[] | null;
-	linesCount : number;
-	linesOffset: number;
-}
-function createPdeContentInfo(name: string, c : string, lines : number)
+export class PdeContentInfo
 {
-	return {
-		name: name, 
-		rawContent: c, 
-		syntaxTokens: null, 
-		symbols: [], 
-		refs : null,
+	public name : string = "";
+	public rawContent : string = "";
+	public syntaxTokens : ParserRuleContext | null = null;
+	public symbols : symb.BaseSymbol [] = [];
+	
+	public requireDeclarationsRebuild : boolean = false;
+	public requireReferencesRebuild : boolean = false;
 
-		processedTokens: null, 
-		linesCount: lines, 
-		linesOffset: 0, 
-	};
+	public diagnostics : lsp.Diagnostic[] = [];
+
+	public processedTokens: ParserRuleContext[] | null = null;
+	public linesCount : number=0;
+	public linesOffset: number=0;
+
+	private definitionDict : Map<TerminalNode, symb.BaseSymbol> = new Map<TerminalNode, symb.BaseSymbol>();
+	private contextTypeDict : Map<ParseTree, symb.Type> = new Map<ParseTree, symb.Type>();
+	private usageMap : Map<symb.BaseSymbol, lsp.Range[]> = new Map<symb.BaseSymbol, lsp.Range[]>();
+
+
+	static createPdeContentInfo(pdeName: string, newContent: string, linesCount: number): PdeContentInfo 
+	{
+		let result = new PdeContentInfo();
+		result.name = pdeName;
+		result.rawContent = newContent;
+		result.linesCount = linesCount;
+		return result;
+	}
+
+	public tryRebuildSymbolDeclarations()
+	{
+		if(this.requireDeclarationsRebuild)
+			this.buildDeclarationSymbols();
+	}
+
+	public buildDeclarationSymbols() 
+	{
+		this.definitionDict.clear();
+		this.contextTypeDict.clear();
+		this.usageMap.clear();
+		this.diagnostics = [];
+
+		this.removeSymbolsFromMainClass();
+
+		//log.write(`building <${this.name}> declaration symbols.`, log.severity.EVENT);
+
+		try
+		{
+			this.syntaxTokens = parser.parse(this.rawContent) as ParserRuleContext;
+		
+			symbolTableVisitor.visitPdeLinked(this);
+			this.requireDeclarationsRebuild = false;
+			this.requireReferencesRebuild = true;
+		}
+		catch(e)
+		{
+			this.notifyCompileError("Unable to parse pde file.\n"+e)
+		}
+	}
+
+	public tryRebuildSymbolReferences()
+	{
+		if(this.requireReferencesRebuild)
+			this.buildSymbolReferences();
+	}
+
+	buildSymbolReferences() 
+	{
+		//log.write(`building <${this.name}> references.`, log.severity.EVENT);
+
+		if(this.syntaxTokens)
+			new dm.UsageVisitor(mainSymbolTable, mainClass, this).visit(this.syntaxTokens);
+
+		this.requireReferencesRebuild = false;
+		let fileUri = sketchInfo.uri+this.name
+		server.connection.sendDiagnostics({uri: fileUri, diagnostics: this.diagnostics})
+	}
+
+	public removeSymbolsFromMainClass()
+	{
+		while(this.symbols.length > 0)
+		{
+			let s : symb.BaseSymbol | undefined = this.symbols.pop();
+			if(s)
+				mainClass.removeSymbol(s);
+		}
+	}
+
+	public getUsageReferencesFor( decl : symb.BaseSymbol ) : lsp.Range[] | undefined
+	{
+		return this.usageMap.get(decl);
+	}
+
+	public findNodeSymbolDefinition( node : TerminalNode )  : symb.BaseSymbol | undefined
+	{
+		return this.definitionDict.get(node);
+	}
+
+	public findNodeContextTypeDefinition(node : ParseTree ) : symb.Type | undefined
+	{
+		return this.contextTypeDict.get(node);
+	}
+
+	public registerDefinition(node: TerminalNode, declaredSymbol : symb.BaseSymbol | undefined) : symb.BaseSymbol | undefined
+	{
+		if(declaredSymbol !== undefined)
+		{
+			this.definitionDict.set(node, declaredSymbol);
+			let lst = this.usageMap.get(declaredSymbol);
+			if(lst === undefined)
+				this.usageMap.set(declaredSymbol, lst = []);
+			lst.push(parseUtils.calcRangeFromParseTree(node));
+		}
+		else
+			this.notifyCompileError(`Unable to find declaration for ${node.text}`, node);
+
+		return declaredSymbol;
+	}
+
+	public registerContextType(node: ParseTree | undefined, ctxType : symb.Type | undefined)
+	{
+		if(!ctxType)
+			return;
+		if(!node)
+			return;
+		this.contextTypeDict.set(node, ctxType);
+	}
+
+	public notifyCompileError(msg:string, node?:ParseTree|undefined)
+	{
+		let diagnostic: lsp.Diagnostic = {
+			severity: lsp.DiagnosticSeverity.Error,
+			range: parseUtils.calcRangeFromParseTree(node),
+			message: msg,
+			source: `pde`
+	   }
+	   this.diagnostics.push(diagnostic);
+	}
 }
 
 export function getRootContext() { return processedSketchTokens; }
@@ -104,34 +221,47 @@ export function initialize(workspacePath: string)
 	}
 	jrePath = `${__dirname.substring(0,__dirname.length-11)}/jre/bin`;
 
-	symbolTableVisitor = new SymbolTableVisitor(name);
-	
-	try 
-	{
-		let mainFileName = sketchInfo.name+'.pde';
-		let mainFileContents : string = fs.readFileSync(sketchInfo.path+mainFileName, 'utf-8');
+	mainSymbolTable = new PSymbolTable("", { allowDuplicateSymbols: true });
 
-		addPdeContent(mainFileName, mainFileContents);
-		//contents.set(mainFileName, mainFileContents);
-	}
-	catch (e) 
-	{
-		log.write("Something went wrong while loading the main file", log.severity.ERROR);
-		log.write(e, log.severity.ERROR);
-		return false;
-	}
+	javaModules.loadDefaultLibraries();
+	javaModules.tryAddDependency(mainSymbolTable, "java.lang");
+	javaModules.tryAddDependency(mainSymbolTable, "processing.core");
+	javaModules.tryAddDependency(mainSymbolTable, "processing.awt");
+	javaModules.tryAddDependency(mainSymbolTable, "processing.data");
+	javaModules.tryAddDependency(mainSymbolTable, "processing.event");
+	javaModules.tryAddDependency(mainSymbolTable, "processing.javafx");
+	javaModules.tryAddDependency(mainSymbolTable, "processing.opengl");
+	mainSymbolTable.addImport("java.util")
+
+	mainClass = new PClassSymbol(name, PUtils.createClassType("processing.core.PApplet"));
+	mainSymbolTable.addSymbol(mainClass);
+
+	symbolTableVisitor = new SymbolTableVisitor(mainSymbolTable, mainClass);
+	
+	// try 
+	// {
+	// 	let mainFileName = sketchInfo.name+'.pde';
+	// 	let mainFileContents : string = fs.readFileSync(sketchInfo.path+mainFileName, 'utf-8');
+
+	// 	addPdeContent(mainFileName, mainFileContents);
+	// 	//contents.set(mainFileName, mainFileContents);
+	// }
+	// catch (e) 
+	// {
+	// 	log.write("Something went wrong while loading the main file", log.severity.ERROR);
+	// 	log.write(e, log.severity.ERROR);
+	// 	return false;
+	// }
+	tryAddPdeFile(sketchInfo.name+'.pde')
 
 	try
 	{
 		let fileNames = fs.readdirSync(sketchInfo.path);
-		fileNames.forEach((fileName : string) =>{
+		for(let fileName of fileNames)
+		{
 			if (fileName.endsWith('.pde') && !fileName.includes(sketchInfo.name))
-			{
-				let tabContents = fs.readFileSync(sketchInfo.path+fileName, 'utf-8');
-				addPdeContent(fileName, tabContents);
-				//contents.set(fileName, tabContents);
-			}
-		});
+				tryAddPdeFile(fileName);
+		}
 	}
 	catch(e) 
 	{
@@ -149,12 +279,17 @@ export function prepareSketch(sketchFolder : string)
 {
 	log.write("prepareSketch Started", log.severity.EVENT);
 	initialize(sketchFolder+'/');
+}
 
-	// let bigCount = 1
-	// for (let [pdeName, pdeContents] of pdeMap) 
-	// 	bigCount = cookTransformDict(pdeName, pdeContents, bigCount);
-	
-	
+export function rebuildReferences()
+{
+	log.write("Rebuild definitions & references BEGIN", log.severity.EVENT);
+	for (let pdeInfo of getAllPdeInfos()) 
+		pdeInfo.tryRebuildSymbolDeclarations();
+
+	for (let pdeInfo of getAllPdeInfos()) 
+		pdeInfo.tryRebuildSymbolReferences();
+	log.write("Rebuild definitions & references ENDED", log.severity.EVENT);
 }
 
 export function startPreprocessing()
@@ -248,11 +383,8 @@ export function getPdeContentFromUri(uri : string) : string | undefined
 
 	let fileName = pathM.basename(uri)
 	if (fileName.endsWith('.pde')) 
-	{
-		let tabContents = fs.readdirSync(sketchInfo.path+fileName, 'utf-8');
-		addPdeContent(fileName, tabContents);
-		//contents.set(fileName, tabContents)
-	}
+		tryAddPdeFile(fileName);
+
 	cookPdeContentOffsets();
 }
 
@@ -640,7 +772,7 @@ function getUriFromPath(path : string) : string
 	return 'file:///'+ tempUri;
 }
 
-export function getUriFromPdeName(pdeName : string) : DocumentUri
+export function getUriFromPdeName(pdeName : string) : lsp.DocumentUri
 {
 	return getUriFromPath(sketchInfo.path+pdeName);
 }
@@ -666,39 +798,36 @@ export function updatePdeContent(pdeName : string, newContent : string, linesCou
 	}
 	else
 	{
-		pdeInfo = createPdeContentInfo(pdeName, newContent, linesCount);
+		pdeInfo = PdeContentInfo.createPdeContentInfo(pdeName, newContent, linesCount);
 		pdeMap.set(pdeName, pdeInfo);
 	}
 
 	if(offsetsChanged)
 		cookPdeContentOffsets();
 
-	pdeInfo.syntaxTokens = parser.parse(newContent) as ParserRuleContext;
-	
-	pdeInfo.refs = new dm.UsageVisitor(symbolTableVisitor.getMainClass());
-	symbolTableVisitor.removeRootSymbols(pdeInfo.symbols);
-	symbolTableVisitor.visitPdeLinked(pdeInfo);
+	pdeInfo.requireDeclarationsRebuild = true;
+	//pdeInfo.buildDeclarationSymbols(newContent);
+	//pdeInfo.buildSymbolReferences();
 
-	pdeInfo.refs.visit(pdeInfo.syntaxTokens);
-
-	let fileUri = sketchInfo.uri+pdeInfo.name
-	server.connection.sendDiagnostics({uri: fileUri, diagnostics: pdeInfo.refs.diagnostics})
-
-	//new ReferencesVisitor(symbolTableVisitor.symbolTable).visitForInfo(pdeInfo.syntaxTokens, pdeInfo.references)
 	return pdeInfo;
+}
+
+function tryAddPdeFile(pdeFilename : string)
+{
+	let fileContent = fs.readFileSync(sketchInfo.path+pdeFilename, 'utf-8');
+	addPdeContent(pdeFilename, fileContent);
 }
 
 function addPdeContent(pdeName : string, newContent : string) : PdeContentInfo
 {
-	log.write(`adding ${pdeName} symbols.`, log.severity.EVENT);
+	//log.write(`loading ${pdeName} content.`, log.severity.EVENT);
 	let	linesCount : number = newContent.split(/\r?\n/).length;
 
-	let result : PdeContentInfo = createPdeContentInfo(pdeName, newContent, linesCount);
+	let result : PdeContentInfo = PdeContentInfo.createPdeContentInfo(pdeName, newContent, linesCount);
 	pdeMap.set(pdeName, result);
-	result.refs = new dm.UsageVisitor(symbolTableVisitor.getMainClass());
-	result.syntaxTokens = parser.parse(newContent) as ParserRuleContext;
-	symbolTableVisitor.visitPdeLinked(result);
-	result.refs.visit(result.syntaxTokens);
-	
+	result.requireDeclarationsRebuild = true;
+	//result.buildDeclarationSymbols(newContent);
+	//result.buildSymbolReferences();
+
 	return result;
 }

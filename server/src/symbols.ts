@@ -8,7 +8,7 @@ import * as log from './scripts/syslogs'
 import { DocumentSymbols } from "./documentSymbols"
 import { PdeContentInfo } from "./sketch";
 import * as psymb from "./antlr-sym"
-import * as javaModules from './javaModules'
+
 import * as parseUtils from './astutils'
 import { ParserRuleContext } from 'antlr4';
 
@@ -28,23 +28,11 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 	protected pdeInfo: PdeContentInfo | undefined;
 	public symbolTable;
 
-	constructor(mainName : string)
+	constructor(symbolTable : psymb.PSymbolTable, mainClass : psymb.PClassSymbol)
 	{
 		super();
-		this.symbolTable = new psymb.PSymbolTable("", { allowDuplicateSymbols: true });
-
-		javaModules.loadDefaultLibraries();
-		javaModules.tryAddDependency(this.symbolTable, "java.lang");
-		javaModules.tryAddDependency(this.symbolTable, "processing.core");
-		javaModules.tryAddDependency(this.symbolTable, "processing.awt");
-		javaModules.tryAddDependency(this.symbolTable, "processing.data");
-		javaModules.tryAddDependency(this.symbolTable, "processing.event");
-		javaModules.tryAddDependency(this.symbolTable, "processing.javafx");
-		javaModules.tryAddDependency(this.symbolTable, "processing.opengl");
-		this.symbolTable.addImport("java.util")
-
-		this.mainClass = new psymb.PClassSymbol(mainName, psymb.PUtils.createClassType("processing.core.PApplet"));
-		this.symbolTable.addSymbol(this.mainClass);
+		this.symbolTable = symbolTable;
+		this.mainClass = mainClass;
 		this.scope = this.mainClass;
 	}
 
@@ -63,16 +51,6 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		for(let i=0; i < pdeInfo.symbols.length; i++ )
 			this.registerPdeName(pdeInfo.symbols[i], pdeInfo.name);
 		return this.defaultResult();
-	}
-
-	public removeRootSymbols(symbs : symb.BaseSymbol[])
-	{
-		while(symbs.length > 0)
-		{
-			let s : symb.BaseSymbol | undefined = symbs.pop();
-			if(s)
-				this.scope.removeSymbol(s);
-		}
 	}
 
 	visitVariableDeclaratorId(ctx: pp.VariableDeclaratorIdContext) : symb.SymbolTable
@@ -142,7 +120,8 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 
 	visitImportDeclaration(ctx: pp.ImportDeclarationContext) : symb.SymbolTable
 	{
-		log.write("Importing "+ctx.qualifiedName().text, log.severity.WARNING);
+		//log.write("Importing "+ctx.qualifiedName().text, log.severity.WARNING);
+		this.symbolTable.addImport(ctx.qualifiedName().text);
 		return this.defaultResult();
 	} 
 
@@ -156,7 +135,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 				modifiers.push(symb.Modifier.Final);
 		}
 
-		let symbolType = parseUtils.evaluateTypeTypeToSymbolType(ctx.typeType(), this.scope);
+		let symbolType = parseUtils.convertTypeTypeToSymbolType(ctx.typeType(), this.scope);
 		this.addTypedSymbol(symbolType, ctx.variableDeclaratorId(), VAR_LOCAL, symb.MemberVisibility.Private, modifiers);
 		return this.defaultResult();
 	}
@@ -171,7 +150,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 				modifiers.push(symb.Modifier.Final);
 		}
 
-		let symbolType = parseUtils.evaluateTypeTypeToSymbolType(ctx.typeType(), this.scope);
+		let symbolType = parseUtils.convertTypeTypeToSymbolType(ctx.typeType(), this.scope);
 		this.addTypedSymbols(symbolType, ctx.variableDeclarators(), VAR_LOCAL, symb.MemberVisibility.Private, modifiers);
 		return this.defaultResult();
 	}
@@ -186,7 +165,25 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 				modifiers.push(symb.Modifier.Final);
 		}
 
-		let symbolType = parseUtils.evaluateTypeTypeToSymbolType(ctx.typeType(), this.scope);
+		let symbolType = parseUtils.convertTypeTypeToSymbolType(ctx.typeType(), this.scope);
+		this.addTypedSymbol(symbolType, ctx.variableDeclaratorId(), VAR_PARAM, symb.MemberVisibility.Private, modifiers);
+		
+		return this.defaultResult();
+	}
+
+	visitLastFormalParameter(ctx: pp.LastFormalParameterContext) : symb.SymbolTable 
+	{
+		let memberModif = ctx.variableModifier();
+		let modifiers : symb.Modifier[] = [];
+		for(let modifCtx of memberModif)
+		{
+			if( modifCtx.FINAL() )
+				modifiers.push(symb.Modifier.Final);
+		}
+		let ctxType = ctx.typeType();
+		let symbolType = parseUtils.convertTypeTypeToSymbolType(ctxType, this.scope);
+		if(ctx.ELLIPSIS() && symbolType)
+			symbolType = psymb.PUtils.createArrayType(symbolType);
 		this.addTypedSymbol(symbolType, ctx.variableDeclaratorId(), VAR_PARAM, symb.MemberVisibility.Private, modifiers);
 		
 		return this.defaultResult();
@@ -195,20 +192,60 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 	tryDeclareField(ctx: pp.FieldDeclarationContext, visibility:symb.MemberVisibility, modifiers:symb.Modifier[]) : symb.SymbolTable
 	{
 		let fileTypeCtx = ctx.typeType();
-		let symbolType = parseUtils.evaluateTypeTypeToSymbolType(fileTypeCtx, this.scope);
+		let symbolType = parseUtils.convertTypeTypeToSymbolType(fileTypeCtx, this.scope);
 		this.addTypedSymbols(symbolType, ctx.variableDeclarators(), VAR_FIELD, visibility, modifiers);
 		return this.defaultResult();
 	}
 
 	visitClassDeclaration(ctx: pp.ClassDeclarationContext) : symb.SymbolTable
 	{
-		let ext : symb.Type = psymb.PUtils.createDefaultObjectType();
-		let impl : symb.Type [] = [];
 		let classIdentifier = ctx.IDENTIFIER();
+		let classBody = ctx.classBody();
+		let typeParams = ctx.typeParameters();
+		let extendsCtx = ctx.typeType();
+		let implemCtx =ctx.typeList();
+
+		let ext : symb.Type;
+		let impl : symb.Type [] = [];
+
+		if(extendsCtx)
+			ext = parseUtils.convertTypeTypeToSymbolType(extendsCtx, this.scope);
+		else
+			ext = psymb.PUtils.createDefaultObjectType();
+
+		ext.kind = symb.TypeKind.Class;
+		if(implemCtx)
+			impl = parseUtils.convertTypeListToSymbolTypeList(implemCtx, this.scope);
+
 		let className = classIdentifier.text;
-		let classSymbol = new psymb.PClassSymbol(className, ext, impl)
-		this.pdeInfo?.refs?.registerDefinition(classIdentifier, classSymbol );
-		return this.addScope(ctx, classSymbol, () => this.visitChildren(ctx.classBody()));
+		let classSymbol = new psymb.PClassSymbol(className, ext, impl);
+		this.pdeInfo?.registerDefinition(classIdentifier, classSymbol );
+
+		if(typeParams)
+		{
+			let params = typeParams.typeParameter();
+			for(let param of params)
+			{
+				let identif = param.IDENTIFIER();
+				let bound = param.typeBound();
+				let formalTypes : symb.Type [] = [];
+
+				if(bound)
+				{
+					let boundTypesCtx = bound.typeType();
+					for(let boundTypeCtx of boundTypesCtx)
+						formalTypes.push( parseUtils.convertTypeTypeToSymbolType(boundTypeCtx, this.scope) );
+				}
+				let typeParam = new psymb.PFormalParamSymbol(identif.text, formalTypes);
+				classSymbol.addSymbol(typeParam);
+			}
+		}
+		// let savedScope = this.scope;
+		// this.scope = classSymbol;
+		// this.visit(classBody);
+		// this.scope = savedScope;
+
+		return this.addScope(ctx, classSymbol, () => this.visitChildren(classBody));
 	}
 
 	visitClassCreatorRest(ctx: pp.ClassCreatorRestContext) : symb.SymbolTable
@@ -253,7 +290,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 			let returnTypeCtx = returnTypeOrVoid.typeType();
 	
 			if(returnTypeCtx)
-				returnType = parseUtils.evaluateTypeTypeToSymbolType(returnTypeCtx, this.scope);
+				returnType = parseUtils.convertTypeTypeToSymbolType(returnTypeCtx, this.scope);
 			else
 				returnType = psymb.PUtils.createVoidType();
 			
@@ -264,7 +301,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		let method : symb.MethodSymbol = new symb.MethodSymbol(signatureName, returnType);
 		this.applyModifiers(method, visibility, modifiers);
 
-		this.pdeInfo?.refs?.registerDefinition(identif, method );
+		this.pdeInfo?.registerDefinition(identif, method );
 		let parentCtx : ParseTree;
 		//if() = identif.parent;
 		// if(identif.parent instanceof ParserRuleContext)
@@ -284,6 +321,9 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 				let paramList = params.formalParameter();
 				for(let param of paramList)
 					this.visitFormalParameter(param);
+				let lastParam = params.lastFormalParameter();
+				if(lastParam)
+					this.visitLastFormalParameter(lastParam);
 			}
 			if(exceptions) // The method symbol is a scope so no need to create another one, we move directly to the body childrens
 				this.visitChildren(exceptions);
@@ -318,10 +358,10 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 			if (typeBound) {
 				let boundedTypes = typeBound.typeType();
 				for (let i = 0; i < boundedTypes.length; i++) {
-					let symbolType = parseUtils.evaluateTypeTypeToSymbolType(boundedTypes[i], this.scope);
+					let symbolType = parseUtils.convertTypeTypeToSymbolType(boundedTypes[i], this.scope);
 					if (!symbolType) {
 						symbolType = psymb.PUtils.createTypeUnknown();
-						this.notifyCompileError("", boundedTypes[i]);
+						this.pdeInfo?.notifyCompileError("", boundedTypes[i]);
 					}
 					boundTypes.push(symbolType);
 				}
@@ -392,7 +432,10 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		catch(e) 
 		{
 			log.write("adding scope failed at: "+this.scope.qualifiedName(":", true, false)+"."+newSymbol.qualifiedName("|", false, false), log.severity.WARNING);
+			
 			log.write(e, log.severity.ERROR);
+			if(e instanceof TypeError)
+				console.error(e.stack);
 		}
 		return this.defaultResult();
 	}
@@ -440,7 +483,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 				symbol = new symb.VariableSymbol(terminalNode.text, null, varType);
 
 			this.applyModifiers(symbol, visibility, modifiers);
-			this.pdeInfo?.refs?.registerDefinition(terminalNode, symbol );
+			this.pdeInfo?.registerDefinition(terminalNode, symbol );
 			this.addChildSymbol(ctx, symbol);
 		}
 		catch(e)
@@ -494,20 +537,5 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		symbol.modifiers.clear();
 		for(let modif of modifiers)
 			symbol.modifiers.add(modif);
-	}
-	notifyCompileError(msg:string, node:ParseTree)
-	{
-		if(!this.pdeInfo || !this.pdeInfo.refs)
-		{
-			console.error(msg);
-			return;
-		}
-		let diagnostic: Diagnostic = {
-			severity: DiagnosticSeverity.Error,
-			range: parseUtils.calcRangeFromParseTree(node),
-			message: msg,
-			source: this.pdeInfo.name+`.pde`
-	   }
-	   this.pdeInfo.refs.diagnostics.push(diagnostic);
 	}
 }

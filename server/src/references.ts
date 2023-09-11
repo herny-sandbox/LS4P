@@ -30,19 +30,16 @@ export async function scheduleLookUpReference(pdeName : string, line : number, p
 
 	if(scopeAtPos.context === parseNode.parent)
 		focusedDecl = scopeAtPos;
-	else if(pdeInfo.refs)
-		focusedDecl = pdeInfo.refs.findNodeSymbolDefinition(parseNode);
+	else
+		focusedDecl = pdeInfo.findNodeSymbolDefinition(parseNode);
 
 	if(!focusedDecl)
 		return null;
 
 	for (let pdeInfo of sketch.getAllPdeInfos()) 
 	{
-		if(!pdeInfo.refs)
-			continue;
-
 		let pdeUri : string = sketch.getUriFromPdeName(pdeInfo.name);
-		let result : Range[] | undefined = pdeInfo.refs.getUsageReferencesFor(focusedDecl)
+		let result : Range[] | undefined = pdeInfo.getUsageReferencesFor(focusedDecl)
 		if(result)
 		{
 			for(let candidate of result)

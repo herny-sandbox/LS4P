@@ -10,7 +10,11 @@ import {
 	ScopedSymbol,
 } from "antlr4-c3";
 import { PClassSymbol} from "./PClassSymbol"
+import { PInterfaceSymbol} from "./PInterfaceSymbol"
 import { PFormalParamSymbol } from "./PFormalParamSymbol"
+import { PSymbolTable } from './PSymbolTable';
+import { PNamespaceSymbol } from './PNamespaceSymbol';
+import { PLibraryTable } from './PLibraryTable';
 
 export enum PPrimitiveKind {
     Unknown = 0,
@@ -265,6 +269,7 @@ export class PUtils
 				}
 			}
 		}
+		//if()
 			
         if (!localOnly && ctx.parent) 
 		{
@@ -274,32 +279,90 @@ export class PUtils
         return result;
 	}
 
+	public static resolveChildSymbolSync<T extends BaseSymbol, Args extends unknown[]>(ctx: ScopedSymbol, t: SymbolConstructor<T, Args>, name?:string): T | undefined
+	{
+		for (const child of ctx.children) 
+		{
+			const isNameMatch = !name || (child.name == name);
+			const isRightType = (child instanceof t );
+			if (isRightType && isNameMatch)
+				return child;
+		}
+		return undefined;
+	}
+
 	public static resolveSymbolSync<T extends BaseSymbol, Args extends unknown[]>(ctx: BaseSymbol, t: SymbolConstructor<T, Args>, name?:string, localOnly?: boolean): T | undefined
 	{
         let result : T | undefined;
 
-		if(ctx instanceof ScopedSymbol)
-		{
-			for (const child of ctx.children) 
-			{
-				const isNameMatch = !name || (child.name == name);
-				const isRightType = (child instanceof t );
-				if (isRightType && isNameMatch)
-					return child;
-			}
-		}
 		if(ctx instanceof PClassSymbol)
 		{
+			const resultSymbol = PUtils.resolveChildSymbolSync(ctx, t, name);
+			if(resultSymbol)
+				return resultSymbol;
 			if(ctx.extends)
 			{
 				let extSymbol : BaseSymbol | undefined = ctx.resolveSync(ctx.extends.name, false);
 				if(extSymbol && extSymbol instanceof PClassSymbol)
 				{
-					const parentSymbol = PUtils.resolveSymbolSync(extSymbol, t, name, true);
-					if(parentSymbol)
-						return parentSymbol;
+					const resultSymbol = PUtils.resolveSymbolSync(extSymbol, t, name, true);
+					if(resultSymbol)
+						return resultSymbol;
 				}
 			}
+		}
+		else if(ctx instanceof PSymbolTable)
+		{
+			const resultSymbol = PUtils.resolveChildSymbolSync(ctx, t, name);
+			if(resultSymbol)
+				return resultSymbol;
+
+			if(name)
+				name = ctx.ensureIsFullPath(name);
+
+			for(let dependency of ctx.getDependencies())
+			{
+				const resultSymbol = PUtils.resolveSymbolSync(dependency, t, name, true);
+				if(resultSymbol)
+					return resultSymbol;
+			}
+		}
+		else if(ctx instanceof PNamespaceSymbol)
+		{
+			if(name && !ctx.containsName(name))
+				return undefined;
+
+			const relativeName = ctx.consumeName(name);
+			const resultSymbol = PUtils.resolveChildSymbolSync(ctx, t, relativeName);
+			if(resultSymbol)
+				return resultSymbol;
+
+			let childNamespaces = PUtils.getAllSymbolsSync(ctx, PNamespaceSymbol, undefined, true);
+			for (const child of childNamespaces) 
+			{
+				const resultSymbol = PUtils.resolveSymbolSync(child, t, relativeName, true);
+				if(resultSymbol)
+					return resultSymbol;
+			}
+		}
+		else if(ctx instanceof PLibraryTable)
+		{
+			const resultSymbol = PUtils.resolveChildSymbolSync(ctx, t, name);
+			if(resultSymbol)
+				return resultSymbol;
+
+			for (const child of ctx.children) 
+			{
+				const resultSymbol = PUtils.resolveSymbolSync(child, t, name, true);
+				if(resultSymbol)
+					return resultSymbol;
+			}
+		}
+		else  if(ctx instanceof ScopedSymbol)
+		{
+			const resultSymbol = PUtils.resolveChildSymbolSync(ctx, t, name);
+			if(resultSymbol)
+				return resultSymbol;
 		}
 			
         if (!localOnly && ctx.parent) 
@@ -309,6 +372,30 @@ export class PUtils
 				return parentSymbol;
        }
         return undefined;
+	}
+
+	public static resolveSymbolFromTypeSync(currentScope: ScopedSymbol, type: Type): ScopedSymbol
+	{
+		let result : ScopedSymbol | undefined;
+		if(type instanceof PClassSymbol)
+			result = type;
+		else if(type instanceof PInterfaceSymbol)
+			result = type;
+		else if(type.kind == TypeKind.Class)
+		{
+			let callContext = PUtils.resolveSymbolSync(currentScope, PClassSymbol, type.name, false )
+			if(callContext && callContext instanceof ScopedSymbol)
+				result = callContext;
+		}
+		else if(type.kind == TypeKind.Interface)
+		{
+			let callContext = PUtils.resolveSymbolSync(currentScope, PInterfaceSymbol, type.name, false )
+			if(callContext && callContext instanceof ScopedSymbol)
+				result = callContext;
+		}
+		if(!result)
+			result = currentScope;
+		return result;
 	}
 
 	public static getFirstParentMatch<T extends BaseSymbol, Args extends unknown[]>(t: SymbolConstructor<T, Args>, ctx: BaseSymbol): T | undefined 

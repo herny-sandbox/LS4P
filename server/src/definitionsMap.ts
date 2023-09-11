@@ -6,6 +6,7 @@ import * as symb from 'antlr4-c3'
 import * as pp from './grammer/ProcessingParser';
 import * as parseUtils from './astutils'
 import * as psymb from "./antlr-sym"
+import { PdeContentInfo } from "./sketch";
 
 let integralTypes = [ 
 	psymb.PPrimitiveKind.Int,
@@ -17,29 +18,55 @@ let integralTypes = [
 export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined> implements ProcessingParserVisitor<symb.Type | undefined>
 {
 	private mainClass : psymb.PClassSymbol;
-	private definitionDict : Map<TerminalNode, symb.BaseSymbol> = new Map<TerminalNode, symb.BaseSymbol>();
-	private contextTypeDict : Map<ParseTree, symb.Type> = new Map<ParseTree, symb.Type>();
-	private usageMap : Map<symb.BaseSymbol, Range[]> = new Map<symb.BaseSymbol, Range[]>();
-	public diagnostics : Diagnostic[] = [];
-	//private contextSymbol : symbols.BaseSymbol | null = null;
-	constructor(mainClass : psymb.PClassSymbol) { super(); this.mainClass = mainClass; }
+	private pdeInfo: PdeContentInfo;
+	private symbolTable : psymb.PSymbolTable;
+
+	constructor(symbolTable : psymb.PSymbolTable, mainClass : psymb.PClassSymbol, pdeInfo: PdeContentInfo) 
+	{ 
+		super();
+		this.symbolTable = symbolTable;
+		this.pdeInfo = pdeInfo;
+		this.mainClass = mainClass; 
+	}
 	protected defaultResult(): symb.Type | undefined { return this.mainClass; }
 
-	public getUsageReferencesFor( decl : symb.BaseSymbol ) : Range[] | undefined
+	visitClassDeclaration(ctx: pp.ClassDeclarationContext) : symb.Type | undefined
 	{
-		return this.usageMap.get(decl);
-	}
+		let classIdentifier = ctx.IDENTIFIER();
+		let classBody = ctx.classBody();
+		let typeParams = ctx.typeParameters();
+		let extendsCtx = ctx.typeType();
+		let implemCtx =ctx.typeList();
 
-	public findNodeSymbolDefinition( node : TerminalNode )  : symb.BaseSymbol | undefined
-	{
-		return this.definitionDict.get(node);
-	}
+		if(extendsCtx)
+			this.registerDefinitionForDeclarationType(extendsCtx);
+		if(implemCtx)
+		{
+			let typesCtx = implemCtx.typeType();
+			for(let i=0; i<typesCtx.length; i++)
+				this.registerDefinitionForDeclarationType(typesCtx[i]);
+		}
+		if(typeParams)
+		{
+			let params = typeParams.typeParameter();
+			for(let param of params)
+			{
+				let identif = param.IDENTIFIER();
+				let bound = param.typeBound();
+				let formalTypes : symb.Type [] = [];
 
-	public findNodeContextTypeDefinition(node : ParseTree ) : symb.Type | undefined
-	{
-		return this.contextTypeDict.get(node);
+				if(bound)
+				{
+					let boundTypesCtx = bound.typeType();
+					
+					for(let boundTypeCtx of boundTypesCtx)
+						this.registerDefinitionForDeclarationType(boundTypeCtx);
+				}
+			}
+		}
+		this.visit(classBody);
+		return;
 	}
-
 	visitEnhancedForControl(ctx: pp.EnhancedForControlContext) : symb.Type | undefined
 	{
 		this.registerDefinitionForDeclarationType(ctx.typeType());
@@ -63,9 +90,9 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 			{
 				let expressionResult = this.visitExpression(comparerExpression);
 				if(expressionResult && !psymb.PUtils.comparePrimitiveKind(expressionResult, psymb.PPrimitiveKind.Boolean) )
-					this.notifyCompileError(`Incompatible types. Expression should be boolean (${expressionResult.name})`, comparerExpression)
+					this.pdeInfo.notifyCompileError(`Incompatible types. Expression should be boolean (${expressionResult.name})`, comparerExpression)
 				else if(!expressionResult)
-					this.notifyCompileError(`Unable to evaluate expression (${comparerExpression.text})`, comparerExpression)
+					this.pdeInfo.notifyCompileError(`Unable to evaluate expression (${comparerExpression.text})`, comparerExpression)
 			}
 			if(updateExpression)
 				this.visitChildren(updateExpression);
@@ -111,7 +138,7 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 	{
 		const line = ctx.start.line;
 		const pos = ctx.start.charPositionInLine;
-		let currentScope : symb.ScopedSymbol | undefined =  parseUtils.findScopeAtPositionFromSymbols(this.mainClass.children, line, pos+1);
+		let currentScope : symb.ScopedSymbol | undefined =  parseUtils.findScopeAtPositionFromSymbols(this.pdeInfo.symbols, line, pos+1);
 		if(!currentScope || !currentScope.context)
 			return;
 		return this.visitAndRegisterExpression(ctx, currentScope);
@@ -144,7 +171,7 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 
 			if(!symbType)
 			{
-				this.notifyCompileError("Unable to evaluate expression: "+expressions[0].text, expressions[0]);
+				this.pdeInfo.notifyCompileError("Unable to evaluate expression: "+expressions[0].text, expressions[0]);
 				symbType = psymb.PUtils.createTypeUnknown();
 			}
 
@@ -189,38 +216,48 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 
 				else if(ctx.EQUAL() )										// expression '==' expression	
 				{
+					let isComparingInterf = results[0].kind == symb.TypeKind.Interface || results[1].kind == symb.TypeKind.Interface;
 					let isComparingClasses = results[0].kind == symb.TypeKind.Class || results[1].kind == symb.TypeKind.Class;
+					let isComparingArray = results[0].kind == symb.TypeKind.Array || results[1].kind == symb.TypeKind.Array;
 					let isComparingAgainstNull = results[0].name == "null" || results[1].name == "null";
-					if( results[0].kind != results[1].kind && !(isComparingClasses && isComparingAgainstNull) )
-						this.notifyCompileError(`Incompatible types in expression (${results[0].name}) == (${results[1].name})`, expressions[0])
+
+					let isComparingObjectNull =  (isComparingInterf || isComparingClasses || isComparingArray) && isComparingAgainstNull;
+					if( results[0].kind != results[1].kind && !isComparingObjectNull )
+						this.pdeInfo.notifyCompileError(`Incompatible types in expression (${results[0].name}) == (${results[1].name})`, expressions[0])
 					return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Boolean);
 				}
 				else if(ctx.NOTEQUAL())										// expression '!=' expression	
 				{
-					if( results[0].kind != results[1].kind )
-						this.notifyCompileError(`Incompatible types in expression (${results[0].name}) != (${results[1].name})`, expressions[0])
+					let isComparingInterf = results[0].kind == symb.TypeKind.Interface || results[1].kind == symb.TypeKind.Interface;
+					let isComparingClasses = results[0].kind == symb.TypeKind.Class || results[1].kind == symb.TypeKind.Class;
+					let isComparingArray = results[0].kind == symb.TypeKind.Array || results[1].kind == symb.TypeKind.Array;
+					let isComparingAgainstNull = results[0].name == "null" || results[1].name == "null";
+
+					let isComparingObjectNull =  (isComparingInterf || isComparingClasses || isComparingArray) && isComparingAgainstNull;
+					if( results[0].kind != results[1].kind && !isComparingObjectNull )
+						this.pdeInfo.notifyCompileError(`Incompatible types in expression (${results[0].name}) != (${results[1].name})`, expressions[0])
 					return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Boolean);
 				}
 				else if(ctx.LE() || ctx.GE() )								// expression ('<='|'>=') expression
 				{
 					if( results[0].kind != results[1].kind )				
-						this.notifyCompileError(`Incompatible types in expression: possible lossy conversion (${results[0].name})`, expressions[0])
+						this.pdeInfo.notifyCompileError(`Incompatible types in expression: possible lossy conversion (${results[0].name})`, expressions[0])
 					return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Boolean);
 				}
 				else if(ctx.AND() )											// expression '&&' expression
 				{
-					if( psymb.PUtils.comparePrimitiveKind(results[0], psymb.PPrimitiveKind.Boolean) )				
-						this.notifyCompileError(`Incompatible types. Expression should be boolean (${results[0].name})`, expressions[0])
-					if( psymb.PUtils.comparePrimitiveKind(results[1], psymb.PPrimitiveKind.Boolean) )				
-						this.notifyCompileError(`Incompatible types. Expression should be boolean (${results[1].name})`, expressions[1])
+					if( !psymb.PUtils.comparePrimitiveKind(results[0], psymb.PPrimitiveKind.Boolean) )				
+						this.pdeInfo.notifyCompileError(`Incompatible types. Expression should be boolean (${results[0].name})`, expressions[0])
+					if( !psymb.PUtils.comparePrimitiveKind(results[1], psymb.PPrimitiveKind.Boolean) )				
+						this.pdeInfo.notifyCompileError(`Incompatible types. Expression should be boolean (${results[1].name})`, expressions[1])
 					return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Boolean);
 				}
 				else if(ctx.OR() )											// expression '||' expression
 				{
-					if( psymb.PUtils.comparePrimitiveKind(results[0], psymb.PPrimitiveKind.Boolean) )				
-						this.notifyCompileError(`Incompatible types. Expression should be boolean (${results[0].name})`, expressions[0])
-					if( psymb.PUtils.comparePrimitiveKind(results[1], psymb.PPrimitiveKind.Boolean) )				
-						this.notifyCompileError(`Incompatible types. Expression should be boolean (${results[1].name})`, expressions[1])
+					if( !psymb.PUtils.comparePrimitiveKind(results[0], psymb.PPrimitiveKind.Boolean) )				
+						this.pdeInfo.notifyCompileError(`Incompatible types. Expression should be boolean (${results[0].name})`, expressions[0])
+					if( !psymb.PUtils.comparePrimitiveKind(results[1], psymb.PPrimitiveKind.Boolean) )				
+						this.pdeInfo.notifyCompileError(`Incompatible types. Expression should be boolean (${results[1].name})`, expressions[1])
 					return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Boolean);
 				}
 				else if(ctx.ADD() )											// expression '+' expression
@@ -242,33 +279,33 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 				else if(ctx.BITAND())										// expression '&' expression
 				{
 					if( !this.validateExpressionAsPrimitiveType(results[0], integralTypes) )
-						this.notifyCompileError(`Incompatible type in expression (${results[0].name})`, expressions[0])
+						this.pdeInfo.notifyCompileError(`Incompatible type in expression (${results[0].name})`, expressions[0])
 					if( !this.validateExpressionAsPrimitiveType(results[1], integralTypes) )
-						this.notifyCompileError(`Incompatible type in expression (${results[1].name})`, expressions[1])
+						this.pdeInfo.notifyCompileError(`Incompatible type in expression (${results[1].name})`, expressions[1])
 					return results[0];
 				}
 				else if(ctx.BITOR())										// expression '|' expression
 				{
 					if( !this.validateExpressionAsPrimitiveType(results[0], integralTypes) )
-						this.notifyCompileError(`Incompatible type in expression (${results[0].name})`, expressions[0])
+						this.pdeInfo.notifyCompileError(`Incompatible type in expression (${results[0].name})`, expressions[0])
 					if( !this.validateExpressionAsPrimitiveType(results[1], integralTypes) )
-						this.notifyCompileError(`Incompatible type in expression (${results[1].name})`, expressions[1])
+						this.pdeInfo.notifyCompileError(`Incompatible type in expression (${results[1].name})`, expressions[1])
 					return results[0];
 				}
 				else if(ctx.CARET())										// expression '^' expression
 				{
 					if( !this.validateExpressionAsPrimitiveType(results[0], integralTypes) )
-						this.notifyCompileError(`Incompatible type in expression (${results[0].name})`, expressions[0])
+						this.pdeInfo.notifyCompileError(`Incompatible type in expression (${results[0].name})`, expressions[0])
 					if( !this.validateExpressionAsPrimitiveType(results[1], integralTypes) )
-						this.notifyCompileError(`Incompatible type in expression (${results[1].name})`, expressions[1])
+						this.pdeInfo.notifyCompileError(`Incompatible type in expression (${results[1].name})`, expressions[1])
 					return results[0];
 				}
 				else if(ctx.MOD())											// expression '%' expression
 				{
 					if( !this.validateExpressionAsPrimitiveType(results[0], integralTypes) )
-						this.notifyCompileError(`Incompatible type in expression (${results[0].name})`, expressions[0])
+						this.pdeInfo.notifyCompileError(`Incompatible type in expression (${results[0].name})`, expressions[0])
 					if( !this.validateExpressionAsPrimitiveType(results[1], integralTypes) )
-						this.notifyCompileError(`Incompatible type in expression (${results[1].name})`, expressions[1])
+						this.pdeInfo.notifyCompileError(`Incompatible type in expression (${results[1].name})`, expressions[1])
 					return results[0];
 				}
 				else if(ctx.ADD_ASSIGN())									// expression '+=' expression
@@ -299,22 +336,22 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 				if(ctx.BANG())												// '!' expression
 				{
 					if( !psymb.PUtils.comparePrimitiveKind(results[0], psymb.PPrimitiveKind.Boolean) )
-						this.notifyCompileError(`Incompatible type. Expression should be of boolean type (${results[0].name})`, expressions[0])
+						this.pdeInfo.notifyCompileError(`Incompatible type. Expression should be of boolean type (${results[0].name})`, expressions[0])
 				}
 				else if(ctx.TILDE())										// '~' expression
 				{
 					if( !this.validateExpressionAsPrimitiveType(results[0], integralTypes) )
-						this.notifyCompileError(`Incompatible type in expression: possible lossy conversion (${results[0].name})`, expressions[0])
+						this.pdeInfo.notifyCompileError(`Incompatible type in expression: possible lossy conversion (${results[0].name})`, expressions[0])
 				}
 				else if(ctx.INC())										// '~' expression
 				{
 					if( !this.validateExpressionAsPrimitiveType(results[0], integralTypes) )
-						this.notifyCompileError(`Incompatible type using operator ++ (${results[0].name})`, expressions[0])
+						this.pdeInfo.notifyCompileError(`Incompatible type using operator ++ (${results[0].name})`, expressions[0])
 				}
 				else if(ctx.DEC())										// '~' expression
 				{
 					if( !this.validateExpressionAsPrimitiveType(results[0], integralTypes) )
-						this.notifyCompileError(`Incompatible types using operator -- (${results[0].name})`, expressions[0])
+						this.pdeInfo.notifyCompileError(`Incompatible types using operator -- (${results[0].name})`, expressions[0])
 				}
 			}
 		}
@@ -324,55 +361,44 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 
 	visitAndRegisterCreator(creator: pp.CreatorContext, currentScope: symb.ScopedSymbol) : symb.Type | undefined
 	{
+		let result : symb.Type | undefined;
 		let createdName : pp.CreatedNameContext | undefined = creator.createdName();
 		let typeArguments = createdName.typeArgumentsOrDiamond();
 		let identifiers = createdName.IDENTIFIER();
 		let classCreator : pp.ClassCreatorRestContext | undefined = creator.classCreatorRest();
 		let arrayCreator : pp.ArrayCreatorRestContext | undefined = creator.arrayCreatorRest();
-		if( classCreator && identifiers.length > 0 )
+		if( classCreator )
 		{
-			let className =  identifiers[0];
-			let genericClassSymbol = this.resolveSymbolType(className.text, currentScope);
-			this.registerDefinition(identifiers[0], genericClassSymbol);
+			let className =  parseUtils.buildFullClassName( identifiers );
+			let genericClassSymbol = this.resolveSymbolType(className, currentScope);
+			this.pdeInfo.registerDefinition(identifiers[identifiers.length-1], genericClassSymbol);
+			let genericParams : symb.Type [] = []; 
+
 
 			let paramsList : pp.ExpressionListContext | undefined;
 			let args : pp.TypeArgumentContext [] = typeArguments[0]?.typeArguments()?.typeArgument() ?? [];
-			for(let i : number = 0; i < args.length; i++ )
-			{
-				let genericType = args[i].typeType();
-				if(genericType)
-				{
-					let classType = genericType.classOrInterfaceType();
-					if(classType)
-					{
-						let identifiers = classType.IDENTIFIER();
-						if(identifiers.length == 1)
-						{
-							let genericTypeSymbol = this.resolveSymbolType(genericType.text, currentScope);
-							this.registerDefinition(identifiers[0], genericTypeSymbol);
-						}
-					}					
-				}
-			
-			}
+
+			parseUtils.buildTypeArgumentsToSymbolTypes(args , genericParams, currentScope);
+
+			result = psymb.PUtils.createClassType(className, genericParams);
 		}
 		else if( arrayCreator )
 		{
 			//result = symbolContainer;
 		}
-		return;
+		return result;
 	}
 
-	visitTerminal(node: TerminalNode) : symb.Type | undefined
-	{
-		if(node.symbol.type == pp.ProcessingParser.IDENTIFIER)
-		{
-			let focusedDecl : symb.BaseSymbol | undefined = this.findNodeSymbolDefinition(node);
-			if(focusedDecl===undefined)
-				this.registerDefinition(node, focusedDecl);
-			return;
-		}
-	}
+	// visitTerminal(node: TerminalNode) : symb.Type | undefined
+	// {
+	// 	if(node.symbol.type == pp.ProcessingParser.IDENTIFIER)
+	// 	{
+	// 		let focusedDecl : symb.BaseSymbol | undefined = this.pdeInfo.findNodeSymbolDefinition(node);
+	// 		if(focusedDecl===undefined)
+	// 			this.pdeInfo.registerDefinition(node, focusedDecl);
+	// 		return;
+	// 	}
+	// }
 
 	visitAndRegisterMethodCall(expression: pp.ExpressionContext|undefined, dot:TerminalNode|undefined, methodCall: pp.MethodCallContext, currentScope: symb.ScopedSymbol) : symb.Type | undefined
 	{
@@ -385,17 +411,12 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 		if(expression)
 		{
 			expressionType = this.visitAndRegisterExpression(expression, currentScope);
-			this.registerContextType(expression, expressionType);
-			this.registerContextType(dot, expressionType);
-			this.registerContextType(methodID, expressionType);
+			this.pdeInfo.registerContextType(expression, expressionType);
+			this.pdeInfo.registerContextType(dot, expressionType);
+			this.pdeInfo.registerContextType(methodID, expressionType);
 
 			if(expressionType)
-			{
-				//psymb.PUtils.resolveByName(expressionType.name, currentScope,  )
-				let scopeResult = currentScope.resolveSync(expressionType.name, false);
-				if(scopeResult && scopeResult instanceof symb.ScopedSymbol)
-					callScope = scopeResult;
-			}
+				callScope = psymb.PUtils.resolveSymbolFromTypeSync(currentScope, expressionType);
 		}
 
 		if(methodID)
@@ -409,12 +430,18 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 
 			let expressionParams = this.visitAndRegisterExpressionList(methodCall.expressionList(), currentScope);
 			let candidates = psymb.PUtils.getAllSymbolsSync(callScope, symb.MethodSymbol, methodName, localOnly);
+			let match : symb.MethodSymbol | undefined;
 
-			let match = this.checkCandidatesMatch(callContext, candidates, expressionParams, currentScope, true);
-			if(!match)
-				match = this.checkCandidatesMatch(callContext, candidates, expressionParams, currentScope, false);
+			if(candidates.length == 1)
+				match = candidates[0];
+			else if(candidates.length > 1)
+			{
+				match = this.checkCandidatesMatch(callContext, candidates, expressionParams, currentScope, true);
+				if(!match)
+					match = this.checkCandidatesMatch(callContext, candidates, expressionParams, currentScope, false);
+			}
 			
-			this.registerDefinition(methodID, match);
+			this.pdeInfo.registerDefinition(methodID, match);
 			if(!match)
 				return;
 
@@ -456,17 +483,37 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 		let thisCtx = primary.THIS();
 		let identif = primary.IDENTIFIER();
 		let literal = primary.literal();
+		let expression = primary.expression();
+		let superExpr = primary.SUPER();
 
-		if(thisCtx)
+		if(expression)
+			return this.visitAndRegisterExpression(expression, currentScope);
+
+		else if(thisCtx)
 		{
 			let result = this.findFirstClassOrInterfaceUp(currentScope)
-			this.registerDefinition(thisCtx, result);
+			this.pdeInfo.registerDefinition(thisCtx, result);
 			return result;
 		}
-		else if(identif)
-			return this.visitAndRegisterVariable(undefined, undefined, identif, currentScope);
+		if(superExpr)
+		{
+			let result = this.findFirstClassOrInterfaceUp(currentScope);
+			if(result && result instanceof psymb.PClassSymbol)
+			{
+				let extSymb;
+				if(result.extends)
+					extSymb = psymb.PUtils.resolveSymbolSync(currentScope, psymb.PClassSymbol, result.extends.name)
+
+				this.pdeInfo.registerDefinition(superExpr, result);
+				return result;
+			}
+				
+		}
 		else if(literal)
 			return this.visitAndRegisterLiteral(literal, currentScope);
+
+		else if(identif)
+			return this.visitAndRegisterVariable(undefined, undefined, identif, currentScope);
 
 	}
 
@@ -496,23 +543,21 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 		if(expression)
 		{
 			expressionType = this.visitAndRegisterExpression(expression, currentScope);
-			this.registerContextType(expression, expressionType);
-			this.registerContextType(dot, expressionType);
-			this.registerContextType(identifier, expressionType);
+			this.pdeInfo.registerContextType(expression, expressionType);
+			this.pdeInfo.registerContextType(dot, expressionType);
+			this.pdeInfo.registerContextType(identifier, expressionType);
 			if(expressionType)
 			{
 				// A very special built-in case
 				if(expressionType.kind == symb.TypeKind.Array && varName == 'length')
 					return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Int);
 				
-				let callContext = currentScope.resolveSync(expressionType.name, false);
-				if(callContext && callContext instanceof symb.ScopedSymbol)
-					varScope = callContext;
+				varScope = psymb.PUtils.resolveSymbolFromTypeSync(currentScope, expressionType);
 			}
 		}
 		let localOnly = varScope != currentScope;
 		let res : symb.BaseSymbol | undefined = varScope.resolveSync(varName, localOnly);
-		this.registerDefinition(identifier, res);
+		this.pdeInfo.registerDefinition(identifier, res);
 		if(res instanceof psymb.PClassSymbol )
 			return res;
 		if(res instanceof psymb.PInterfaceSymbol )
@@ -532,6 +577,8 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 
 			finalCandidates.push(candidate)
 		}
+		if(perfectMatch && finalCandidates.length > 0)
+			return finalCandidates[0];
 		return finalCandidates.length == 1 ? finalCandidates[0] : undefined
 	}
 
@@ -563,14 +610,17 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 			return false;
 
 		let isSameKind = symbolType.kind == expressionType.kind;
-		let isSameName = symbolType.name == expressionType.name;
-		if(perfectMatch && (!isSameKind || !isSameName)  )
+		// Special case:
+		if( (symbolType.name == "Integer" && expressionType.name=="int") || (symbolType.name == "int" && expressionType.name=="Integer") )
+			return true;
+
+		if(!isSameKind)
 			return false;
 
-		if(symbolType.kind == symb.TypeKind.Class)
+		if(symbolType.kind == symb.TypeKind.Class || symbolType.kind == symb.TypeKind.Interface )
 			return this.compareClassTypes(symbolType, expressionType, symbolContext, perfectMatch);
 		else
-			return this.comparePrimitiveNames(expressionType.name, symbolType.name, perfectMatch)
+			return this.comparePrimitiveNames(expressionType.name, symbolType.name, perfectMatch);
 	}
 
 	comparePrimitiveNames(expressionTypeName: string, requiredName:string, perfectMatch:boolean=false) : boolean
@@ -594,17 +644,28 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 
 	compareClassTypes(symbolType : symb.Type, expressionType : symb.Type, symbolContext : symb.BaseSymbol, perfectMatch:boolean=false) : boolean
 	{
-		if(expressionType.name == symbolType.name)
-			return true;
-		// If the types doesn't match and we are seeking for a perfect match then just fail
-		if(perfectMatch)
-			return false;
+		let requiredName = this.symbolTable.ensureIsFullPath(symbolType.name);
+		let expressionName = this.symbolTable.ensureIsFullPath(expressionType.name);
 
-		//if perfectMatch is not required then we still need to check with the class inheritance
-		let classDef = symbolContext.resolveSync(expressionType.name, false);
-		if(!classDef || !(classDef instanceof psymb.PClassSymbol))
-		 	return false;
-		return this.checkClassInheritanceType(symbolType, classDef, symbolContext, perfectMatch);
+		// If the types doesn't match and we are seeking for a perfect match then just fail
+		if(perfectMatch )
+		{
+			if(requiredName != expressionName)
+				return false;
+			return true;
+		}
+		else
+		{
+			if(requiredName == expressionName)
+				return true;
+
+			//if perfectMatch is not required then we still need to check with the class inheritance
+			let classDef = symbolContext.resolveSync(expressionType.name, false);
+			if(!classDef || !(classDef instanceof psymb.PClassSymbol))
+				return false;
+			return this.checkClassInheritanceType(symbolType, classDef, symbolContext, perfectMatch);
+		}
+
 	}
 
 	checkClassInheritanceType(symbolType : symb.Type, classSymbol:psymb.PClassSymbol, symbolContext : symb.BaseSymbol, perfectMatch:boolean=false) : boolean
@@ -653,7 +714,7 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 	{
 		const line = typeCtx.start.line;
 		const pos = typeCtx.start.charPositionInLine;
-		let currentScope : symb.BaseSymbol | undefined =  parseUtils.findScopeAtPositionFromSymbols(this.mainClass.children, line, pos+1);
+		let currentScope : symb.BaseSymbol | undefined =  parseUtils.findScopeAtPositionFromSymbols(this.pdeInfo.symbols, line, pos+1);
 		if(!currentScope || !currentScope.context)
 			return;
 
@@ -667,12 +728,11 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 		{
 			let identifiers = classOrInterface.IDENTIFIER();
 			let typeArgumentsCtx = classOrInterface.typeArguments();
-			if(	identifiers.length > 0)
-			{
-				let identif = identifiers[0];
-				let typeDefinition = this.resolveSymbolType(identif.text, currentScope);
-				this.registerDefinition(identif, typeDefinition );
-			}
+			let className = parseUtils.buildFullClassName(identifiers);
+
+			let typeDefinition = this.resolveSymbolType(className, currentScope);
+			this.pdeInfo.registerDefinition(identifiers[identifiers.length-1], typeDefinition );
+
 			for(let i=0; i < typeArgumentsCtx.length; i++)
 			{
 				let args = typeArgumentsCtx[0].typeArgument();
@@ -685,30 +745,6 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 		}
 	}
 
-	public registerDefinition(node: TerminalNode, declaredSymbol : symb.BaseSymbol | undefined) : symb.BaseSymbol | undefined
-	{
-		if(declaredSymbol !== undefined)
-		{
-			this.definitionDict.set(node, declaredSymbol);
-			let lst = this.usageMap.get(declaredSymbol);
-			if(lst === undefined)
-				this.usageMap.set(declaredSymbol, lst = []);
-			lst.push(this.getRange(node));
-		}
-		else
-			this.notifyCompileError(`Unable to find declaration for ${node.text}`, node);
-
-		return declaredSymbol;
-	}
-
-	public registerContextType(node: ParseTree | undefined, ctxType : symb.Type | undefined)
-	{
-		if(!ctxType)
-			return;
-		if(!node)
-			return;
-		this.contextTypeDict.set(node, ctxType);
-	}
 
 	validateExpressionAsPrimitiveType(type: symb.Type, typesToCheck:psymb.PPrimitiveKind[]) : boolean
 	{
@@ -720,14 +756,5 @@ export class UsageVisitor extends AbstractParseTreeVisitor<symb.Type | undefined
 		return false;
 	}
 
-	notifyCompileError(msg:string, node:ParseTree)
-	{
-		let diagnostic: Diagnostic = {
-			severity: DiagnosticSeverity.Error,
-			range: parseUtils.calcRangeFromParseTree(node),
-			message: msg,
-			source: `pde`
-	   }
-	   this.diagnostics.push(diagnostic);
-	}
+
 }

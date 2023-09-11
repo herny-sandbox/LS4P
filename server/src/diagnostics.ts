@@ -4,7 +4,6 @@ import { Diagnostic, DiagnosticSeverity, PublishDiagnosticsParams,} from 'vscode
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { ParseDiagnosticError, getSyntaxDiagnostics } from "./grammer/ProcessingErrorListener";
 
-
 const fs = require('fs');
 
 let syntaxDiagnostics = new Map<string,  Diagnostic[]>()
