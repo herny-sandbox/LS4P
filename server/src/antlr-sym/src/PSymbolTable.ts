@@ -1,23 +1,22 @@
 import { 
-	Type, 
-	ReferenceKind, 
 	BaseSymbol,
 	SymbolTable,
 	ScopedSymbol,
 	SymbolTableOptions,
-	SymbolConstructor,
-	IScopedSymbol
 } from "antlr4-c3";
 import { PNamespaceSymbol } from "./PNamespaceSymbol"
-import { PClassSymbol } from "./PClassSymbol"
+import { PComponentSymbol } from "./PComponentSymbol"
 import { PLibraryTable } from './PLibraryTable';
+import { PUtils } from './PUtils';
+
 const PClassSymbol_1 = require("./PClassSymbol");
 
 const fakeEmptyDependencies : Set<SymbolTable> = new Set<SymbolTable>();
 export class PSymbolTable extends SymbolTable 
 {
-	protected imports : Set<string> = new Set<string>();
-	protected importDict : Map<string, string> | null = null;
+	//protected imports : Set<string> = new Set<string>();
+	protected importDict : Map<string, string> = new Map<string, string>();
+
 
 	constructor(name: string, options: SymbolTableOptions)
 	{
@@ -35,53 +34,54 @@ export class PSymbolTable extends SymbolTable
 
 		return result;
 	}
-	public addImport(importPath: string) { this.imports.add(importPath); }
-
-	getImportShortcut(fullPath : string) : string | undefined
-	{
-		for(let importPath of this.imports)
+	public addImport(importPath: string, allMembers: boolean) 
+	{ 
+		if(allMembers)
 		{
-			if( fullPath.startsWith(importPath) )
-				return fullPath.substring(importPath.length+1);
-		}
-	}
-
-	public ensureIsFullPath(name: string) : string
-	{
-		if(this.importDict==null)
-			this.rebuildImportDict();
-
-		let dotIndex = name.lastIndexOf(PNamespaceSymbol.delimiter);
-		if(dotIndex>=0)
-			return name;
-		return this.importDict?.get(name)??name;
-	}
-
-	rebuildImportDict()
-	{
-		this.importDict = new Map<string, string>();
-
-		for(let dependency of this.dependencies)
-		{
-			let result = dependency.getAllSymbolsSync(PClassSymbol_1.PClassSymbol, false);
-			for(let classSymbol of result)
+			for(let dependency of this.dependencies)
 			{
-				if(classSymbol instanceof ScopedSymbol)
+				if(dependency instanceof PLibraryTable)
 				{
-					let fullName = classSymbol.qualifiedName(PNamespaceSymbol.delimiter, true, false);
-					let importShortcut = this.getImportShortcut(fullName);
-					if(importShortcut)
-						this.importDict.set(importShortcut, fullName);
+					let result = dependency.resolveComponent(PComponentSymbol, importPath);
+					let components = PUtils.getAllDirectChildSymbolSync(result, PComponentSymbol, undefined);
+					for(let component of components)
+					{
+						let fullName = component.qualifiedName(PNamespaceSymbol.delimiter, true, false);
+						this.addImportAlias(component.name, fullName);
+					}
 				}
+			}
+		}
+		else
+		{
+			let lastDotIndex = importPath.lastIndexOf(PNamespaceSymbol.delimiter);
+			if(lastDotIndex >= 0)
+			{
+				let className = importPath.substring(lastDotIndex+1);
+				this.addImportAlias(className, importPath);
 			}
 		}
 	}
 
+	private addImportAlias(name:string, fullpath:string)
+	{
+		this.importDict.set(name, fullpath);
+	}
+
+	public ensureIsFullPath(name: string) : string
+	{
+		let dotIndex = name.indexOf(PNamespaceSymbol.delimiter);
+		if(dotIndex>=0)
+		{
+			let firstPart = name.substring(0, dotIndex);
+			return this.importDict.get(firstPart)??name;
+		}
+			
+		return this.importDict.get(name)??name;
+	}
+
     resolveSync(name:string, localOnly = false) : BaseSymbol | undefined
 	{
-		if(this.importDict==null)
-			this.rebuildImportDict();
-
 		// Little hack so the super class doesn't try to check in the dependencies tables
 		let savedDependencies = this.dependencies;
 		this.dependencies = fakeEmptyDependencies;
@@ -89,7 +89,7 @@ export class PSymbolTable extends SymbolTable
 		this.dependencies = savedDependencies;
 		if(!result)
 		{
-			let fullName = this.importDict?.get(name)
+			let fullName = this.ensureIsFullPath(name)
 			if(!fullName)
 				fullName = name;
 			for(let dependency of savedDependencies)

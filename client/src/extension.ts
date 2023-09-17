@@ -11,13 +11,14 @@ import {
 
 let client: LanguageClient;
 
-export function activate(context: vscode.ExtensionContext) {
+export function activate(context: vscode.ExtensionContext) 
+{
 	
 	let serverModule = context.asAbsolutePath(
 		path.join('server', 'out', 'server.js')
 	);
 	
-	let debugOptions = { execArgv: ['--nolazy', '--inspect=6009'] };
+	let debugOptions = { execArgv: ['--nolazy', '--debug-brk=6009'] };
 
 	let serverOptions: ServerOptions = {
 		run: { module: serverModule, transport: TransportKind.ipc },
@@ -28,9 +29,14 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	};
 
+	const config = vscode.workspace.getConfiguration('processing-language-server');
+	const userProcessingPath: string | undefined = config.get('processingPath');
 	
 	let clientOptions: LanguageClientOptions = {
 		documentSelector: [{ scheme: 'file', language: 'Processing' }],
+		initializationOptions: {
+			processingPath: userProcessingPath, // Pass your string here
+		},
 		synchronize: {
 			fileEvents: vscode.workspace.createFileSystemWatcher('**/.clientrc')
 		}

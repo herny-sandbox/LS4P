@@ -1,5 +1,4 @@
 import { 
-	Type, 
 	ReferenceKind, 
 	TypeKind, 
 	BaseSymbol,
@@ -7,16 +6,18 @@ import {
 	MethodSymbol,
 	ScopedSymbol 
 } from "antlr4-c3";
+import { PComponentSymbol } from "./PComponentSymbol"
+import { PType, PTypeKind } from "./PType"
 
 /** Classes and structs. */
-export class PInterfaceSymbol extends ScopedSymbol implements Type 
+export class PInterfaceSymbol extends PComponentSymbol implements PType 
 {
     isStruct: boolean = false;
     reference: ReferenceKind = ReferenceKind.Reference;
     /** Usually only one member, unless the language supports multiple inheritance (like C++). */
-    readonly extends: Type[] = [];
+    readonly extends: PType[] = [];
  
-	constructor(name: string, ext: Type[]=[])
+	constructor(name: string, ext: PType[]=[])
 	{
 		super(name);
 		this.extends = ext;
@@ -24,6 +25,8 @@ export class PInterfaceSymbol extends ScopedSymbol implements Type
 
     get baseTypes() { return this.extends; }
     get kind() { return TypeKind.Interface; }
+	get typeKind() { return PTypeKind.Interface; }
+
 	/**
 		 * @param includeInherited Not used.
 		 *

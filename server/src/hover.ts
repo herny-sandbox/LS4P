@@ -106,16 +106,17 @@ function formatHoverContent(baseSymbol : symb.BaseSymbol, callContext : psymb.Ca
 	
 	if(baseSymbol instanceof symb.MethodSymbol)
 	{
-		if(baseSymbol.returnType)
+		let returnType = psymb.PUtils.typeToPType(baseSymbol.returnType);
+		if(returnType)
 		{
-			if(baseSymbol.returnType.kind == symb.TypeKind.Alias)
-				result +=  extractClassName(parseUtils.convertAliasType(baseSymbol.returnType, callContext).name) + " ";
+			if(returnType.typeKind == psymb.PTypeKind.Generic)
+				result +=  extractClassName(parseUtils.convertAliasType(returnType, callContext).name) + " ";
 			else
-				result += typeTypeToString(baseSymbol.returnType) + " ";
+				result += typeTypeToString(returnType) + " ";
 		} 
 	}
 	if(baseSymbol instanceof symb.VariableSymbol)
-		result += typeTypeToString(baseSymbol.type) + " ";
+		result += typeTypeToString(psymb.PUtils.typeToPType(baseSymbol.type)) + " ";
 
 	result += baseSymbol.name;
 
@@ -128,12 +129,13 @@ function formatHoverContent(baseSymbol : symb.BaseSymbol, callContext : psymb.Ca
 			if(i>0)
 				result += ", ";
 			let param = params[i];
-			if( param instanceof symb.ParameterSymbol && param.type)
+			if( param instanceof symb.ParameterSymbol)
 			{
-				if(param.type.kind == symb.TypeKind.Alias)
-					result +=  extractClassName(parseUtils.convertAliasType(param.type, callContext).name);
+				let paramType = psymb.PUtils.typeToPType(param.type);
+				if(paramType.typeKind == psymb.PTypeKind.Generic)
+					result +=  extractClassName(parseUtils.convertAliasType(paramType, callContext).name);
 				else
-					result += typeTypeToString(param.type);
+					result += typeTypeToString(paramType);
 			}
 		}
 		result += ")";
@@ -146,14 +148,14 @@ function formatHoverContent(baseSymbol : symb.BaseSymbol, callContext : psymb.Ca
 	return markupResult;
 }
 
-function typeTypeToString(type: symb.Type | undefined) : string
+function typeTypeToString(type: psymb.PType | undefined) : string
 {
 	if(!type)
 		return "";
 	
-	if(type.kind == symb.TypeKind.Array)
+	if(type.typeKind == psymb.PTypeKind.Array)
 		return typeTypeToString(type.baseTypes[0]) + "[]";
-	if(type.kind == symb.TypeKind.Alias)
+	if(type.typeKind == psymb.PTypeKind.Generic)
 	{
 		if(type.baseTypes.length==1)
 			return typeTypeToString(type.baseTypes[0]);

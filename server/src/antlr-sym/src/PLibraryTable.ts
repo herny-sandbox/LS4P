@@ -1,54 +1,75 @@
-import { 
-	SymbolTable,
-	SymbolTableOptions,
-	IScopedSymbol,
-	BaseSymbol
-} from "antlr4-c3";
+// import { 
+// 	SymbolTable,
+// 	SymbolTableOptions,
+// 	IScopedSymbol,
+// 	BaseSymbol,
+// 	SymbolConstructor
+// } from "antlr4-c3";
+import * as symb from "antlr4-c3";
 import { PNamespaceSymbol } from "./PNamespaceSymbol"
+import { PComponentSymbol } from "./PComponentSymbol"
+import { PUtils } from "./PUtils"
 
-export class PLibraryTable extends SymbolTable 
+export class PLibraryTable extends symb.SymbolTable 
 {
-	constructor(name: string, options: SymbolTableOptions)
+	constructor(name: string, options: symb.SymbolTableOptions)
 	{
 		super(name, options);
 	}
 
-	getOrCreateNamespaceFor(symbolPath:string, delimiter:string="/") : IScopedSymbol
+	getOrCreateNamespaceFor(symbolPath:string, delimiter:string="/") : symb.IScopedSymbol
 	{
 		const parts = symbolPath.split(delimiter);
         let i = 0;
-        let currentParent : IScopedSymbol = this;
-		let fixedName = parts[i];
-        while (i < parts.length - 1) 
+        let currentParent : symb.IScopedSymbol = this;
+
+		while (i < parts.length - 1) 
 		{
-            let symbol = currentParent.resolveSync(fixedName, true);
-			let namespace : PNamespaceSymbol;
-			if( symbol instanceof PNamespaceSymbol )
-				namespace = symbol;
-			else
+			let component = PUtils.resolveChildSymbolSync(currentParent, PComponentSymbol, parts[i]);
+			if(component == undefined)
 			{
-                namespace = new PNamespaceSymbol(parts[i]);
-				currentParent.addSymbol(namespace);
+                component = new PNamespaceSymbol(parts[i]);
+				currentParent.addSymbol(component);
 			}
-            currentParent = namespace;
+            currentParent = component;
             ++i;
-			fixedName = parts[i-1] + PNamespaceSymbol.delimiter + parts[i];
-       }
+       	}
         return currentParent;
 	}
 
-	resolveSync(name: string, localOnly?: boolean | undefined): BaseSymbol | undefined 
+	// resolveSync(name: string, localOnly?: boolean | undefined): symb.BaseSymbol | undefined 
+	// {
+	// 	let result ;
+	// 	for(let child of this.children)
+	// 	{
+	// 		if(child instanceof PNamespaceSymbol)
+	// 			result = child.resolveSync(name, localOnly);
+	// 		else if(child.name === name)
+	// 			result = child;
+	// 		if(result)
+	// 			break;
+	// 	}
+	// 	return result;	
+	// }
+
+	resolveComponent<T extends PComponentSymbol, Args extends unknown[]>(t: symb.SymbolConstructor<T, Args>, name:string) : T | undefined
 	{
-		let result ;
-		for(let child of this.children)
+		if(name.indexOf('.')>=0)
 		{
-			if(child instanceof PNamespaceSymbol)
-				result = child.resolveSync(name, localOnly);
-			else if(child.name === name)
-				result = child;
-			if(result)
-				break;
+			let nameParts : string [] = name.split(".");
+			let callContext = PUtils.resolveChildSymbolSync(this, PComponentSymbol, nameParts[0] );
+			let partIndex = 1;
+			while(callContext && partIndex < nameParts.length)
+			{
+				callContext = PUtils.resolveChildSymbolSync(callContext, PComponentSymbol, nameParts[partIndex]);
+				partIndex++;
+			}
+			return (callContext instanceof t)? callContext : undefined;
 		}
-		return result;	
+		else
+		{
+			let callContext = PUtils.resolveChildSymbolSync(this, t, name );
+			return callContext;
+		}
 	}
 }

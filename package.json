@@ -4,21 +4,14 @@
   "author": "Processing Foundation",
   "license": "MIT",
   "version": "0.2.0",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/herny-sandbox/LS4P"
-  },
   "publisher": "Processing",
   "categories": [],
   "keywords": [
     "multi-root ready"
   ],
   "engines": {
-    "vscode": "^1.80.0"
+    "vscode": "^1.82.2"
   },
-  "activationEvents": [
-    "onLanguage:Processing"
-  ],
   "main": "./client/out/extension",
   "contributes": {
     "languages": [
@@ -43,15 +36,15 @@
         "processing.path": {
           "type": "string",
           "default": "processing-java",
-          "description": "Path to Processing. Leave default if you've added processing to your path, otherwise enter the path to processing-java here. Example: 'C:\\Program Files\\processing-3.0.1\\processing-java' for Windows"
+          "description": "Path to Processing. Leave default if you've added processing to your path, otherwise enter the path to processing here.\nExample: 'C:\\Program Files\\processing-4.2' for Windows"
         },
-        "languageServerExample.maxNumberOfProblems": {
+        "processing.maxNumberOfProblems": {
           "scope": "resource",
           "type": "number",
           "default": 100,
           "description": "Controls the maximum number of problems produced by the server."
         },
-        "languageServerExample.trace.server": {
+        "processing.trace.server": {
           "scope": "window",
           "type": "string",
           "enum": [
@@ -97,8 +90,7 @@
     "typescript": "^5.2.0-dev.20230730"
   },
   "dependencies": {
-    "lru-cache" : "^6.0.0",
-    "brace-expansion": "^2.0.1",
-    "@types/vscode": "^1.23.0"
+    "@types/vscode": "^1.23.0",
+    "lru-cache": "^6.0.0"
   }
 }

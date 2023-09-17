@@ -7,14 +7,19 @@ import {
 	VariableSymbol,
 	SymbolTable,
 	SymbolConstructor,
+	MethodSymbol,
 	ScopedSymbol,
+	MethodFlags,
 } from "antlr4-c3";
 import { PClassSymbol} from "./PClassSymbol"
 import { PInterfaceSymbol} from "./PInterfaceSymbol"
+import { PEnumSymbol} from "./PEnumSymbol"
 import { PFormalParamSymbol } from "./PFormalParamSymbol"
+import { PComponentSymbol} from "./PComponentSymbol"
 import { PSymbolTable } from './PSymbolTable';
 import { PNamespaceSymbol } from './PNamespaceSymbol';
 import { PLibraryTable } from './PLibraryTable';
+import { PType, PTypeKind } from './PType';
 
 export enum PPrimitiveKind {
     Unknown = 0,
@@ -48,199 +53,192 @@ const defaultNullName = "null"
 
 export class CallContext
 {
-	public callerType : Type | undefined;
+	public callerType : PType | undefined;
 	public callerSymbol : BaseSymbol | undefined;
-	public genericsDict : Map<string, Type> = new Map<string, Type>();
 }
 
 export class PUtils 
 {
-	public static createDefaultObjectType()
+	public static typeToPType(type: any|undefined) : PType | undefined
+	{
+		if(type == undefined)
+			return undefined;
+		return new PType(type.name, type.typeKind, type.reference, type.baseTypes);
+	}
+
+	public static isDefaultObjectPath(path: string) {return path == defaultObjectClass; }
+	public static createDefaultObjectType() : PType
 	{
 		return PUtils.createClassType(defaultObjectClass);
 	}
-	public static createClassType(className:string, baseTypes:Type[]=[]) : Type
+	public static createClassType(className:string, baseTypes:PType[]=[]) : PType
 	{
 		return PUtils.setAsClassType(PUtils.createTypeUnknown(), className, baseTypes);
 	}
 
-	public static createInterfaceType(className:string, baseTypes:Type[]=[]) : Type
+	public static createInterfaceType(className:string, baseTypes:PType[]=[]) : PType
 	{
 		return PUtils.setAsInterfaceType(PUtils.createTypeUnknown(), className, baseTypes); 
 	}
 
-	public static createPrimitiveType(kind:PPrimitiveKind) : Type
+	public static createPrimitiveType(kind:PPrimitiveKind) : PType
 	{
 		return PUtils.setAsPrimitiveType(PUtils.createTypeUnknown(), kind); 
 	}
 
-	public static createStringType() : Type
+	public static createStringType() : PType
 	{
 		return PUtils.setAsClassType(PUtils.createTypeUnknown(), defaultStringClass); 
 	}
 
-	public static createNullType() : Type
+	public static createNullType() : PType
 	{
-		return PUtils.setAsNullType(PUtils.createTypeUnknown()); 
+		return new PType("null", PTypeKind.Null, ReferenceKind.Irrelevant); 
 	}
 
-	public static createArrayType(baseType:Type) : Type
+	public static createArrayType(baseType:PType) : PType
 	{
 		return PUtils.setAsArrayType(PUtils.createTypeUnknown(), baseType); 
 	}
 
-	public static createVoidType() : Type
+	public static createVoidType() : PType
 	{
-		return PUtils.createClassType("void");  
+		return new PType("void", PTypeKind.Void, ReferenceKind.Irrelevant);  
 	}
-	public static createGenericType(name:string, boundTypes: Type[])
+	public static createGenericType(name:string, boundTypes: PType[])
 	{
-		return PUtils.setAsGenericType(PUtils.createTypeUnknown(), name, boundTypes);
+		return new PType(name, PTypeKind.Generic, ReferenceKind.Reference, boundTypes); 
+	}
+	public static createNamespaceType(name:string) : PType
+	{
+		return new PType(name, PTypeKind.Namespace, ReferenceKind.Reference);  
 	}
 
-	public static createTypeUnknown(typeName:string="<unknown>") : Type
+	public static createTypeUnknown(typeName:string="<unknown>") : PType
 	{
 		return {  
 			name : typeName,
 			kind : TypeKind.Unknown,
+			typeKind : PTypeKind.Unknown,
 			baseTypes : [],
 			reference : ReferenceKind.Irrelevant
 		};
 	}
 
-	public static setAsNullType(type: Type) : Type
+	public static setAsNullType(type: PType) : PType
 	{
 		type.name = defaultNullName;
 		type.kind = TypeKind.Unknown,
+		type.typeKind = PTypeKind.Null;
 		type.baseTypes = [],
 		type.reference = ReferenceKind.Reference
 		return type;	}
 
-	public static setAsClassType(type: Type, className:string, baseTypes:Type[]=[]) : Type
+	public static setAsClassType(type: PType, className:string, baseTypes:PType[]=[]) : PType
 	{
 		type.name = className;
 		type.kind = TypeKind.Class,
+		type.typeKind = PTypeKind.Class;
 		type.baseTypes = PUtils.cloneTypes(baseTypes),
 		type.reference = ReferenceKind.Reference
 		return type;
 	}
 
-	public static setAsInterfaceType(type: Type, interfName:string, baseTypes:Type[]=[]) : Type
+	public static setAsInterfaceType(type: PType, interfName:string, baseTypes:PType[]=[]) : PType
 	{
 		type.name = interfName;
 		type.kind = TypeKind.Interface,
+		type.typeKind = PTypeKind.Interface;
 		type.baseTypes = PUtils.cloneTypes(baseTypes),
 		type.reference = ReferenceKind.Reference
 		return type;
 	}
 
-	public static setAsPrimitiveType(type: Type, kind:PPrimitiveKind) : Type
+	public static setAsNamespaceType(type: PType, name: string)
+	{
+		type.name = name;
+		type.kind = TypeKind.Float,
+		type.typeKind = PTypeKind.Namespace;
+		type.baseTypes = [],
+		type.reference = ReferenceKind.Reference
+		return type;
+	}
+
+	public static setAsPrimitiveType(type: PType, kind:PPrimitiveKind) : PType
 	{
 		type.name = primitiveKindNames[kind];
 		type.kind = TypeKind.Integer, // all primitives are going to be marked as integer
+		type.typeKind = PTypeKind.Primitive;
 		type.baseTypes = [],
 		type.reference = ReferenceKind.Instance
 		return type;
 	}
 
-	public static setAsArrayType(type: Type, baseType:Type) : Type
+	public static setAsArrayType(type: PType, baseType:PType) : PType
 	{
 		type.name = "Array";
 		type.kind = TypeKind.Array,
+		type.typeKind = PTypeKind.Array;
 		type.baseTypes = [baseType],
 		type.reference = ReferenceKind.Reference
 		return type;
 	}
 
-	private static setAsGenericType(type: Type, genericName:string, boundTypes:Type[] ): Type
+	private static setAsGenericType(type: PType, genericName:string, boundTypes:PType[] ): PType
 	{
 		type.name = genericName;
 		type.kind = TypeKind.Alias,
+		type.typeKind = PTypeKind.Generic;
 		type.baseTypes = PUtils.cloneTypes(boundTypes),
 		type.reference = ReferenceKind.Reference;
 		return type;
 	}
 
-	public static setAsTypeUnknown(type: Type, typeName:string="<unknown>") : Type
+	public static setAsTypeUnknown(type: PType, typeName:string="<unknown>") : PType
 	{
 		type.name = typeName;
-		type.kind = TypeKind.Unknown,
-		type.baseTypes = [],
+		type.kind = TypeKind.Unknown;
+		type.typeKind = PTypeKind.Unknown;
+		type.baseTypes = [];
 		type.reference = ReferenceKind.Irrelevant;
 		return type;
 	}
-	public static cloneTypeAsInstance(type: Type) : Type
+	
+	public static setAsVoidType(type: PType) : PType
+	{
+		type.name = "void";
+		type.kind = TypeKind.Unknown;
+		type.typeKind = PTypeKind.Void;
+		type.baseTypes = [];
+		type.reference = ReferenceKind.Irrelevant;
+		return type;
+	}
+	public static cloneTypeAsInstance(type: PType) : PType
 	{
 		return {  
 			name : type.name,
 			kind : type.kind,
+			typeKind : type.typeKind,
 			baseTypes : PUtils.cloneTypes(type.baseTypes),
 			reference : ReferenceKind.Instance,
 		};
 	}
-	public static cloneType(type: Type) : Type
+	public static cloneType(type: PType) : PType
 	{
 		return {  
 			name : type.name,
 			kind : type.kind,
+			typeKind : type.typeKind,
 			baseTypes : PUtils.cloneTypes(type.baseTypes),
 			reference : type.reference
 		};
 	}
-	public static cloneTypes(types:Type[]) : Type[]
+	public static cloneTypes(types:PType[]) : PType[]
 	{
-		let baseTypes : Type[] = [];
+		let baseTypes : PType[] = [];
 		for(let i=0; i < types.length; i++)
 			baseTypes.push(PUtils.cloneType(types[i]));
 		return baseTypes;
-	}
-
-	public static setAsVoidType(type: Type) : Type
-	{
-		return PUtils.setAsTypeUnknown(type, "void");  
-	}
-
-	public static getParentClass(ctx:BaseSymbol): PClassSymbol | undefined
-	{
-		if(ctx.parent)
-		{
-			if(ctx.parent instanceof PClassSymbol)
-				return ctx.parent;
-			return PUtils.getParentClass(ctx.parent);
-		} 
-		return;
-	}
-
-	public static resolveByName(name: string, context : BaseSymbol, results : BaseSymbol [],  localOnly : boolean = false) : void
-	{
-		let anyMatch : BaseSymbol | undefined;
-		if(context instanceof SymbolTable)
-		{
-			let result = context.resolveSync(name, false);
-			if(result !== undefined)
-				results.push(result);
-		}
-		else
-		{
-			anyMatch = context.resolveSync(name, true);
-			if(anyMatch !== undefined)
-			{
-				let child : BaseSymbol | undefined = anyMatch;
-				while(child !== undefined)
-				{
-					if(child.name === name)
-						results.push(child);
-					child = child.nextSibling;
-				}
-			}
-		
-			// Nothing found locally. Let the parent continue.
-			if (!localOnly) {
-				if (context.parent) {
-					return PUtils.resolveByName(name, context.parent, results, false);
-				}
-			}
-		}
 	}
 
 	public static getAllSymbolsSync<T extends BaseSymbol, Args extends unknown[]>(ctx: IScopedSymbol, t: SymbolConstructor<T, Args>, name?:string, localOnly?: boolean): T[] 
@@ -261,7 +259,7 @@ export class PUtils
 		{
 			if(ctx.extends)
 			{
-				let extSymbol : BaseSymbol | undefined = ctx.resolveSync(ctx.extends.name, false);
+				let extSymbol : PClassSymbol | undefined = PUtils.resolveComponentSync(ctx, PClassSymbol, ctx.extends.name )
 				if(extSymbol && extSymbol instanceof PClassSymbol)
 				{
 					const parentSymbols = PUtils.getAllSymbolsSync(extSymbol, t, name, true);
@@ -269,7 +267,20 @@ export class PUtils
 				}
 			}
 		}
-		//if()
+		else if(ctx instanceof PSymbolTable)
+		{
+			const symbols = PUtils.getAllDirectChildSymbolSync(ctx, t, name)
+			result.push(...symbols);
+
+			if(name)
+				name = ctx.ensureIsFullPath(name);
+
+			for(let dependency of ctx.getDependencies())
+			{
+				const symbols = PUtils.getAllDirectChildSymbolSync(dependency, t, name)
+				result.push(...symbols);
+			}
+		}
 			
         if (!localOnly && ctx.parent) 
 		{
@@ -279,7 +290,7 @@ export class PUtils
         return result;
 	}
 
-	public static resolveChildSymbolSync<T extends BaseSymbol, Args extends unknown[]>(ctx: ScopedSymbol, t: SymbolConstructor<T, Args>, name?:string): T | undefined
+	public static resolveChildSymbolSync<T extends BaseSymbol, Args extends unknown[]>(ctx: IScopedSymbol, t: SymbolConstructor<T, Args>, name?:string): T | undefined
 	{
 		for (const child of ctx.children) 
 		{
@@ -291,9 +302,37 @@ export class PUtils
 		return undefined;
 	}
 
+	public static getAllDirectChildSymbolSync<T extends BaseSymbol, Args extends unknown[]>(ctx: IScopedSymbol, t: SymbolConstructor<T, Args>, name?:string): T[]
+	{
+		let result : T[] = [];
+		for (const child of ctx.children) 
+		{
+			const isNameMatch = !name || (child.name == name);
+			const isRightType = (child instanceof t );
+			if (isRightType && isNameMatch)
+				result.push( child );
+		}
+		return result;
+	}
+
 	public static resolveSymbolSync<T extends BaseSymbol, Args extends unknown[]>(ctx: BaseSymbol, t: SymbolConstructor<T, Args>, name?:string, localOnly?: boolean): T | undefined
 	{
         let result : T | undefined;
+
+		if(name && name.indexOf('.')>=0)
+		{
+			let nameParts : string [] = name.split(".");
+			let callContext = PUtils.resolveSymbolSync(ctx, PComponentSymbol, nameParts[0], false );
+			let partIndex = 1;
+			while(callContext && partIndex < nameParts.length)
+			{
+				callContext = PUtils.resolveChildSymbolSync(callContext, PComponentSymbol, nameParts[partIndex]);
+				partIndex++;
+			}
+			if(callContext instanceof t)
+				return callContext;
+			return undefined;
+		}
 
 		if(ctx instanceof PClassSymbol)
 		{
@@ -302,10 +341,36 @@ export class PUtils
 				return resultSymbol;
 			if(ctx.extends)
 			{
-				let extSymbol : BaseSymbol | undefined = ctx.resolveSync(ctx.extends.name, false);
-				if(extSymbol && extSymbol instanceof PClassSymbol)
+				let extSymbol : PClassSymbol | undefined = PUtils.resolveComponentSync(ctx, PClassSymbol, ctx.extends.name )
+				if(extSymbol)
 				{
 					const resultSymbol = PUtils.resolveSymbolSync(extSymbol, t, name, true);
+					if(resultSymbol)
+						return resultSymbol;
+				}
+			}
+			for(let impl of ctx.implements)
+			{
+				let implSymbol : PInterfaceSymbol | undefined = PUtils.resolveComponentSync(ctx, PInterfaceSymbol, impl.name )
+				if(implSymbol)
+				{
+					const resultSymbol = PUtils.resolveSymbolSync(implSymbol, t, name, true);
+					if(resultSymbol)
+						return resultSymbol;
+				}
+			}
+		}
+		else if(ctx instanceof PInterfaceSymbol)
+		{
+			const resultSymbol = PUtils.resolveChildSymbolSync(ctx, t, name);
+			if(resultSymbol)
+				return resultSymbol;
+			for(let interf of ctx.extends)
+			{
+				let implSymbol : BaseSymbol | undefined = ctx.resolveSync(interf.name, false);
+				if(implSymbol && implSymbol instanceof PInterfaceSymbol)
+				{
+					const resultSymbol = PUtils.resolveSymbolSync(implSymbol, t, name, true);
 					if(resultSymbol)
 						return resultSymbol;
 				}
@@ -320,43 +385,15 @@ export class PUtils
 			if(name)
 				name = ctx.ensureIsFullPath(name);
 
-			for(let dependency of ctx.getDependencies())
-			{
-				const resultSymbol = PUtils.resolveSymbolSync(dependency, t, name, true);
-				if(resultSymbol)
-					return resultSymbol;
-			}
-		}
-		else if(ctx instanceof PNamespaceSymbol)
-		{
-			if(name && !ctx.containsName(name))
-				return undefined;
-
-			const relativeName = ctx.consumeName(name);
-			const resultSymbol = PUtils.resolveChildSymbolSync(ctx, t, relativeName);
-			if(resultSymbol)
-				return resultSymbol;
-
-			let childNamespaces = PUtils.getAllSymbolsSync(ctx, PNamespaceSymbol, undefined, true);
-			for (const child of childNamespaces) 
-			{
-				const resultSymbol = PUtils.resolveSymbolSync(child, t, relativeName, true);
-				if(resultSymbol)
-					return resultSymbol;
-			}
-		}
-		else if(ctx instanceof PLibraryTable)
-		{
-			const resultSymbol = PUtils.resolveChildSymbolSync(ctx, t, name);
-			if(resultSymbol)
-				return resultSymbol;
-
-			for (const child of ctx.children) 
-			{
-				const resultSymbol = PUtils.resolveSymbolSync(child, t, name, true);
-				if(resultSymbol)
-					return resultSymbol;
-			}
+			// for(let dependency of ctx.getDependencies())
+			// {
+			// 	if(dependency instanceof PLibraryTable)
+			// 	{
+			// 		// let component = dependency.resolveComponent(t, name);
+			// 		// if(component)
+			// 		// 	return component;
+			// 	}
+			// }
 		}
 		else  if(ctx instanceof ScopedSymbol)
 		{
@@ -374,28 +411,83 @@ export class PUtils
         return undefined;
 	}
 
-	public static resolveSymbolFromTypeSync(currentScope: ScopedSymbol, type: Type): ScopedSymbol
+	public static resolveComponentSync<T extends PComponentSymbol, Args extends unknown[]>(ctx: BaseSymbol, t: SymbolConstructor<T, Args>, name?:string): T | undefined
+	{
+        let result : T | undefined;
+
+		if(name && name.indexOf('.')>=0)
+		{
+			let nameParts : string [] = name.split(".");
+			let callContext = PUtils.resolveComponentSync(ctx, PComponentSymbol, nameParts[0] );
+			let partIndex = 1;
+			while(callContext && partIndex < nameParts.length)
+			{
+				callContext = PUtils.resolveChildSymbolSync(callContext, PComponentSymbol, nameParts[partIndex]);
+				partIndex++;
+			}
+			if(callContext instanceof t)
+				return callContext;
+			return undefined;
+		}
+		if(ctx instanceof ScopedSymbol)
+		{
+			const resultSymbol = PUtils.resolveChildSymbolSync(ctx, t, name);
+			if(resultSymbol)
+				return resultSymbol;
+		}
+		if(ctx instanceof PSymbolTable)
+		{
+			if(name)
+				name = ctx.ensureIsFullPath(name);
+
+			for(let dependency of ctx.getDependencies())
+			{
+				if(dependency instanceof PLibraryTable)
+				{
+					let component = dependency.resolveComponent(t, name);
+					if(component)
+						return component;
+				}
+			}
+		}
+		else  
+		if (ctx.parent) 
+		{
+			const parentSymbol = PUtils.resolveComponentSync(ctx.parent, t, name);
+			if(parentSymbol)
+				return parentSymbol;
+       	}
+    	return undefined;
+	}
+
+	public static resolveSymbolFromTypeSync(currentScope: ScopedSymbol, type: PType): ScopedSymbol
 	{
 		let result : ScopedSymbol | undefined;
 		if(type instanceof PClassSymbol)
 			result = type;
 		else if(type instanceof PInterfaceSymbol)
 			result = type;
-		else if(type.kind == TypeKind.Class)
+		else if(type instanceof PEnumSymbol)
+			result = type;
+		else if(type.typeKind == PTypeKind.Class || type.typeKind == PTypeKind.Interface || 
+				type.typeKind == PTypeKind.Unknown || type.typeKind == PTypeKind.Namespace || type.typeKind == PTypeKind.Enum)
 		{
-			let callContext = PUtils.resolveSymbolSync(currentScope, PClassSymbol, type.name, false )
-			if(callContext && callContext instanceof ScopedSymbol)
-				result = callContext;
-		}
-		else if(type.kind == TypeKind.Interface)
-		{
-			let callContext = PUtils.resolveSymbolSync(currentScope, PInterfaceSymbol, type.name, false )
-			if(callContext && callContext instanceof ScopedSymbol)
-				result = callContext;
+			result = PUtils.resolveComponentSync(currentScope, PComponentSymbol, type.name );
 		}
 		if(!result)
 			result = currentScope;
 		return result;
+	}
+
+	public static resolveTypeNameReference(currentScope : ScopedSymbol, typeName: string) : ScopedSymbol | undefined
+	{
+		let callContext : ScopedSymbol | undefined;
+		callContext = PUtils.resolveSymbolSync(currentScope, PClassSymbol, typeName, false );
+		if(!callContext)
+			callContext = PUtils.resolveSymbolSync(currentScope, PInterfaceSymbol, typeName, false );
+		if(!callContext)
+			callContext = PUtils.resolveSymbolSync(currentScope, PNamespaceSymbol, typeName, false );
+		return callContext;
 	}
 
 	public static getFirstParentMatch<T extends BaseSymbol, Args extends unknown[]>(t: SymbolConstructor<T, Args>, ctx: BaseSymbol): T | undefined 
@@ -415,24 +507,35 @@ export class PUtils
 		return;
 	}
 
-	public static comparePrimitiveKind(symbolType : Type, primKind : PPrimitiveKind)
+	public static comparePrimitiveKind(symbolType : PType, primKind : PPrimitiveKind, scope: ScopedSymbol)
 	{
-		return symbolType.kind == TypeKind.Integer && symbolType.name == primitiveKindNames[primKind];
+		if(symbolType.typeKind == PTypeKind.Primitive)
+			return symbolType.name == primitiveKindNames[primKind];
+		else if(symbolType.typeKind == PTypeKind.Class || symbolType.typeKind == PTypeKind.Interface)
+		{
+			let classSymb = PUtils.resolveSymbolFromTypeSync(scope, symbolType);
+			if(!classSymb)
+				return false;
+			let callContext = PUtils.resolveSymbolSync(classSymb, MethodSymbol, primitiveKindNames[primKind]+"Value", true );
+			return callContext !== undefined;
+		}
+
+		//return symbolType.typeKind == PTypeKind.Primitive && symbolType.name == primitiveKindNames[primKind];
 	}
 
-	public static convertSymbolTypeToString(symbolType : Type | undefined, full:boolean=false) : string
+	public static convertSymbolTypeToString(symbolType : PType | undefined, full:boolean=false) : string
 	{
 		if(!symbolType)
 			return "<unknown>";
 
-		if(symbolType.kind == TypeKind.Array)
+		if(symbolType.typeKind == PTypeKind.Array)
 		{
 			if(symbolType.baseTypes.length==1)
 				return PUtils.convertSymbolTypeToString(symbolType.baseTypes[0], full) + "[]"
 			else
 				return "<unknown> []"
 		}
-		else if(symbolType.kind == TypeKind.Class || symbolType.kind == TypeKind.Interface)
+		else if(symbolType.typeKind == PTypeKind.Class || symbolType.typeKind == PTypeKind.Interface)
 		{
 			let result : string;
 			if(full)
@@ -456,4 +559,42 @@ export class PUtils
 		else
 			return symbolType.name;
 	}
+
+	static checkComparableTypes(left: PType, right: PType, scope: ScopedSymbol) : boolean
+	{
+		let comparingInterfaces = left.typeKind == PTypeKind.Interface || right.typeKind == PTypeKind.Interface;
+		let comparingClasses = left.typeKind == PTypeKind.Class || right.typeKind == PTypeKind.Class;
+		let comparingArray = left.typeKind == PTypeKind.Array || right.typeKind == PTypeKind.Array;
+		let comparingNull = left.name == "null" || right.name == "null";
+		let comparingPrimitive = left.typeKind == PTypeKind.Primitive || right.typeKind == PTypeKind.Primitive;
+
+		if((comparingInterfaces || comparingClasses || comparingArray) && comparingNull)
+			return true;
+
+		if(comparingClasses && comparingPrimitive)
+		{
+			let primitive = left.typeKind == PTypeKind.Primitive ? left : right;
+			let classType = left.typeKind == PTypeKind.Class ? left : right;
+
+			let classSymb = PUtils.resolveSymbolFromTypeSync(scope, classType);
+			if(!classSymb)
+				return false;
+			let callContext = PUtils.resolveSymbolSync(classSymb, MethodSymbol, primitive.name+"Value", true );
+			return callContext !== undefined;
+		}
+		if(comparingArray && comparingClasses)
+			return true;
+
+		return left.typeKind == right.typeKind;
+	}
+
+	public static setMethodLastVargs( method : MethodSymbol)
+	{
+		method.methodFlags |= MethodFlags.Virtual;
+	} 
+
+	public static hasMethodLastVargs( method : MethodSymbol)
+	{
+		return (method.methodFlags & MethodFlags.Virtual) != 0;
+	} 
 }

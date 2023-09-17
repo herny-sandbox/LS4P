@@ -60,7 +60,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		{
 			try
 			{
-				let symbolType : symb.Type | undefined = undefined;
+				let symbolType : psymb.PType | undefined = undefined;
 				this.addChildSymbol(ctx, new symb.VariableSymbol(terminalNode.text, null, symbolType));
 			}
 			catch(e)
@@ -113,15 +113,26 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 			else if(classDecl)
 				this.visit(classDecl);
 			else if(enumDecl)
-				this.visit(enumDecl);
+				this.tryDeclareEnum(enumDecl, visibility, modifiers);
 		}
 		return this.defaultResult();
 	}
 
 	visitImportDeclaration(ctx: pp.ImportDeclarationContext) : symb.SymbolTable
 	{
-		//log.write("Importing "+ctx.qualifiedName().text, log.severity.WARNING);
-		this.symbolTable.addImport(ctx.qualifiedName().text);
+		let staticCtx = ctx.STATIC();
+		let qualifiedName = ctx.qualifiedName();
+		let allMembers = ctx.MUL() != undefined;
+
+		let fullName = parseUtils.buildFullClassName(qualifiedName.IDENTIFIER())
+
+		if(staticCtx)
+		{
+			console.error("unhandled static import: " + fullName + (allMembers?".*":""));
+		}
+		else
+			this.symbolTable.addImport(fullName, allMembers);
+
 		return this.defaultResult();
 	} 
 
@@ -149,8 +160,8 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 			if( modifCtx.FINAL() )
 				modifiers.push(symb.Modifier.Final);
 		}
-
-		let symbolType = parseUtils.convertTypeTypeToSymbolType(ctx.typeType(), this.scope);
+		let typeCtx = ctx.typeType();
+		let symbolType = parseUtils.convertTypeTypeToSymbolType(typeCtx, this.scope);
 		this.addTypedSymbols(symbolType, ctx.variableDeclarators(), VAR_LOCAL, symb.MemberVisibility.Private, modifiers);
 		return this.defaultResult();
 	}
@@ -183,7 +194,11 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		let ctxType = ctx.typeType();
 		let symbolType = parseUtils.convertTypeTypeToSymbolType(ctxType, this.scope);
 		if(ctx.ELLIPSIS() && symbolType)
+		{
 			symbolType = psymb.PUtils.createArrayType(symbolType);
+			if(this.scope instanceof symb.MethodSymbol)
+				psymb.PUtils.setMethodLastVargs(this.scope);
+		}
 		this.addTypedSymbol(symbolType, ctx.variableDeclaratorId(), VAR_PARAM, symb.MemberVisibility.Private, modifiers);
 		
 		return this.defaultResult();
@@ -205,17 +220,19 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		let extendsCtx = ctx.typeType();
 		let implemCtx =ctx.typeList();
 
-		let ext : symb.Type;
-		let impl : symb.Type [] = [];
+		let ext : psymb.PType;
+		let impl : psymb.PType [] = [];
 
 		if(extendsCtx)
 			ext = parseUtils.convertTypeTypeToSymbolType(extendsCtx, this.scope);
 		else
 			ext = psymb.PUtils.createDefaultObjectType();
 
-		ext.kind = symb.TypeKind.Class;
+		ext.typeKind = psymb.PTypeKind.Class;
 		if(implemCtx)
 			impl = parseUtils.convertTypeListToSymbolTypeList(implemCtx, this.scope);
+		for(let interf of impl)
+			interf.typeKind = psymb.PTypeKind.Interface;
 
 		let className = classIdentifier.text;
 		let classSymbol = new psymb.PClassSymbol(className, ext, impl);
@@ -228,7 +245,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 			{
 				let identif = param.IDENTIFIER();
 				let bound = param.typeBound();
-				let formalTypes : symb.Type [] = [];
+				let formalTypes : psymb.PType [] = [];
 
 				if(bound)
 				{
@@ -240,25 +257,61 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 				classSymbol.addSymbol(typeParam);
 			}
 		}
-		// let savedScope = this.scope;
-		// this.scope = classSymbol;
-		// this.visit(classBody);
-		// this.scope = savedScope;
 
 		return this.addScope(ctx, classSymbol, () => this.visitChildren(classBody));
 	}
 
+	visitInterfaceDeclaration(ctx: pp.InterfaceDeclarationContext) 
+	{
+		let identifier = ctx.IDENTIFIER();
+		let typeParams = ctx.typeParameters();
+		let extendsCtx =ctx.typeList();
+		let interfaceBody = ctx.interfaceBody();
+
+		let exts : psymb.PType [] = [];
+
+		if(extendsCtx)
+			exts = parseUtils.convertTypeListToSymbolTypeList(extendsCtx, this.scope);
+		for(let ext of exts)
+			ext.typeKind = psymb.PTypeKind.Interface;
+
+		let interfName = identifier.text;
+		let interfSymbol = new psymb.PInterfaceSymbol(interfName, exts);
+		this.pdeInfo?.registerDefinition(identifier, interfSymbol );
+
+		if(typeParams)
+		{
+			let params = typeParams.typeParameter();
+			for(let param of params)
+			{
+				let identif = param.IDENTIFIER();
+				let bound = param.typeBound();
+				let formalTypes : psymb.PType [] = [];
+
+				if(bound)
+				{
+					let boundTypesCtx = bound.typeType();
+					for(let boundTypeCtx of boundTypesCtx)
+						formalTypes.push( parseUtils.convertTypeTypeToSymbolType(boundTypeCtx, this.scope) );
+				}
+				let typeParam = new psymb.PFormalParamSymbol(identif.text, formalTypes);
+				interfSymbol.addSymbol(typeParam);
+			}
+		}
+
+		return this.addScope(ctx, interfSymbol, () => this.visitChildren(interfaceBody));
+	}
+
 	visitClassCreatorRest(ctx: pp.ClassCreatorRestContext) : symb.SymbolTable
 	{
-		let ext : symb.Type = psymb.PUtils.createDefaultObjectType();
-		let impl : symb.Type [] = [];
+		let ext : psymb.PType = psymb.PUtils.createDefaultObjectType();
+		let impl : psymb.PType [] = [];
 		return this.addScope(ctx, new psymb.PClassSymbol("", ext, impl), () => this.visitChildren(ctx));
 	}
 
 	visitEnumDeclaration(ctx: pp.EnumDeclarationContext) : symb.SymbolTable
 	{
-		let signatureName : string = ctx.IDENTIFIER().text;
-		return this.addScope(ctx, new psymb.PClassSymbol(signatureName), () => this.visitChildren(ctx));
+		return this.tryDeclareEnum(ctx, undefined, []);
 	}
 
 	tryDeclareMethod(typeParameters: pp.TypeParametersContext|undefined, ctx: pp.MethodDeclarationContext, visibility:symb.MemberVisibility, modifiers:symb.Modifier[]) : symb.SymbolTable
@@ -284,7 +337,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 	{
 		let signatureName : string = identif.text;
 
-		let returnType : symb.Type | undefined;
+		let returnType : psymb.PType | undefined;
 		if(returnTypeOrVoid)
 		{
 			let returnTypeCtx = returnTypeOrVoid.typeType();
@@ -348,7 +401,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 
 	private tryDeclareTypeParams(typeParameters: pp.TypeParametersContext) {
 		let typeParameterArray = typeParameters.typeParameter();
-		let boundTypes: symb.Type[] = [];
+		let boundTypes: psymb.PType[] = [];
 		for (let i = 0; i < typeParameterArray.length; i++) {
 			//let baseType: symb.Type;
 			let paramName = typeParameterArray[i].IDENTIFIER().text;
@@ -395,12 +448,95 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		return this.tryDeclareConstructor(typeParameters, constDecl, visibility, modifiers);
 	}
 
+	tryDeclareEnum(ctx: pp.EnumDeclarationContext, visibility:symb.MemberVisibility, modifiers:symb.Modifier[]) : symb.SymbolTable
+	{
+		let enumID = ctx.IDENTIFIER();
+		let implCtx = ctx.typeList();
+		let enumMembers = ctx.enumConstants();
+		let enumBodyDecl = ctx.enumBodyDeclarations();
+
+		let implementing : psymb.PType [] = [];
+		if(implCtx)
+			implementing = parseUtils.convertTypeListToSymbolTypeList(implCtx, this.scope);
+		for(let impl of implementing)
+			impl.typeKind = psymb.PTypeKind.Interface;
+
+		let savedScope = this.scope;
+		let enumSymbol = new psymb.PEnumSymbol(enumID.text, implementing)
+		this.pdeInfo?.registerDefinition( enumID, enumSymbol );
+		this.addChildSymbol(ctx, enumSymbol);
+		this.scope = enumSymbol;
+
+		let enumContantArray = enumMembers.enumConstant();
+		for(let enumConstant of enumContantArray)
+		{
+			let enumMemberID = enumConstant.IDENTIFIER();
+			let args = enumConstant.arguments();
+			let body = enumConstant.classBody();
+
+			let enumMemberSymbol = new psymb.PEnumMemberSymbol(enumMemberID.text, implementing)
+			this.pdeInfo?.registerDefinition( enumMemberID, enumMemberSymbol );
+			this.addChildSymbol(ctx, enumMemberSymbol);
+
+			this.scope = enumMemberSymbol;
+
+			if(body)
+				this.visitChildren(body);
+
+			this.scope = enumSymbol;
+		}
+		if(enumBodyDecl)
+			this.visitChildren(enumBodyDecl)
+		this.scope = savedScope;
+
+		return this.defaultResult();
+	}
+
 	visitBlock(ctx: pp.BlockContext) : symb.SymbolTable
 	{
 		let fakeSymbolName : string = "";//"block"+ctx.start.startIndex;
 		let newSymbol : symb.ScopedSymbol = new symb.ScopedSymbol(fakeSymbolName);
 		return this.addScope(ctx, newSymbol, () => this.visitChildren(ctx));
 	};
+
+	visitCatchClause(ctx: pp.CatchClauseContext)  : symb.SymbolTable
+	{
+		let catchType = ctx.catchType();
+		let identif = ctx.IDENTIFIER();
+
+		let memberModif = ctx.variableModifier();
+		let modifiers : symb.Modifier[] = [];
+		for(let modifCtx of memberModif)
+		{
+			if( modifCtx.FINAL() )
+				modifiers.push(symb.Modifier.Final);
+		}
+		let savedSymbol = this.scope;
+		let catchSymbol : symb.ScopedSymbol = new symb.ScopedSymbol("");
+		this.addChildSymbol(ctx, catchSymbol);
+
+		let qualifName = catchType.qualifiedName();
+		if(qualifName.length > 0)
+		{
+			let exceptionType = psymb.PUtils.createClassType(qualifName[0].text);
+			let exceptionSymbol = new symb.VariableSymbol(identif.text, null, exceptionType);
+
+			this.applyModifiers(exceptionSymbol, symb.MemberVisibility.Private, modifiers);
+			this.pdeInfo?.registerDefinition(identif, exceptionSymbol );
+			this.addChildSymbol(ctx, exceptionSymbol);
+		}
+		this.visit(ctx.block());
+		this.scope = savedSymbol;
+		return this.defaultResult();
+		//return this.addScope(ctx, catchSymbol, () => this.visitChildren(ctx));
+	}
+
+	// visitFinallyBlock(ctx: pp.FinallyBlockContext)   : symb.SymbolTable
+	// {
+	// 	let fakeSymbolName : string = "";
+	// 	let newSymbol : symb.ScopedSymbol = new symb.ScopedSymbol(fakeSymbolName);
+	// 	return this.addScope(ctx, newSymbol, () => this.visitChildren(ctx));
+	// }
 	
 	visitForLoop(ctx: pp.ForLoopContext) : symb.SymbolTable
 	{
@@ -450,28 +586,32 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 
 	}
 
-	protected addTypedSymbols(symbolType : symb.Type | undefined, ctx: pp.VariableDeclaratorsContext, kind : number = 1, visibility:symb.MemberVisibility, modifiers:symb.Modifier[] )
+	protected addTypedSymbols(symbolType : psymb.PType, ctx: pp.VariableDeclaratorsContext, kind : number = 1, visibility:symb.MemberVisibility, modifiers:symb.Modifier[] )
 	{
 		let variableDeclarators : pp.VariableDeclaratorContext [] = ctx.variableDeclarator();
 		for( let i:number=0; i < variableDeclarators.length; i++ )
 		{
-			//let terminalNode = variableDeclarators[i].variableDeclaratorId().IDENTIFIER();
 			let varDeclarator = variableDeclarators[i];
 			let decl = varDeclarator.variableDeclaratorId();
-			//let init = varDeclarator.variableInitializer();
+
 			this.addTypedSymbol(symbolType, decl, kind, visibility, modifiers);
 		}
 	}
 
-	protected addTypedSymbol(varType : symb.Type | undefined, ctx: pp.VariableDeclaratorIdContext, kind : number = 1, visibility:symb.MemberVisibility, modifiers:symb.Modifier[] )
+	protected addTypedSymbol(varType : psymb.PType, ctx: pp.VariableDeclaratorIdContext, kind : number = 1, visibility:symb.MemberVisibility, modifiers:symb.Modifier[] )
 	{
 		let terminalNode = ctx.IDENTIFIER();
+		let arraySize = ctx.LBRACK().length;
 		if(!terminalNode)
 		{
 			log.write("add variable declaration at: "+this.scope.qualifiedName(":", true, false)+"."+ctx.text+` [${ctx.start.line}|${ctx.start.charPositionInLine}]`, log.severity.ERROR);
 			return;
 		}
-
+		while(arraySize > 0)
+		{
+			varType = psymb.PUtils.createArrayType(varType);
+			arraySize--;
+		}
 		try
 		{
 			let symbol : symb.BaseSymbol;

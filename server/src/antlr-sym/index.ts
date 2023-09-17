@@ -5,4 +5,8 @@ export * from "./src/PLibraryTable";
 export * from "./src/PSymbolTable";
 export * from "./src/PNamespaceSymbol";
 export * from "./src/PFormalParamSymbol";
+export * from "./src/PComponentSymbol";
+export * from "./src/PEnumSymbol";
+export * from "./src/PEnumMemberSymbol";
+export * from "./src/PType";
 export * from "./src/PUtils";

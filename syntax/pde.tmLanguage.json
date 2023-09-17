@@ -1272,7 +1272,7 @@
 		"primitive-arrays": {
 			"patterns": [
 				{
-					"begin": "\\b(void|boolean|byte|char|short|int|float|long|double)\\b\\s*(?=\\[)",
+					"begin": "\\b(void|boolean|byte|char|short|int|float|long|double|color)\\b\\s*(?=\\[)",
 					"beginCaptures": {
 						"1": {
 							"name": "storage.type.primitive.array.java"
@@ -1291,7 +1291,7 @@
 			]
 		},
 		"primitive-types": {
-			"match": "\\b(void|boolean|byte|char|short|int|float|long|double)\\b",
+			"match": "\\b(void|boolean|byte|char|short|int|float|long|double|color)\\b",
 			"name": "storage.type.primitive.java"
 		},
 		"properties": {

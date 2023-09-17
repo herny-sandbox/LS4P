@@ -244,9 +244,9 @@ export function flushRecords(){
 
 
 
-export function convertTypeTypeToSymbolType(typeContext : pp.TypeTypeContext, scope: symb.ScopedSymbol) : symb.Type
+export function convertTypeTypeToSymbolType(typeContext : pp.TypeTypeContext, scope: symb.ScopedSymbol) : psymb.PType
 {
-	let result : symb.Type | undefined
+	let result : psymb.PType | undefined
 
 	let classOrInterface : pp.ClassOrInterfaceTypeContext | undefined = typeContext.classOrInterfaceType();
 	let primitive : pp.PrimitiveTypeContext | undefined =  typeContext.primitiveType();
@@ -274,9 +274,9 @@ export function convertTypeTypeToSymbolType(typeContext : pp.TypeTypeContext, sc
 	return result;
 }
 
-export function convertTypeListToSymbolTypeList(typeContext : pp.TypeListContext, scope: symb.ScopedSymbol, isClass:boolean=true) : symb.Type []
+export function convertTypeListToSymbolTypeList(typeContext : pp.TypeListContext, scope: symb.ScopedSymbol) : psymb.PType []
 {
-	let result : symb.Type[] = [];
+	let result : psymb.PType[] = [];
 	let typesCtx = typeContext.typeType();
 	for(let i=0; i<typesCtx.length; i++)
 	{
@@ -286,13 +286,13 @@ export function convertTypeListToSymbolTypeList(typeContext : pp.TypeListContext
 	return result;
 }
 
-export function evaluateClassOrInterfaceTypeToSymbolType(classOrInterface : pp.ClassOrInterfaceTypeContext, scope: symb.ScopedSymbol) : symb.Type | undefined
+export function evaluateClassOrInterfaceTypeToSymbolType(classOrInterface : pp.ClassOrInterfaceTypeContext, scope: symb.ScopedSymbol) : psymb.PType | undefined
 {
 	let identifs = classOrInterface.IDENTIFIER();
 	let genericArguments = classOrInterface.typeArguments();
 
 	let typeName = buildFullClassName( identifs );
-	let baseTypes : symb.Type[] = [];
+	let baseTypes : psymb.PType[] = [];
 
 	if(genericArguments.length > 0)
 		buildTypeArgumentsToSymbolTypes(genericArguments[0].typeArgument(), baseTypes, scope);
@@ -312,11 +312,11 @@ export function buildFullClassName(identifs: TerminalNode[]) : string
 	return result;
 }
 
-export function buildTypeArgumentsToSymbolTypes(args : pp.TypeArgumentContext[], result: symb.Type[], scope: symb.ScopedSymbol)
+export function buildTypeArgumentsToSymbolTypes(args : pp.TypeArgumentContext[], result: psymb.PType[], scope: symb.ScopedSymbol)
 {
 	for(let j=0; j<args.length; j++)
 	{
-		let baseType : symb.Type | undefined;
+		let baseType : psymb.PType | undefined;
 		let typeCtx = args[j].typeType();
 		if(typeCtx)
 			baseType = convertTypeTypeToSymbolType(typeCtx, scope);
@@ -329,7 +329,7 @@ export function buildTypeArgumentsToSymbolTypes(args : pp.TypeArgumentContext[],
 
 
 
-export function evaluatePrimitiveTypeToSymbolType(primitive : pp.PrimitiveTypeContext) : symb.Type
+export function evaluatePrimitiveTypeToSymbolType(primitive : pp.PrimitiveTypeContext) : psymb.PType
 {
 	if(primitive.BOOLEAN())
 		return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Boolean);
@@ -368,7 +368,7 @@ export function findPdeName(baseSymbol : symb.BaseSymbol) : string | undefined
 	return findPdeName(baseSymbol.parent);
 }
 
-export function convertAliasType( type: symb.Type, callContext : psymb.CallContext ) : symb.Type
+export function convertAliasType( type: psymb.PType, callContext : psymb.CallContext ) : psymb.PType
 {
 	if( !callContext.callerSymbol || !callContext.callerType  )
 	{

@@ -1,14 +1,12 @@
 import * as symb from 'antlr4-c3'
-import * as path from 'path';
-import * as AdmZip from 'adm-zip';
-import * as javaTools from 'java-class-tools'
-//import * as JavaClassParser from 'java-class-parser';
 import * as psymb from "./antlr-sym"
-import * as antlr from 'antlr4ts';
 import { ClassReader } from "@xmcl/asm"
-import { ClassBuilderFromJava } from "./symbolsFromJava"
+import { JavaClassVisitor } from "./javaClassVisitor"
+
+import * as path from 'path';
 
 const fs = require('fs');
+const AdmZip = require('adm-zip');
 
 const containerPath = `${__dirname}/processing/`;
 
@@ -28,49 +26,17 @@ export interface ModuleInfo
 }
 
 let modulesMap : Map<string, ModuleInfo> = new Map<string, ModuleInfo>();
-const reader = new javaTools.JavaClassFileReader();
+export let libTable : psymb.PLibraryTable = new psymb.PLibraryTable("", { allowDuplicateSymbols: true});
+export let processingImports : Set<string> = new Set<string>();
 
 export function loadDefaultLibraries()
 {
-	for(let i=0; i <50000; i++);
+	loadJavaSymbolsFile("ct.sym");
 
-	let module = importModuleInfo("customcontainer/", "", "custom");
-	if(module)
-		modulesMap.set("java.lang", module);
+	importModuleInfo("customcontainer/", "", "custom");
 
 	for(let _counter: number = 0; _counter < extractionModuleType.length; _counter++)
-	{
-		let name = extractionModuleType[_counter];
-		let module = importModuleInfo("container/", "extractor/processing/", name);
-		if(module)
-			modulesMap.set("processing."+name, module);
-	}
-}
-
-export function getModuleSymbols(moduleName: string): symb.SymbolTable | undefined 
-{
-	let moduleInfo = modulesMap.get(moduleName);
-	return moduleInfo?.symbols;
-}
-
-export function tryAddDependency(mainTable : psymb.PSymbolTable, moduleName : string)
-{
-	let module = getModuleSymbols(moduleName);
-	if(module)
-		mainTable.addDependencies(module);
-	mainTable.addImport(moduleName);
-}
-
-export function GetClass(classPath: string): psymb.PClassSymbol | undefined 
-{
-	let lastIndex = classPath.lastIndexOf(psymb.PNamespaceSymbol.delimiter);
-	let moduleName = classPath.substring(0, lastIndex);
-	let className = classPath.substring(lastIndex+1, classPath.length);
-	let moduleInfo = modulesMap.get(moduleName);
-	let result = moduleInfo?.symbols.resolveSync(className);
-	if(result instanceof psymb.PClassSymbol)
-		return result;
-	return;
+		importModuleInfo("container/", "extractor/processing/", extractionModuleType[_counter]);
 }
 
 function importModuleInfo(moduleDeclPath:string, classesRoute:string, modType:string) : ModuleInfo | undefined
@@ -81,20 +47,19 @@ function importModuleInfo(moduleDeclPath:string, classesRoute:string, modType:st
 		let data = fs.readFileSync(filePath, 'utf-8')
 		let tempSplit = data.split('\n');
 
-		let libTable : psymb.PLibraryTable = new psymb.PLibraryTable("", { allowDuplicateSymbols: true });
  
 		for(let i : number=0; i < tempSplit.length; i++)
 		{
 			let classFileName : string = tempSplit[i];
-			if(!classFileName.includes('$') && classFileName.includes('.class'))
+			if( classFileName.includes('.class') )
 			{
 				let fullClassPath : string = `${containerPath}${classesRoute}${modType}/${classFileName}`;
 				
 				try
 				{
-					let className : string = classFileName.substring(0, classFileName.length-6);
+					let className : string = classFileName.substring(classFileName.lastIndexOf('$')+1, classFileName.lastIndexOf('.'));
 
-					const visitor = new ClassBuilderFromJava(libTable, className);
+					const visitor = new JavaClassVisitor(libTable, className);
 					const classData: Buffer = fs.readFileSync(fullClassPath);
 					new ClassReader(classData).accept(visitor);
 				}
@@ -115,3 +80,111 @@ function importModuleInfo(moduleDeclPath:string, classesRoute:string, modType:st
 	return;
 }
 
+export function loadJarsFromDirectory(directoryPath: string)
+{
+	  // Read the contents of the directory
+	let fileNames = fs.readdirSync(directoryPath);
+	for(let fileName of fileNames)
+	{
+		if (fileName.endsWith('.jar') )
+		  	loadJarFile(directoryPath+fileName);
+	}
+}
+
+function loadJarFile(filename:string)
+{
+	try 
+	{
+        // Create an instance of AdmZip
+        const zip = new AdmZip(filename);
+
+        // Get the entries (files and directories) in the zip archive
+        const zipEntries = zip.getEntries();
+        // Process each entry in the zip archive
+        for (const entry of zipEntries) 
+		{
+            if (entry.isDirectory)
+                continue;
+            if(!entry.name || entry.name.length == 0)
+                continue;
+
+			if (!entry.name.endsWith('.class') )
+				continue;
+			
+			let fullName = entry.entryName;
+			fullName = fullName.substring(0, fullName.length-6);
+
+			let packageEndIndex = fullName.lastIndexOf('/');
+
+			let packageName = fullName.substring(0, packageEndIndex);
+			packageName = packageName.replace(/\//g, psymb.PNamespaceSymbol.delimiter);
+
+			let classFileName = fullName.substring(packageEndIndex+1);
+			let className : string = classFileName.substring(classFileName.indexOf('$')+1);
+
+			processingImports.add(packageName);
+			
+			const fileContent : Buffer = entry.getData();
+			const visitor = new JavaClassVisitor(libTable, className);
+			new ClassReader(fileContent).accept(visitor);
+		}
+		
+    } catch (error) {
+        console.error(`Error reading zip file: ${error}`);
+    }
+}
+
+function loadJavaSymbolsFile(filename:string)
+{
+	let filePath = containerPath + filename;
+	let classMap : Map<string, Buffer> = new Map<string, Buffer>();
+	
+	try {
+        // Create an instance of AdmZip
+        const zip = new AdmZip(filePath);
+
+        // Get the entries (files and directories) in the zip archive
+        const zipEntries = zip.getEntries();
+
+        // Process each entry in the zip archive
+        for (const entry of zipEntries) 
+		{
+            if (entry.isDirectory)
+                continue;
+            if(!entry.name || entry.name.length == 0)
+                continue;
+
+            let versionMarker = entry.entryName.indexOf('/');
+            let moduleMarker = entry.entryName.indexOf('/', versionMarker+1);
+            let classMarker = entry.entryName.lastIndexOf('/');
+
+            let moduleName = entry.entryName.substring(versionMarker+1, moduleMarker);
+            let packageName = entry.entryName.substring(moduleMarker+1, classMarker);
+            let className = entry.entryName.substring(classMarker+1);
+ 
+			packageName = packageName.replace(/\//g, psymb.PNamespaceSymbol.delimiter);
+			const fileContent : Buffer = entry.getData();//.toString('utf-8');
+			let fullname = `${packageName}.${className}`;
+			classMap.set(fullname, fileContent);
+		}
+		let i:number=0;
+		for(let [key, val] of classMap)
+		{
+			let fullName = key;
+			if(key.endsWith(".sig"))
+				fullName = fullName.substring(0, fullName.length-4);
+			let classFileName = fullName.substring(fullName.lastIndexOf('.')+1);
+			let className : string = classFileName.substring(classFileName.indexOf('$')+1);
+
+			const visitor = new JavaClassVisitor(libTable, className);
+			const classData: Buffer = val;
+			new ClassReader(classData).accept(visitor);
+
+			i++;
+		}
+		console.log(`found ${i} elements`);
+		
+    } catch (error) {
+        console.error(`Error reading zip file: ${error}`);
+    }
+}

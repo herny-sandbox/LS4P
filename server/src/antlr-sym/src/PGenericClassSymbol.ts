@@ -1,10 +1,10 @@
-import { Type } from "antlr4-c3";
 import { PClassSymbol } from "./PClassSymbol"
+import { PType } from "./PType"
 
 export class PGenericClassSymbol extends PClassSymbol
 {
-	readonly genericTypes: Type[] = [];
-    constructor(name: string, genTypes: Type[], ext?: Type|undefined, impl: Type[]=[])
+	readonly genericTypes: PType[] = [];
+    constructor(name: string, genTypes: PType[], ext?: PType|undefined, impl: PType[]=[])
 	{
 		super(name, ext, impl);
 		this.genericTypes = genTypes;

@@ -46,6 +46,7 @@ export let hasDiagnosticRelatedInformationCapability: boolean = false;
 
 connection.onInitialize((params: InitializeParams) => {
 	let capabilities = params.capabilities;
+	//let initOptions = params.initializationOptions;
 
 	hasConfigurationCapability = !!(
 		capabilities.workspace && !!capabilities.workspace.configuration
@@ -58,6 +59,11 @@ connection.onInitialize((params: InitializeParams) => {
 		capabilities.textDocument.publishDiagnostics &&
 		capabilities.textDocument.publishDiagnostics.relatedInformation
 	);
+	// if(initOptions)
+	// {
+	// 	const processingPath: string | undefined = initOptions.processingPath;
+	// 	console.log(`processingPath: ${processingPath}`);
+	// }
 	if(params.workspaceFolders && params.workspaceFolders.length > 0)
 		forcedDelayedStart(params.workspaceFolders[0].uri);
 
@@ -121,14 +127,22 @@ let globalSettings: ExampleSettings = defaultSettings;
 let documentSettings: Map<string, Thenable<ExampleSettings>> = new Map();
 
 connection.onDidChangeConfiguration(change => {
-	log.write(`Config change event occured`, log.severity.EVENT)
-	if (hasConfigurationCapability) {
-		documentSettings.clear();
-	} else {
-		globalSettings = <ExampleSettings>(
-			(change.settings.languageServerExample || defaultSettings)
-		);
-	}
+	// log.write(`Config change event occured`, log.severity.EVENT);
+	// if (change.settings && change.settings.processing) {
+    //     const processingPath : string = change.settings.processing.path;
+	// 	const maxNumberOfProblems : number = change.settings.processing.maxNumberOfProblems;
+    //     // Now you can use mySettingValue in your server logic
+    //     // ...
+	// 	log.write(`Config change event occured, processingPath: ${processingPath}`, log.severity.EVENT);
+	// 	log.write(`Config change event occured, maxNumberOfProblems: ${maxNumberOfProblems}`, log.severity.EVENT);
+    // }
+	// if (hasConfigurationCapability) {
+	// 	documentSettings.clear();
+	// } else {
+	// 	globalSettings = <ExampleSettings>(
+	// 		(change.settings.processing || defaultSettings)
+	// 	);
+	// }
 
 	//documents.all().forEach(diagnostics.checkForRealtimeDiagnostics);
 });
@@ -211,7 +225,7 @@ async function notifySketchChanged()
 
 async function forcedDelayedStart(projectUri: string)
 {
-	//await sleep(2000);
+	//await sleep(4000);
 
 	sketch.prepareSketch(projectUri);
 	tryNotifySketchChanged();

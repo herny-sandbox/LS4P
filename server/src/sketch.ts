@@ -10,7 +10,7 @@ import { ParserRuleContext } from 'antlr4ts';
 import * as symb from 'antlr4-c3'
 import * as dm from './definitionsMap'
 import * as lsp from 'vscode-languageserver'
-import { PSymbolTable, PClassSymbol, PUtils } from './antlr-sym';
+import * as psymb from './antlr-sym';
 import * as javaModules from './javaModules'
 import * as parseUtils from './astutils'
 
@@ -29,8 +29,8 @@ let tokenArray: [ParseTree, ParseTree][];
 let jrePath:string = ''
 
 let symbolTableVisitor : SymbolTableVisitor;
-let mainSymbolTable : PSymbolTable;
-let mainClass : PClassSymbol;
+let mainSymbolTable : psymb.PSymbolTable;
+let mainClass : psymb.PClassSymbol;
 /** 
  * Map which maps the line in the java file to the line in the .pde file (tab). 
  * Index is the java file number.
@@ -75,7 +75,7 @@ export class PdeContentInfo
 	public linesOffset: number=0;
 
 	private definitionDict : Map<TerminalNode, symb.BaseSymbol> = new Map<TerminalNode, symb.BaseSymbol>();
-	private contextTypeDict : Map<ParseTree, symb.Type> = new Map<ParseTree, symb.Type>();
+	private contextTypeDict : Map<ParseTree, psymb.PType> = new Map<ParseTree, psymb.PType>();
 	private usageMap : Map<symb.BaseSymbol, lsp.Range[]> = new Map<symb.BaseSymbol, lsp.Range[]>();
 
 
@@ -157,7 +157,7 @@ export class PdeContentInfo
 		return this.definitionDict.get(node);
 	}
 
-	public findNodeContextTypeDefinition(node : ParseTree ) : symb.Type | undefined
+	public findNodeContextTypeDefinition(node : ParseTree ) : psymb.PType | undefined
 	{
 		return this.contextTypeDict.get(node);
 	}
@@ -178,7 +178,7 @@ export class PdeContentInfo
 		return declaredSymbol;
 	}
 
-	public registerContextType(node: ParseTree | undefined, ctxType : symb.Type | undefined)
+	public registerContextType(node: ParseTree | undefined, ctxType : psymb.PType | undefined)
 	{
 		if(!ctxType)
 			return;
@@ -193,7 +193,7 @@ export class PdeContentInfo
 			severity: lsp.DiagnosticSeverity.Error,
 			range: parseUtils.calcRangeFromParseTree(node),
 			message: msg,
-			source: `pde`
+			source: this.name
 	   }
 	   this.diagnostics.push(diagnostic);
 	}
@@ -221,37 +221,27 @@ export function initialize(workspacePath: string)
 	}
 	jrePath = `${__dirname.substring(0,__dirname.length-11)}/jre/bin`;
 
-	mainSymbolTable = new PSymbolTable("", { allowDuplicateSymbols: true });
+	mainSymbolTable = new psymb.PSymbolTable("", { allowDuplicateSymbols: true });
 
 	javaModules.loadDefaultLibraries();
-	javaModules.tryAddDependency(mainSymbolTable, "java.lang");
-	javaModules.tryAddDependency(mainSymbolTable, "processing.core");
-	javaModules.tryAddDependency(mainSymbolTable, "processing.awt");
-	javaModules.tryAddDependency(mainSymbolTable, "processing.data");
-	javaModules.tryAddDependency(mainSymbolTable, "processing.event");
-	javaModules.tryAddDependency(mainSymbolTable, "processing.javafx");
-	javaModules.tryAddDependency(mainSymbolTable, "processing.opengl");
-	mainSymbolTable.addImport("java.util")
+	javaModules.loadJarsFromDirectory(path+"code/");
+	mainSymbolTable.addDependencies(javaModules.libTable);
+	mainSymbolTable.addImport("java.util", true);
+	mainSymbolTable.addImport("java.io", true);
+	mainSymbolTable.addImport("java.lang", true);
+	mainSymbolTable.addImport("processing.core", true);
+	mainSymbolTable.addImport("processing.data", true);
+	mainSymbolTable.addImport("processing.event", true);
+	mainSymbolTable.addImport("processing.opengl", true);
 
-	mainClass = new PClassSymbol(name, PUtils.createClassType("processing.core.PApplet"));
+	for(let procImport of javaModules.processingImports)
+		mainSymbolTable.addImport(procImport, true);
+
+	mainClass = new psymb.PClassSymbol(name, psymb.PUtils.createClassType("processing.core.PApplet"));
 	mainSymbolTable.addSymbol(mainClass);
 
 	symbolTableVisitor = new SymbolTableVisitor(mainSymbolTable, mainClass);
 	
-	// try 
-	// {
-	// 	let mainFileName = sketchInfo.name+'.pde';
-	// 	let mainFileContents : string = fs.readFileSync(sketchInfo.path+mainFileName, 'utf-8');
-
-	// 	addPdeContent(mainFileName, mainFileContents);
-	// 	//contents.set(mainFileName, mainFileContents);
-	// }
-	// catch (e) 
-	// {
-	// 	log.write("Something went wrong while loading the main file", log.severity.ERROR);
-	// 	log.write(e, log.severity.ERROR);
-	// 	return false;
-	// }
 	tryAddPdeFile(sketchInfo.name+'.pde')
 
 	try
@@ -283,10 +273,11 @@ export function prepareSketch(sketchFolder : string)
 
 export function rebuildReferences()
 {
-	log.write("Rebuild definitions & references BEGIN", log.severity.EVENT);
+	log.write("Rebuilding definitions...", log.severity.EVENT);
 	for (let pdeInfo of getAllPdeInfos()) 
 		pdeInfo.tryRebuildSymbolDeclarations();
 
+	log.write("Rebuilding references...", log.severity.EVENT);
 	for (let pdeInfo of getAllPdeInfos()) 
 		pdeInfo.tryRebuildSymbolReferences();
 	log.write("Rebuild definitions & references ENDED", log.severity.EVENT);
