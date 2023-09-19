@@ -24,7 +24,7 @@ import {
 } from 'vscode-languageserver/node';
 
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { DocumentSymbols } from "./documentSymbols";
+import { DocumentSymbols } from "./DocumentSymbols";
 
 import * as completion from './completion';
 import * as definition from './definition';
@@ -46,7 +46,7 @@ export let hasDiagnosticRelatedInformationCapability: boolean = false;
 
 connection.onInitialize((params: InitializeParams) => {
 	let capabilities = params.capabilities;
-	//let initOptions = params.initializationOptions;
+	let initOptions = params.initializationOptions;
 
 	hasConfigurationCapability = !!(
 		capabilities.workspace && !!capabilities.workspace.configuration
@@ -59,11 +59,12 @@ connection.onInitialize((params: InitializeParams) => {
 		capabilities.textDocument.publishDiagnostics &&
 		capabilities.textDocument.publishDiagnostics.relatedInformation
 	);
-	// if(initOptions)
-	// {
-	// 	const processingPath: string | undefined = initOptions.processingPath;
-	// 	console.log(`processingPath: ${processingPath}`);
-	// }
+	if(initOptions)
+	{
+		const processingPath: string | undefined = initOptions.processingPath;
+		console.log(`processingPath: ${processingPath}`);
+		sketch.setProcessingPath(processingPath);
+	}
 	if(params.workspaceFolders && params.workspaceFolders.length > 0)
 		forcedDelayedStart(params.workspaceFolders[0].uri);
 

@@ -59,6 +59,7 @@ export class CallContext
 
 export class PUtils 
 {
+
 	public static typeToPType(type: any|undefined) : PType | undefined
 	{
 		if(type == undefined)
@@ -67,6 +68,8 @@ export class PUtils
 	}
 
 	public static isDefaultObjectPath(path: string) {return path == defaultObjectClass; }
+	public static isDefaultStringPath(path: string) {return path == defaultStringClass; }
+
 	public static createDefaultObjectType() : PType
 	{
 		return PUtils.createClassType(defaultObjectClass);
@@ -267,6 +270,21 @@ export class PUtils
 				}
 			}
 		}
+		if(ctx instanceof PInterfaceSymbol)
+		{
+			if(ctx.extends)
+			{
+				for(let i=0; i < ctx.extends.length; i++ )
+				{
+					let extSymbol : PInterfaceSymbol | undefined = PUtils.resolveComponentSync(ctx, PInterfaceSymbol, ctx.extends[i].name )
+					if( extSymbol )
+					{
+						const parentSymbols = PUtils.getAllSymbolsSync(extSymbol, t, name, true);
+						result.push(...parentSymbols);
+					}
+				}
+			}
+		}
 		else if(ctx instanceof PSymbolTable)
 		{
 			const symbols = PUtils.getAllDirectChildSymbolSync(ctx, t, name)
@@ -313,6 +331,17 @@ export class PUtils
 				result.push( child );
 		}
 		return result;
+	}
+
+	public static getClassName( fullname : string )  : string
+	{
+		if(fullname && fullname.indexOf('.')>=0)
+		{
+			let nameParts : string [] = fullname.split(".");
+			return nameParts[nameParts.length-1];
+		}
+
+		return fullname;
 	}
 
 	public static resolveSymbolSync<T extends BaseSymbol, Args extends unknown[]>(ctx: BaseSymbol, t: SymbolConstructor<T, Args>, name?:string, localOnly?: boolean): T | undefined
@@ -367,7 +396,8 @@ export class PUtils
 				return resultSymbol;
 			for(let interf of ctx.extends)
 			{
-				let implSymbol : BaseSymbol | undefined = ctx.resolveSync(interf.name, false);
+				let implSymbol : PInterfaceSymbol | undefined = PUtils.resolveComponentSync(ctx, PInterfaceSymbol, interf.name )
+				//let implSymbol : BaseSymbol | undefined = ctx.resolveSync(interf.name, false);
 				if(implSymbol && implSymbol instanceof PInterfaceSymbol)
 				{
 					const resultSymbol = PUtils.resolveSymbolSync(implSymbol, t, name, true);
@@ -381,19 +411,6 @@ export class PUtils
 			const resultSymbol = PUtils.resolveChildSymbolSync(ctx, t, name);
 			if(resultSymbol)
 				return resultSymbol;
-
-			if(name)
-				name = ctx.ensureIsFullPath(name);
-
-			// for(let dependency of ctx.getDependencies())
-			// {
-			// 	if(dependency instanceof PLibraryTable)
-			// 	{
-			// 		// let component = dependency.resolveComponent(t, name);
-			// 		// if(component)
-			// 		// 	return component;
-			// 	}
-			// }
 		}
 		else  if(ctx instanceof ScopedSymbol)
 		{
@@ -575,6 +592,9 @@ export class PUtils
 		{
 			let primitive = left.typeKind == PTypeKind.Primitive ? left : right;
 			let classType = left.typeKind == PTypeKind.Class ? left : right;
+
+			if(classType.name == "Object" || PUtils.isDefaultObjectPath(classType.name))
+				return true;
 
 			let classSymb = PUtils.resolveSymbolFromTypeSync(scope, classType);
 			if(!classSymb)

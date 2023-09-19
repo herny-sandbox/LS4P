@@ -275,6 +275,8 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.PType | undefin
 				}
 				else if(ctx.ADD() )											// expression '+' expression
 				{
+					if( this.IsTypeStringType(results[0], currentScope) || this.IsTypeStringType(results[1], currentScope) )
+						return psymb.PUtils.createStringType();
 					return results[0];
 				}
 				else if(ctx.SUB() )											// expression '-' expression
@@ -398,9 +400,11 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.PType | undefin
 		let arrayCreator : pp.ArrayCreatorRestContext | undefined = creator.arrayCreatorRest();
 		if( classCreator )
 		{
-			let className =  parseUtils.buildFullClassName( identifiers );
-			//let genericClassSymbol = this.resolveSymbolType(className, currentScope);
-			//this.pdeInfo.registerDefinition(identifiers[identifiers.length-1], genericClassSymbol);
+			let paramExpressionList : pp.ExpressionListContext = classCreator.arguments().expressionList();
+
+			let fullClassPath =  parseUtils.buildFullClassName( identifiers );
+			let className = psymb.PUtils.getClassName(fullClassPath);
+			let methodID = identifiers[identifiers.length-1];
 
 			this.registerUsageForIdentifiers(identifiers, currentScope);
 
@@ -410,7 +414,9 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.PType | undefin
 
 			parseUtils.buildTypeArgumentsToSymbolTypes(args , genericParams, currentScope);
 
-			result = psymb.PUtils.createClassType(className, genericParams);
+			let classType = psymb.PUtils.createClassType(fullClassPath, genericParams);
+			this.visitMethodCallRaw(classType, methodID, className, paramExpressionList, currentScope);
+			result = classType;
 		}
 		else if( arrayCreator )
 		{
@@ -492,8 +498,12 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.PType | undefin
 			let result = this.findFirstClassOrInterfaceUp(currentScope);
 			if(result && result instanceof psymb.PClassSymbol)
 			{
+				// Calling the constructor from the super class
 				if(result.extends)
-					this.visitMethodCallRaw(result.extends, superCall, result.extends.name, paramExpressionList, currentScope);
+				{
+					let className = psymb.PUtils.getClassName(result.extends.name);
+					this.visitMethodCallRaw(result.extends, superCall, className, paramExpressionList, currentScope);
+				}
 				return;
 			}
 
@@ -525,6 +535,8 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.PType | undefin
 			if(!match)
 				match = this.checkCandidatesMatch(callContext, candidates, expressionParams, currentScope, false);
 		}
+		else if(candidates.length == 0 && callScope.name == methodName ) // Is a constructor? could be not explicity defined
+			return;
 		
 		this.pdeInfo.registerDefinition(methodID, match);
 		if(!match)
@@ -603,7 +615,12 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.PType | undefin
 		{
 			let typeType = typeTypeOrVoid.typeType();
 			if(typeType)
-				return psymb.PUtils.createClassType("java.lang.Class");
+			{
+				let baseTypes : psymb.PType [] = [];
+				baseTypes.push( parseUtils.convertTypeTypeToSymbolType(typeType, currentScope) );
+				return psymb.PUtils.createClassType("java.lang.Class", baseTypes);
+			}
+				
 		}
 	}
 
@@ -668,7 +685,7 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.PType | undefin
 			this.pdeInfo.registerDefinition(identifier, compSymbol);
 
 			if(compSymbol instanceof psymb.PNamespaceSymbol)
-				return psymb.PUtils.createNamespaceType(compSymbol.qualifiedName());
+				return psymb.PUtils.createNamespaceType(compSymbol.qualifiedName(psymb.PNamespaceSymbol.delimiter, true, false));
 			if(compSymbol instanceof psymb.PClassSymbol )
 				return compSymbol;
 			else if(compSymbol instanceof psymb.PInterfaceSymbol )
@@ -719,7 +736,10 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.PType | undefin
 			else
 				requiredParam = psymb.PUtils.typeToPType(argParam);
 
+			let isVArg : boolean = (i >= (requiredParams.length-1)) && lastIsVarg;
 			let appliedParam : psymb.PType | undefined = i < userParams.length ? userParams[i] : undefined;
+			if( !appliedParam && isVArg )
+				break;
 			if( !requiredParam || !appliedParam )
 				return false;
 
@@ -742,13 +762,6 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.PType | undefin
 
 		if(psymb.PUtils.checkComparableTypes(referenceType, instanceType, symbolContext))
 			return true;
-		// let isSameKind = referenceType.kind == instanceType.kind;
-		// // Special case:
-		// if( (referenceType.name == "Integer" && instanceType.name=="int") || (referenceType.name == "int" && instanceType.name=="Integer") )
-		// 	return true;
-
-		// if(!isSameKind)
-		// 	return false;
 
 		if(referenceType.typeKind == psymb.PTypeKind.Class || referenceType.typeKind == psymb.PTypeKind.Interface )
 			return this.compareClassTypes(referenceType, instanceType, symbolContext, perfectMatch);
@@ -883,6 +896,14 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.PType | undefin
 		if(!currentScope)
 			currentScope = this.mainClass;
 		return currentScope;
+	}
+
+	private IsTypeStringType(type: psymb.PType, currentScope : symb.ScopedSymbol)
+	{
+		if(type.typeKind != psymb.PTypeKind.Class )
+			return false;
+		let classPath = this.symbolTable.ensureIsFullPath(type.name);
+		return psymb.PUtils.isDefaultStringPath(classPath);
 	}
 	
 	private registerUsageForIdentifier(identifier : TerminalNode, currentScope : symb.ScopedSymbol)

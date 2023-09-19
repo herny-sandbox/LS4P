@@ -18,6 +18,8 @@ const fs = require('fs')
 const pathM = require('path')
 const childProcess = require('child_process');
 
+let processingPath : string;
+
 let sketchInfo : Info;
 let initialized = false;
 
@@ -167,10 +169,14 @@ export class PdeContentInfo
 		if(declaredSymbol !== undefined)
 		{
 			this.definitionDict.set(node, declaredSymbol);
-			let lst = this.usageMap.get(declaredSymbol);
-			if(lst === undefined)
-				this.usageMap.set(declaredSymbol, lst = []);
-			lst.push(parseUtils.calcRangeFromParseTree(node));
+			let idText = node.text;
+			if(idText != "this" && idText != "super" )
+			{
+				let lst = this.usageMap.get(declaredSymbol);
+				if(lst === undefined)
+					this.usageMap.set(declaredSymbol, lst = []);
+				lst.push(parseUtils.calcRangeFromParseTree(node));
+			}
 		}
 		else
 			this.notifyCompileError(`Unable to find declaration for ${node.text}`, node);
@@ -202,6 +208,11 @@ export class PdeContentInfo
 export function getRootContext() { return processedSketchTokens; }
 export function getSymbolTable() { return symbolTableVisitor.symbolTable; }
 
+export function setProcessingPath(path: string)
+{ 
+	processingPath = path;
+}
+
 /**
  * Initializes a sketch. 
  * Determens the sketch folder based on the parameter
@@ -223,7 +234,9 @@ export function initialize(workspacePath: string)
 
 	mainSymbolTable = new psymb.PSymbolTable("", { allowDuplicateSymbols: true });
 
-	javaModules.loadDefaultLibraries();
+	//javaModules.loadDefaultLibraries();
+	javaModules.loadJavaSymbolsFile(processingPath+"java/lib/ct.sym");
+	javaModules.loadJarsFromDirectory(processingPath+"core/library/");
 	javaModules.loadJarsFromDirectory(path+"code/");
 	mainSymbolTable.addDependencies(javaModules.libTable);
 	mainSymbolTable.addImport("java.util", true);

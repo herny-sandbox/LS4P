@@ -5,7 +5,6 @@ import * as symb from 'antlr4-c3'
 import * as pp from './grammer/ProcessingParser';
 import { Diagnostic, DiagnosticSeverity } from 'vscode-languageserver'
 import * as log from './scripts/syslogs'
-import { DocumentSymbols } from "./documentSymbols"
 import { PdeContentInfo } from "./sketch";
 import * as psymb from "./antlr-sym"
 
@@ -355,10 +354,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		this.applyModifiers(method, visibility, modifiers);
 
 		this.pdeInfo?.registerDefinition(identif, method );
-		let parentCtx : ParseTree;
-		//if() = identif.parent;
-		// if(identif.parent instanceof ParserRuleContext)
-		// {
+
 		if(!identif.parent)
 			return this.defaultResult();
 	
@@ -387,8 +383,6 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 			this.scope = method.parent as symb.ScopedSymbol;
 			return this.defaultResult();
 		}
-		//}
-		return this.defaultResult();
 	}
 
 	tryDeclareGenericMethod(ctx: pp.GenericMethodDeclarationContext, visibility:symb.MemberVisibility, modifiers:symb.Modifier[]) : symb.SymbolTable
@@ -494,10 +488,91 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 
 	visitBlock(ctx: pp.BlockContext) : symb.SymbolTable
 	{
-		let fakeSymbolName : string = "";//"block"+ctx.start.startIndex;
+		let fakeSymbolName : string = "";
 		let newSymbol : symb.ScopedSymbol = new symb.ScopedSymbol(fakeSymbolName);
 		return this.addScope(ctx, newSymbol, () => this.visitChildren(ctx));
-	};
+	}
+
+	visitStatement(ctx: pp.StatementContext) : symb.SymbolTable
+	{
+		let blockStatement = ctx.block();
+		let expressions = ctx.expression();
+		let statements = ctx.statement();
+		let assertToken = ctx.ASSERT();
+		let ifToken = ctx.IF();
+		let forLoop = ctx.forLoop();
+		let whileToken = ctx.WHILE();
+		let doToken = ctx.DO();
+		let tryToken = ctx.TRY();
+		let switchToken = ctx.SWITCH();
+		let syncToken = ctx.SYNCHRONIZED();
+		let returnToken = ctx.RETURN();
+		let throwToken = ctx.THROW();
+		let breakToken = ctx.BREAK();
+		let continueToken = ctx.CONTINUE();
+		let identifier = ctx.IDENTIFIER();
+
+		if(ctx._blockLabel)
+			this.visitBlock(blockStatement);
+		else if(ifToken)
+		{
+			for(let i=0; i<statements.length;i++)
+				this.visitChildren(statements[i]);
+		}
+		else if(forLoop)
+			this.visitForLoop(forLoop);
+
+		else if(whileToken)
+		{
+			for(let i=0; i<statements.length;i++)
+				this.visitChildren(statements[i]);
+		}
+		else if(doToken)
+		{
+			for(let i=0; i<statements.length;i++)
+				this.visitChildren(statements[i]);
+		}
+		else if(tryToken)
+		{
+			let resources = ctx.resourceSpecification();
+			if(resources)
+				this.visitChildren(resources);
+
+			this.visitBlock(blockStatement);
+
+			let catchCtx = ctx.catchClause();
+			let finallyCtx = ctx.finallyBlock();
+			if(catchCtx && catchCtx.length > 0)
+			{
+				for(let i=0; i<catchCtx.length;i++)
+					this.visitCatchClause(catchCtx[i]);
+			}
+			if(finallyCtx)
+			{
+				let block = finallyCtx.block();
+				if(block)
+					this.visitBlock(block);
+			}
+		}
+		else if(switchToken)
+		{
+			let switchBlocks = ctx.switchBlockStatementGroup();
+			let switchLabels = ctx.switchLabel();
+			for(let i=0; i< switchBlocks.length; i++ )
+				this.visitChildren(switchBlocks[i]);
+			for(let i=0; i< switchLabels.length; i++ )
+				this.visitChildren(switchLabels[i]);
+		}
+		else if(syncToken)
+			this.visitBlock(blockStatement);
+		else if(ctx._identifierLabel)
+		{
+			for(let i=0; i<statements.length;i++)
+				this.visitChildren(statements[i]);
+		}
+
+		return this.defaultResult();
+	}
 
 	visitCatchClause(ctx: pp.CatchClauseContext)  : symb.SymbolTable
 	{
@@ -514,6 +589,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		let savedSymbol = this.scope;
 		let catchSymbol : symb.ScopedSymbol = new symb.ScopedSymbol("");
 		this.addChildSymbol(ctx, catchSymbol);
+		this.scope = catchSymbol;
 
 		let qualifName = catchType.qualifiedName();
 		if(qualifName.length > 0)

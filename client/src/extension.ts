@@ -18,7 +18,7 @@ export function activate(context: vscode.ExtensionContext)
 		path.join('server', 'out', 'server.js')
 	);
 	
-	let debugOptions = { execArgv: ['--nolazy', '--debug-brk=6009'] };
+	let debugOptions = { execArgv: ['--nolazy', '--inspect=6009'] }; // '--inspect-brk=6009'] };
 
 	let serverOptions: ServerOptions = {
 		run: { module: serverModule, transport: TransportKind.ipc },
@@ -29,8 +29,9 @@ export function activate(context: vscode.ExtensionContext)
 		}
 	};
 
-	const config = vscode.workspace.getConfiguration('processing-language-server');
-	const userProcessingPath: string | undefined = config.get('processingPath');
+	const config = vscode.workspace.getConfiguration('vscode-processing-ls');
+	const userProcessingPath: string = config.get('processing.path', "");
+	console.log(`Processing path: ${userProcessingPath}`)
 	
 	let clientOptions: LanguageClientOptions = {
 		documentSelector: [{ scheme: 'file', language: 'Processing' }],

@@ -370,30 +370,33 @@ export function findPdeName(baseSymbol : symb.BaseSymbol) : string | undefined
 
 export function convertAliasType( type: psymb.PType, callContext : psymb.CallContext ) : psymb.PType
 {
-	if( !callContext.callerSymbol || !callContext.callerType  )
-	{
-		console.error("Unable to resolve Generic Alias: "+type.name)
-		return type;
-	}
-	if(callContext.callerSymbol instanceof symb.ScopedSymbol)
-	{
-		let genericParams = callContext.callerSymbol.getNestedSymbolsOfTypeSync(psymb.PFormalParamSymbol);
-		for(let i=0; i < genericParams.length; i++)
-		{
-			if(genericParams[i].name == type.name)
-			{
-				if( callContext.callerType.baseTypes.length >= i )
-					return callContext.callerType.baseTypes[i];
-			}
-		}
-	}
-	
-	// for( let baseType of callContext.callerType.baseTypes )
-	// {
-	// 	if(baseType.name == type.name)
-	// 		return baseType.baseTypes[0];
-	// }
-	console.error("Unable to resolve generic type: "+type.name);
+	// let paramSymbol = psymb.PUtils.resolveSymbolSync(currentScope, psymb.PFormalParamSymbol, type.name);
+	// if(paramSymbol && paramSymbol.extends.length > 0)
+	// 	return paramSymbol.extends[0];
 
+    if( !callContext.callerSymbol || !callContext.callerType  )
+    {
+        console.error("Unable to resolve Generic Alias: "+type.name)
+        return type;
+    }
+    if(callContext.callerSymbol instanceof symb.ScopedSymbol)
+    {
+        let genericParams = callContext.callerSymbol.getNestedSymbolsOfTypeSync(psymb.PFormalParamSymbol);
+        for(let i=0; i < genericParams.length; i++)
+        {
+            if(genericParams[i].name == type.name)
+            {
+                if( callContext.callerType.baseTypes.length >= i )
+                    return callContext.callerType.baseTypes[i];
+            }
+        }
+    }
+    
+    // for( let baseType of callContext.callerType.baseTypes )
+    // {
+    //     if(baseType.name == type.name)
+    //         return baseType.baseTypes[0];
+    // }
+    console.error("Unable to resolve generic type: "+type.name);
 	return type;
 }

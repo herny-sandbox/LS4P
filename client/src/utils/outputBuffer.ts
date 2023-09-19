@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 
 export class BufferedOutputChannel implements vscode.Disposable {
     private _buffer: string[];
-    private _timer: NodeJS.Timer;
+    private _timer: NodeJS.Timeout;
     private _lastFlushTime: number;
 
     public constructor(private readonly outputCallback: (value: string) => void, private readonly flushIntervalMs: number) {
@@ -20,9 +20,10 @@ export class BufferedOutputChannel implements vscode.Disposable {
         this.add(value + "\n");
     }
 
-    public dispose() {
+    public dispose() 
+    {
         this.tryFlush();
-        clearInterval(this._timer);
+        clearInterval( this._timer );
     }
 
     private add(value: string) {

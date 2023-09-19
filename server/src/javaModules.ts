@@ -31,7 +31,7 @@ export let processingImports : Set<string> = new Set<string>();
 
 export function loadDefaultLibraries()
 {
-	loadJavaSymbolsFile("ct.sym");
+	loadDefaultJavaSymbolsFile("ct.sym");
 
 	importModuleInfo("customcontainer/", "", "custom");
 
@@ -134,9 +134,14 @@ function loadJarFile(filename:string)
     }
 }
 
-function loadJavaSymbolsFile(filename:string)
+export function loadDefaultJavaSymbolsFile(filename:string)
 {
-	let filePath = containerPath + filename;
+	loadJavaSymbolsFile(containerPath + filename)
+}
+
+export function loadJavaSymbolsFile(filename:string)
+{
+	let filePath = filename;
 	let classMap : Map<string, Buffer> = new Map<string, Buffer>();
 	
 	try {
