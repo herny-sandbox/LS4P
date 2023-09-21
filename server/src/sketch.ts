@@ -250,7 +250,7 @@ export function initialize(workspacePath: string)
 	for(let procImport of javaModules.processingImports)
 		mainSymbolTable.addImport(procImport, true);
 
-	mainClass = new psymb.PClassSymbol(name, psymb.PUtils.createClassType("processing.core.PApplet"));
+	mainClass = new psymb.PClassSymbol(name, psymb.PType.createAppletClassType());
 	mainSymbolTable.addSymbol(mainClass);
 
 	symbolTableVisitor = new SymbolTableVisitor(mainSymbolTable, mainClass);

@@ -116,38 +116,102 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.PType | undefin
 
 	visitLocalVariableDeclaration(ctx: pp.LocalVariableDeclarationContext) : psymb.PType | undefined 
 	{
-		this.registerUsageForDeclarationType(ctx.typeType());
-		return this.visitChildren(ctx.variableDeclarators());
+		let callContext = this.registerUsageForDeclarationType(ctx.typeType());
+		let declaratorsContext = ctx.variableDeclarators();
+		let declaratorList = declaratorsContext.variableDeclarator();
+		return this.visitChildren(declaratorsContext);
 	}
 	
 	visitFormalParameter(ctx: pp.FormalParameterContext) : psymb.PType | undefined
 	{
-		this.registerUsageForDeclarationType(ctx.typeType());
+		let callContext = this.registerUsageForDeclarationType(ctx.typeType());
 		return this.visitChildren(ctx.variableDeclaratorId());
 	}
 
 	visitFieldDeclaration(ctx: pp.FieldDeclarationContext) : psymb.PType | undefined
 	{
-		this.registerUsageForDeclarationType(ctx.typeType());
-		return this.visitChildren(ctx.variableDeclarators());
+		let callContext = this.registerUsageForDeclarationType(ctx.typeType());
+		let declaratorsContext = ctx.variableDeclarators();
+		return this.visitChildren(declaratorsContext);
 	}
 
 	visitMethodDeclaration(ctx: pp.MethodDeclarationContext) : psymb.PType | undefined
 	{
+		let callContext : psymb.CallContext | undefined;
 		let returnTypeOrVoid : pp.TypeTypeOrVoidContext = ctx.typeTypeOrVoid();
 		let returnTypeCtx = returnTypeOrVoid.typeType();
 		if(returnTypeCtx)
-			this.registerUsageForDeclarationType(returnTypeCtx);
+			callContext = this.registerUsageForDeclarationType(returnTypeCtx);
 
 		this.visitTerminal(ctx.IDENTIFIER());
 		this.visitChildren(ctx.formalParameters());
 		this.visitChildren(ctx.methodBody());
-		return;
+		return callContext?.type;
 	};
 
 	visitExpression(ctx: pp.ExpressionContext) : psymb.PType | undefined
 	{
 		return this.visitAndRegisterExpression(ctx, this.findScopeAtToken(ctx.start));
+	}
+
+	visitStatement(ctx: pp.StatementContext) : psymb.PType | undefined
+	{
+		let switchToken = ctx.SWITCH();
+		if(switchToken)
+		{
+			let currentScope = this.findScopeAtToken(ctx.start);
+			let parExpression = ctx.parExpression();
+			let switchBlockStatement = ctx.switchBlockStatementGroup();
+			let switchLabel = ctx.switchLabel();
+			let switchType : psymb.PType | undefined;
+			if(parExpression)
+			{
+				let expression = parExpression.expression();
+				if(expression)
+					switchType = this.visitAndRegisterExpression(expression, currentScope);
+			}
+			for(let i=0; i < switchBlockStatement.length; i++)
+				this.visitAndRegisterSwithStatementGroup(switchBlockStatement[i], currentScope, switchType);
+		
+			for(let i=0; i < switchLabel.length; i++)
+				this.visitAndRegisterSwithLabel(switchLabel[i], currentScope, switchType);
+			
+		}
+		else
+			return this.visitChildren(ctx);
+	}
+
+	visitAndRegisterSwithStatementGroup(ctx: pp.SwitchBlockStatementGroupContext, currentScope: symb.ScopedSymbol, switchType:psymb.PType|undefined)
+	{
+		let switchLabel = ctx.switchLabel();
+		let blockStatement = ctx.blockStatement();
+
+		for(let i=0; i < switchLabel.length; i++)
+			this.visitAndRegisterSwithLabel(switchLabel[i], currentScope, switchType);
+
+		for(let i=0; i < blockStatement.length; i++)
+			this.visit(blockStatement[i]);
+	}
+
+	visitAndRegisterSwithLabel(ctx: pp.SwitchLabelContext, currentScope: symb.ScopedSymbol, switchType:psymb.PType|undefined) 
+	{
+		if(ctx.DEFAULT())
+			return;
+
+		let labelType : psymb.PType | undefined;
+		if( ctx._constantExpression )
+			labelType = this.visitAndRegisterExpression(ctx._constantExpression, currentScope );
+		if( ctx._enumConstantName )
+		{
+			let enumMember : psymb.PEnumMemberSymbol | undefined;
+			if(switchType)
+			{
+				let callContext = psymb.PUtils.resolveComponentSync(currentScope, PComponentSymbol, switchType.name );
+				if(callContext)
+					enumMember = psymb.PUtils.resolveChildSymbolSync(callContext, psymb.PEnumMemberSymbol, ctx._enumConstantName.text);
+			}
+			this.pdeInfo.registerDefinition(ctx.IDENTIFIER(), enumMember );
+		}
 	}
 
 	visitAndRegisterExpression(ctx: pp.ExpressionContext, currentScope: symb.ScopedSymbol) : psymb.PType | undefined
@@ -163,9 +227,9 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.PType | undefin
 		if(expressions.length>0)
 			expression = expressions[0];
 		
-		let paren = ctx.LPAREN();
-		let dot = ctx.DOT();
-		let instanceOf = ctx.INSTANCEOF();
+		let parenToken = ctx.LPAREN();
+		let dotToken = ctx.DOT();
+		let instanceOfToken = ctx.INSTANCEOF();
 
 		if(primary) 														// : primary
 			return this.visitAndRegisterPrimary(primary, currentScope);
@@ -191,12 +255,12 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.PType | undefin
 			return symbType;
 		}
 		else if(methodCall)													// | methodCall
-			return this.visitAndRegisterMethodCall(expression, dot, methodCall, currentScope);
+			return this.visitAndRegisterMethodCall(expression, dotToken, methodCall, currentScope);
 
 		else if( ctx.NEW() && creator )										// | NEW creator
 			return this.visitAndRegisterCreator(creator, currentScope);
 
-		else if( paren && typeTypeCtx && expression )
+		else if( parenToken && typeTypeCtx && expression )
 		{
 			let result = this.visitAndRegisterExpression(expression, currentScope);
 			this.registerUsageForTypeType(typeTypeCtx, currentScope);
@@ -204,7 +268,7 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.PType | undefin
 
 			return castType;
 		}
-		else if( expression && instanceOf && typeTypeCtx)
+		else if( expression && instanceOfToken && typeTypeCtx)
 		{
 			let expressionType = this.visitAndRegisterExpression(expression, currentScope);
 			this.registerUsageForDeclarationType(typeTypeCtx);
@@ -412,7 +476,7 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.PType | undefin
 			//let paramsList : pp.ExpressionListContext | undefined;
 			let args : pp.TypeArgumentContext [] = typeArguments[0]?.typeArguments()?.typeArgument() ?? [];
 
-			parseUtils.buildTypeArgumentsToSymbolTypes(args , genericParams, currentScope);
+			parseUtils.convertTypeArgumentsToSymbolTypes(args , genericParams);
 
 			let classType = psymb.PUtils.createClassType(fullClassPath, genericParams);
 			this.visitMethodCallRaw(classType, methodID, className, paramExpressionList, currentScope);
@@ -518,9 +582,7 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.PType | undefin
 		
 		let localOnly = callScope !== currentScope;
 
-		let callContext : psymb.CallContext = new psymb.CallContext();
-		callContext.callerType = callerType;
-		callContext.callerSymbol = callScope;
+		let callContext : psymb.CallContext = new psymb.CallContext(callerType, callScope);
 
 		let expressionParams = this.visitAndRegisterExpressionList(paramExpressionList, currentScope);
 
@@ -882,10 +944,10 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.PType | undefin
 		return Range.create( line-1, pos, line-1, pos+length);
 	}
 
-	private registerUsageForDeclarationType(typeCtx : pp.TypeTypeContext)
+	private registerUsageForDeclarationType(typeCtx : pp.TypeTypeContext) : psymb.CallContext
 	{
 		let currentScope : symb.ScopedSymbol = this.findScopeAtToken(typeCtx.start);
-		this.registerUsageForTypeType(typeCtx, currentScope);
+		return this.registerUsageForTypeType(typeCtx, currentScope);
 	}
 
 	private findScopeAtToken(token: Token) : symb.ScopedSymbol
@@ -926,25 +988,92 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.PType | undefin
 		}
 	}
 
-	private registerUsageForTypeType(typeCtx : pp.TypeTypeContext, currentScope : symb.ScopedSymbol)
+	private registerUsageForClassOrInterfaceIdentifiers(identifiers : pp.ClassOrInterfaceIdentifierContext[], currentScope : symb.ScopedSymbol) : psymb.CallContext
 	{
-		let classOrInterface = typeCtx.classOrInterfaceType();
-		if(classOrInterface)
+		let callContext = this.registerUsageForClassOrInterfaceIdentifier(identifiers[0], currentScope, false);
+		let callerSymbol = callContext.symbol;
+		let idIndex = 1;
+		while(idIndex < identifiers.length)
 		{
-			let identifiers = classOrInterface.IDENTIFIER();
-			this.registerUsageForIdentifiers(identifiers, currentScope);
+			callContext = this.registerUsageForClassOrInterfaceIdentifier(identifiers[idIndex], callerSymbol, true);
+			callerSymbol = callContext.symbol;
+			idIndex++;
+		}
+		return callContext;
+	}
 
-			let typeArgumentsCtx = classOrInterface.typeArguments();
-			for(let i=0; i < typeArgumentsCtx.length; i++)
+	private registerUsageForClassOrInterfaceIdentifier(ctx : pp.ClassOrInterfaceIdentifierContext, currentScope : symb.ScopedSymbol, onlyChilds:boolean) : psymb.CallContext
+	{
+		let identifier = ctx.IDENTIFIER();
+		let typeArguments = ctx.typeArguments();
+		let idName : string = identifier.text;
+
+
+		let callContext : psymb.PComponentSymbol | undefined;
+		if(currentScope)
+		{
+			if(onlyChilds)
+				callContext = psymb.PUtils.resolveChildSymbolSync(currentScope, PComponentSymbol, idName );
+			else
+				callContext = psymb.PUtils.resolveComponentSync(currentScope, PComponentSymbol, idName );
+		}
+		this.pdeInfo.registerDefinition(identifier, callContext );
+
+		let genericArguments : psymb.PType[] = [];
+		if(typeArguments)
+		{
+			let typeArgumentList = typeArguments.typeArgument();
+			for(let i=0; i < typeArgumentList.length; i++)
 			{
-				let args = typeArgumentsCtx[0].typeArgument();
-				if(args.length==0 )
-					continue;
-				let typeType = args[0].typeType();
+				let typeType = typeArgumentList[i].typeType();
 				if(typeType)
-					this.registerUsageForTypeType(typeType, currentScope);
+					genericArguments.push( this.registerUsageForTypeType(typeType, currentScope).type );
 			}
 		}
+		if(callContext instanceof psymb.PNamespaceSymbol)
+			return new psymb.CallContext(psymb.PUtils.createNamespaceType(idName), callContext);
+		else if(callContext instanceof psymb.PEnumSymbol)
+			return new psymb.CallContext(psymb.PUtils.createEnumType(idName), callContext);
+		else if(callContext instanceof psymb.PClassSymbol)
+			return new psymb.CallContext(psymb.PUtils.createClassType(idName, genericArguments), callContext);
+		else if(callContext instanceof psymb.PInterfaceSymbol)
+			return new psymb.CallContext(psymb.PUtils.createInterfaceType(idName, genericArguments), callContext);
+
+		return new psymb.CallContext(psymb.PUtils.createTypeUnknown("<unknown>", genericArguments), callContext);
+	}
+
+	private registerUsageForTypeType(typeCtx : pp.TypeTypeContext, currentScope : symb.ScopedSymbol) : psymb.CallContext
+	{
+		let result : psymb.CallContext;
+		let classOrInterfaceType = typeCtx.classOrInterfaceType();
+		let primitiveType = typeCtx.primitiveType();
+		let varToken = typeCtx.VAR();
+		let bracks = typeCtx.LBRACK();
+
+		if(classOrInterfaceType)
+		{
+			let identifiers =  classOrInterfaceType.classOrInterfaceIdentifier();
+			result = this.registerUsageForClassOrInterfaceIdentifiers(identifiers, currentScope);
+		}
+		else if(primitiveType)
+		{
+			result = new psymb.CallContext( parseUtils.convertPrimitiveTypeToSymbolType(primitiveType), undefined);
+		}
+		else // varToken ?
+			result = new psymb.CallContext( psymb.PUtils.createTypeUnknown(), undefined);
+
+		if(bracks.length>0)
+		{
+			let callerType = result.type;
+			let arraySize = bracks.length;
+			while(arraySize>0)
+			{
+				callerType = psymb.PUtils.createArrayType(callerType);
+				arraySize--;
+			}
+			result = new psymb.CallContext( callerType, undefined);
+		}
+		return result;
 	}
 
 

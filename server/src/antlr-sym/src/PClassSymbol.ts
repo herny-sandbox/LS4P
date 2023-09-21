@@ -11,23 +11,18 @@ import { PComponentSymbol } from "./PComponentSymbol"
 import { PType, PTypeKind } from "./PType"
 
 /** Classes and structs. */
-export class PClassSymbol extends PComponentSymbol implements PType 
+export class PClassSymbol extends PComponentSymbol 
 {
-    isStruct: boolean = false;
-    reference: ReferenceKind = ReferenceKind.Reference;
-    /** Usually only one member, unless the language supports multiple inheritance (like C++). */
-    readonly extends: PType | undefined;
     /** Typescript allows a class to implement a class, not only interfaces. */
     readonly implements: PType[] = [];
+
+
    	constructor(name: string, ext?: PType|undefined, impl: PType[]=[])
 	{
-		super(name);
-		this.extends = ext;
+		super(name, ext);
 		this.implements = impl;
 	}
 
-    get baseTypes() { return this.implements; }
-    get kind() { return TypeKind.Class; }
 	get typeKind() { return PTypeKind.Class; }
 
 	/**

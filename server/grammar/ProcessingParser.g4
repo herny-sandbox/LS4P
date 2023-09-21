@@ -237,7 +237,11 @@ arrayInitializer
     ;
 
 classOrInterfaceType
-    : IDENTIFIER typeArguments? ('.' IDENTIFIER typeArguments?)*
+    : classOrInterfaceIdentifier ('.' classOrInterfaceIdentifier)*
+    ;
+
+classOrInterfaceIdentifier
+    : IDENTIFIER typeArguments?
     ;
 
 typeArgument

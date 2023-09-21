@@ -1,30 +1,24 @@
 import { 
-	ReferenceKind, 
-	TypeKind, 
 	BaseSymbol,
 	FieldSymbol,
 	MethodSymbol,
-	ScopedSymbol 
 } from "antlr4-c3";
 import { PComponentSymbol } from "./PComponentSymbol"
 import { PType, PTypeKind } from "./PType"
 
 /** Classes and structs. */
-export class PInterfaceSymbol extends PComponentSymbol implements PType 
+export class PInterfaceSymbol extends PComponentSymbol 
 {
-    isStruct: boolean = false;
-    reference: ReferenceKind = ReferenceKind.Reference;
-    /** Usually only one member, unless the language supports multiple inheritance (like C++). */
-    readonly extends: PType[] = [];
+	/** Usually only one member, unless the language supports multiple inheritance (like C++). */
+    readonly implements: PType[] = [];
  
 	constructor(name: string, ext: PType[]=[])
 	{
 		super(name);
-		this.extends = ext;
+		this.implements = ext;
 	}
 
-    get baseTypes() { return this.extends; }
-    get kind() { return TypeKind.Interface; }
+    get baseTypes() { return this.implements; }
 	get typeKind() { return PTypeKind.Interface; }
 
 	/**
@@ -59,9 +53,9 @@ export class PInterfaceSymbol extends PComponentSymbol implements PType
 			return result;
 
 		// Not found yet, keep searching in the extensions	
-		for(let i=0; i < this.extends.length; i++)
+		for(let i=0; i < this.implements.length; i++)
 		{
-			let implSymbol : BaseSymbol | undefined = super.resolveSync(this.extends[i].name, false);
+			let implSymbol : BaseSymbol | undefined = super.resolveSync(this.implements[i].name, false);
 			if(implSymbol && implSymbol instanceof PInterfaceSymbol)
 				result = implSymbol.resolveSync(name, true);
 			if( result )
@@ -78,9 +72,9 @@ export class PInterfaceSymbol extends PComponentSymbol implements PType
 			result = this;
 		if(!result)
 		{
-			for(let i=0; i < this.extends.length; i++)
+			for(let i=0; i < this.implements.length; i++)
 			{
-				let implSymbol : BaseSymbol | undefined = super.resolveSync(this.extends[i].name, false);
+				let implSymbol : BaseSymbol | undefined = super.resolveSync(this.implements[i].name, false);
 				if(implSymbol && implSymbol instanceof PInterfaceSymbol)
 					result = implSymbol.resolveInheritance(name);
 				if( result )

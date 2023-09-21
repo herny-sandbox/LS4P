@@ -43,6 +43,7 @@ import { VariableDeclaratorContext } from "./ProcessingParser";
 import { VariableInitializerContext } from "./ProcessingParser";
 import { ArrayInitializerContext } from "./ProcessingParser";
 import { ClassOrInterfaceTypeContext } from "./ProcessingParser";
+import { ClassOrInterfaceIdentifierContext } from "./ProcessingParser";
 import { TypeArgumentContext } from "./ProcessingParser";
 import { QualifiedNameListContext } from "./ProcessingParser";
 import { FormalParametersContext } from "./ProcessingParser";
@@ -409,6 +410,13 @@ export interface ProcessingParserVisitor<Result> extends ParseTreeVisitor<Result
 	 * @return the visitor result
 	 */
 	visitClassOrInterfaceType?: (ctx: ClassOrInterfaceTypeContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by `ProcessingParser.classOrInterfaceIdentifier`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitClassOrInterfaceIdentifier?: (ctx: ClassOrInterfaceIdentifierContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by `ProcessingParser.typeArgument`.

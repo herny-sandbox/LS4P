@@ -39,12 +39,12 @@ export class JavaClassVisitor extends ClassVisitor
 		if(superName && superName.length!=0)
 		{
 			let fixedName = superName.replace(/\//g, psymb.PNamespaceSymbol.delimiter);
-			ext = psymb.PUtils.createClassType(fixedName);
+			ext = psymb.PType.createClassType(fixedName);
 		}
 		for(let i=0; interfaces && i < interfaces.length; i++)
 		{
 			let fixedName = interfaces[i].replace(/\//g, psymb.PNamespaceSymbol.delimiter);
-			impl.push( psymb.PUtils.createInterfaceType(fixedName) );
+			impl.push( psymb.PType.createInterfaceType(fixedName) );
 		}
 
 		if(isInterface)

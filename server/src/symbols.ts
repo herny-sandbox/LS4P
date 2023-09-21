@@ -145,7 +145,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 				modifiers.push(symb.Modifier.Final);
 		}
 
-		let symbolType = parseUtils.convertTypeTypeToSymbolType(ctx.typeType(), this.scope);
+		let symbolType = parseUtils.convertTypeTypeToSymbolType(ctx.typeType());
 		this.addTypedSymbol(symbolType, ctx.variableDeclaratorId(), VAR_LOCAL, symb.MemberVisibility.Private, modifiers);
 		return this.defaultResult();
 	}
@@ -160,7 +160,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 				modifiers.push(symb.Modifier.Final);
 		}
 		let typeCtx = ctx.typeType();
-		let symbolType = parseUtils.convertTypeTypeToSymbolType(typeCtx, this.scope);
+		let symbolType = parseUtils.convertTypeTypeToSymbolType(typeCtx);
 		this.addTypedSymbols(symbolType, ctx.variableDeclarators(), VAR_LOCAL, symb.MemberVisibility.Private, modifiers);
 		return this.defaultResult();
 	}
@@ -175,7 +175,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 				modifiers.push(symb.Modifier.Final);
 		}
 
-		let symbolType = parseUtils.convertTypeTypeToSymbolType(ctx.typeType(), this.scope);
+		let symbolType = parseUtils.convertTypeTypeToSymbolType(ctx.typeType());
 		this.addTypedSymbol(symbolType, ctx.variableDeclaratorId(), VAR_PARAM, symb.MemberVisibility.Private, modifiers);
 		
 		return this.defaultResult();
@@ -191,7 +191,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 				modifiers.push(symb.Modifier.Final);
 		}
 		let ctxType = ctx.typeType();
-		let symbolType = parseUtils.convertTypeTypeToSymbolType(ctxType, this.scope);
+		let symbolType = parseUtils.convertTypeTypeToSymbolType(ctxType);
 		if(ctx.ELLIPSIS() && symbolType)
 		{
 			symbolType = psymb.PUtils.createArrayType(symbolType);
@@ -206,7 +206,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 	tryDeclareField(ctx: pp.FieldDeclarationContext, visibility:symb.MemberVisibility, modifiers:symb.Modifier[]) : symb.SymbolTable
 	{
 		let fileTypeCtx = ctx.typeType();
-		let symbolType = parseUtils.convertTypeTypeToSymbolType(fileTypeCtx, this.scope);
+		let symbolType = parseUtils.convertTypeTypeToSymbolType(fileTypeCtx);
 		this.addTypedSymbols(symbolType, ctx.variableDeclarators(), VAR_FIELD, visibility, modifiers);
 		return this.defaultResult();
 	}
@@ -223,13 +223,13 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		let impl : psymb.PType [] = [];
 
 		if(extendsCtx)
-			ext = parseUtils.convertTypeTypeToSymbolType(extendsCtx, this.scope);
+			ext = parseUtils.convertTypeTypeToSymbolType(extendsCtx);
 		else
 			ext = psymb.PUtils.createDefaultObjectType();
 
 		ext.typeKind = psymb.PTypeKind.Class;
 		if(implemCtx)
-			impl = parseUtils.convertTypeListToSymbolTypeList(implemCtx, this.scope);
+			impl = parseUtils.convertTypeListToSymbolTypeArray(implemCtx);
 		for(let interf of impl)
 			interf.typeKind = psymb.PTypeKind.Interface;
 
@@ -250,7 +250,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 				{
 					let boundTypesCtx = bound.typeType();
 					for(let boundTypeCtx of boundTypesCtx)
-						formalTypes.push( parseUtils.convertTypeTypeToSymbolType(boundTypeCtx, this.scope) );
+						formalTypes.push( parseUtils.convertTypeTypeToSymbolType(boundTypeCtx) );
 				}
 				let typeParam = new psymb.PFormalParamSymbol(identif.text, formalTypes);
 				classSymbol.addSymbol(typeParam);
@@ -270,7 +270,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		let exts : psymb.PType [] = [];
 
 		if(extendsCtx)
-			exts = parseUtils.convertTypeListToSymbolTypeList(extendsCtx, this.scope);
+			exts = parseUtils.convertTypeListToSymbolTypeArray(extendsCtx);
 		for(let ext of exts)
 			ext.typeKind = psymb.PTypeKind.Interface;
 
@@ -291,7 +291,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 				{
 					let boundTypesCtx = bound.typeType();
 					for(let boundTypeCtx of boundTypesCtx)
-						formalTypes.push( parseUtils.convertTypeTypeToSymbolType(boundTypeCtx, this.scope) );
+						formalTypes.push( parseUtils.convertTypeTypeToSymbolType(boundTypeCtx) );
 				}
 				let typeParam = new psymb.PFormalParamSymbol(identif.text, formalTypes);
 				interfSymbol.addSymbol(typeParam);
@@ -342,7 +342,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 			let returnTypeCtx = returnTypeOrVoid.typeType();
 	
 			if(returnTypeCtx)
-				returnType = parseUtils.convertTypeTypeToSymbolType(returnTypeCtx, this.scope);
+				returnType = parseUtils.convertTypeTypeToSymbolType(returnTypeCtx);
 			else
 				returnType = psymb.PUtils.createVoidType();
 			
@@ -405,7 +405,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 			if (typeBound) {
 				let boundedTypes = typeBound.typeType();
 				for (let i = 0; i < boundedTypes.length; i++) {
-					let symbolType = parseUtils.convertTypeTypeToSymbolType(boundedTypes[i], this.scope);
+					let symbolType = parseUtils.convertTypeTypeToSymbolType(boundedTypes[i]);
 					if (!symbolType) {
 						symbolType = psymb.PUtils.createTypeUnknown();
 						this.pdeInfo?.notifyCompileError("", boundedTypes[i]);
@@ -451,7 +451,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 
 		let implementing : psymb.PType [] = [];
 		if(implCtx)
-			implementing = parseUtils.convertTypeListToSymbolTypeList(implCtx, this.scope);
+			implementing = parseUtils.convertTypeListToSymbolTypeArray(implCtx);
 		for(let impl of implementing)
 			impl.typeKind = psymb.PTypeKind.Interface;
 
