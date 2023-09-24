@@ -130,7 +130,7 @@ function loadJarFile(filename:string)
 		}
 		
     } catch (error) {
-        console.error(`Error reading zip file: ${error}`);
+        console.error(`Error reading zip file: ${error} for ${filename}`);
     }
 }
 
@@ -143,7 +143,8 @@ export function loadJavaSymbolsFile(filename:string)
 {
 	let filePath = filename;
 	let classMap : Map<string, Buffer> = new Map<string, Buffer>();
-	
+	let className : string;
+
 	try {
         // Create an instance of AdmZip
         const zip = new AdmZip(filePath);
@@ -179,7 +180,7 @@ export function loadJavaSymbolsFile(filename:string)
 			if(key.endsWith(".sig"))
 				fullName = fullName.substring(0, fullName.length-4);
 			let classFileName = fullName.substring(fullName.lastIndexOf('.')+1);
-			let className : string = classFileName.substring(classFileName.indexOf('$')+1);
+			className = classFileName.substring(classFileName.indexOf('$')+1);
 
 			const visitor = new JavaClassVisitor(libTable, className);
 			const classData: Buffer = val;
@@ -190,6 +191,6 @@ export function loadJavaSymbolsFile(filename:string)
 		console.log(`found ${i} elements`);
 		
     } catch (error) {
-        console.error(`Error reading zip file: ${error}`);
+        console.error(`Error reading java symbol file: ${error} for ${filename} (${className})`);
     }
 }

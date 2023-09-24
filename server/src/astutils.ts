@@ -260,17 +260,17 @@ export function convertTypeTypeToSymbolType(typeContext : pp.TypeTypeContext) : 
 	if(arrayMultiSize.length > 0)
 	{
 		if(!result)
-			result = psymb.PUtils.createTypeUnknown("<unknown>"); 
+			result = psymb.PType.createUnknownType(); 
 		
 		let arraySize = arrayMultiSize.length;
 		while(arraySize>0)
 		{
-			result = psymb.PUtils.createArrayType(result);
+			result = psymb.PType.createArrayType(result);
 			arraySize--;
 		}
 	}
 	if(!result)
-		result = psymb.PUtils.createTypeUnknown("<unknown>"); 
+		result = psymb.PType.createUnknownType(); 
 	return result;
 }
 
@@ -338,7 +338,7 @@ export function convertTypeArgumentsToSymbolTypes(args : pp.TypeArgumentContext[
 		if(typeCtx)
 			baseType = convertTypeTypeToSymbolType(typeCtx);
 		if(!baseType)
-			baseType = psymb.PUtils.createTypeUnknown();
+			baseType = psymb.PType.createUnknownType();
 
 		result.push(baseType);
 	}
@@ -348,26 +348,26 @@ export function convertTypeArgumentsToSymbolTypes(args : pp.TypeArgumentContext[
 
 export function convertPrimitiveTypeToSymbolType(primitive : pp.PrimitiveTypeContext) : psymb.PType
 {
-	if(primitive.BOOLEAN())
-		return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Boolean);
-	if(primitive.CHAR())
-		return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Char);
-	if(primitive.BYTE())
-		return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Byte);
-	if(primitive.SHORT())
-		return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Short);
-	if(primitive.INT())
-		return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Int);
-	if(primitive.LONG())
-		return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Long);
-	if(primitive.FLOAT())
-		return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Float);
-	if(primitive.DOUBLE())
-		return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Double);
-	if(primitive.colorPrimitiveType())
-		return psymb.PUtils.createPrimitiveType(psymb.PPrimitiveKind.Color)
 
-	return psymb.PUtils.createTypeUnknown(primitive.text);
+	if(primitive.CHAR())
+		return psymb.PType.createPrimitiveType(psymb.PPrimitiveKind.Char);
+	if(primitive.BYTE())
+		return psymb.PType.createPrimitiveType(psymb.PPrimitiveKind.Byte);
+	if(primitive.SHORT())
+		return psymb.PType.createPrimitiveType(psymb.PPrimitiveKind.Short);
+	if(primitive.INT())
+		return psymb.PType.createPrimitiveType(psymb.PPrimitiveKind.Int);
+	if(primitive.LONG())
+		return psymb.PType.createPrimitiveType(psymb.PPrimitiveKind.Long);
+	if(primitive.FLOAT())
+		return psymb.PType.createPrimitiveType(psymb.PPrimitiveKind.Float);
+	if(primitive.DOUBLE())
+		return psymb.PType.createPrimitiveType(psymb.PPrimitiveKind.Double);
+	if(primitive.colorPrimitiveType())
+		return psymb.PType.createPrimitiveType(psymb.PPrimitiveKind.Color)
+	//if(primitive.BOOLEAN())
+		return psymb.PType.createPrimitiveType(psymb.PPrimitiveKind.Boolean);
+	//return psymb.PType.createUnknownType(primitive.text);
 }
 
 function getPdeName(anySymbol: any) : string | undefined
@@ -398,8 +398,8 @@ export function convertAliasType( type: psymb.PType, callContext : psymb.CallCon
 	{
 		if(genericParams[i].name == type.name)
 		{
-			if( callContext.type.baseTypes.length >= i )
-				return callContext.type.baseTypes[i];
+			if( callContext.type.genericTypes.length >= i )
+				return callContext.type.genericTypes[i];
 		}
 	}
     

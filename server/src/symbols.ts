@@ -60,7 +60,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 			try
 			{
 				let symbolType : psymb.PType | undefined = undefined;
-				this.addChildSymbol(ctx, new symb.VariableSymbol(terminalNode.text, null, symbolType));
+				this.addChildSymbol(ctx, new psymb.PVariableSymbol(terminalNode.text, null, symbolType));
 			}
 			catch(e)
 			{
@@ -194,8 +194,8 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		let symbolType = parseUtils.convertTypeTypeToSymbolType(ctxType);
 		if(ctx.ELLIPSIS() && symbolType)
 		{
-			symbolType = psymb.PUtils.createArrayType(symbolType);
-			if(this.scope instanceof symb.MethodSymbol)
+			symbolType = psymb.PType.createArrayType(symbolType);
+			if(this.scope instanceof psymb.PMethodSymbol)
 				psymb.PUtils.setMethodLastVargs(this.scope);
 		}
 		this.addTypedSymbol(symbolType, ctx.variableDeclaratorId(), VAR_PARAM, symb.MemberVisibility.Private, modifiers);
@@ -225,7 +225,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		if(extendsCtx)
 			ext = parseUtils.convertTypeTypeToSymbolType(extendsCtx);
 		else
-			ext = psymb.PUtils.createDefaultObjectType();
+			ext = psymb.PType.createObjectType();
 
 		ext.typeKind = psymb.PTypeKind.Class;
 		if(implemCtx)
@@ -303,7 +303,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 
 	visitClassCreatorRest(ctx: pp.ClassCreatorRestContext) : symb.SymbolTable
 	{
-		let ext : psymb.PType = psymb.PUtils.createDefaultObjectType();
+		let ext : psymb.PType = psymb.PType.createObjectType();
 		let impl : psymb.PType [] = [];
 		return this.addScope(ctx, new psymb.PClassSymbol("", ext, impl), () => this.visitChildren(ctx));
 	}
@@ -344,13 +344,13 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 			if(returnTypeCtx)
 				returnType = parseUtils.convertTypeTypeToSymbolType(returnTypeCtx);
 			else
-				returnType = psymb.PUtils.createVoidType();
+				returnType = psymb.PType.createVoidType();
 			
 			if(!returnType)
-				returnType = psymb.PUtils.createTypeUnknown();
+				returnType = psymb.PType.createUnknownType();
 		}
 
-		let method : symb.MethodSymbol = new symb.MethodSymbol(signatureName, returnType);
+		let method : psymb.PMethodSymbol = new psymb.PMethodSymbol(signatureName, returnType);
 		this.applyModifiers(method, visibility, modifiers);
 
 		this.pdeInfo?.registerDefinition(identif, method );
@@ -407,14 +407,14 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 				for (let i = 0; i < boundedTypes.length; i++) {
 					let symbolType = parseUtils.convertTypeTypeToSymbolType(boundedTypes[i]);
 					if (!symbolType) {
-						symbolType = psymb.PUtils.createTypeUnknown();
+						symbolType = psymb.PType.createUnknownType();
 						this.pdeInfo?.notifyCompileError("", boundedTypes[i]);
 					}
 					boundTypes.push(symbolType);
 				}
 			}
 			else
-				boundTypes.push(psymb.PUtils.createDefaultObjectType());
+				boundTypes.push(psymb.PType.createObjectType());
 
 			this.scope.addSymbol(new psymb.PFormalParamSymbol(paramName, boundTypes));
 		}
@@ -594,8 +594,8 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		let qualifName = catchType.qualifiedName();
 		if(qualifName.length > 0)
 		{
-			let exceptionType = psymb.PUtils.createClassType(qualifName[0].text);
-			let exceptionSymbol = new symb.VariableSymbol(identif.text, null, exceptionType);
+			let exceptionType = psymb.PType.createClassType(qualifName[0].text);
+			let exceptionSymbol = new psymb.PVariableSymbol(identif.text, null, exceptionType);
 
 			this.applyModifiers(exceptionSymbol, symb.MemberVisibility.Private, modifiers);
 			this.pdeInfo?.registerDefinition(identif, exceptionSymbol );
@@ -685,18 +685,18 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		}
 		while(arraySize > 0)
 		{
-			varType = psymb.PUtils.createArrayType(varType);
+			varType = psymb.PType.createArrayType(varType);
 			arraySize--;
 		}
 		try
 		{
 			let symbol : symb.BaseSymbol;
 			if(kind == VAR_PARAM)
-				symbol = new symb.ParameterSymbol(terminalNode.text, null, varType);
+				symbol = new psymb.PParameterSymbol(terminalNode.text, null, varType);
 			else if(kind == VAR_FIELD)
-				symbol = new symb.FieldSymbol(terminalNode.text, null, varType);
+				symbol = new psymb.PFieldSymbol(terminalNode.text, null, varType);
 			else
-				symbol = new symb.VariableSymbol(terminalNode.text, null, varType);
+				symbol = new psymb.PVariableSymbol(terminalNode.text, null, varType);
 
 			this.applyModifiers(symbol, visibility, modifiers);
 			this.pdeInfo?.registerDefinition(terminalNode, symbol );

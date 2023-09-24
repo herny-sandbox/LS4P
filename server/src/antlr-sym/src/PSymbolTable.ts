@@ -1,7 +1,6 @@
 import { 
 	BaseSymbol,
 	SymbolTable,
-	ScopedSymbol,
 	SymbolTableOptions,
 } from "antlr4-c3";
 import { PNamespaceSymbol } from "./PNamespaceSymbol"
@@ -9,9 +8,9 @@ import { PComponentSymbol } from "./PComponentSymbol"
 import { PLibraryTable } from './PLibraryTable';
 import { PUtils } from './PUtils';
 
-const PClassSymbol_1 = require("./PClassSymbol");
 
 const fakeEmptyDependencies : Set<SymbolTable> = new Set<SymbolTable>();
+
 export class PSymbolTable extends SymbolTable 
 {
 	//protected imports : Set<string> = new Set<string>();
@@ -43,12 +42,17 @@ export class PSymbolTable extends SymbolTable
 				if(dependency instanceof PLibraryTable)
 				{
 					let result = dependency.resolveComponent(PComponentSymbol, importPath);
-					let components = PUtils.getAllDirectChildSymbolSync(result, PComponentSymbol, undefined);
-					for(let component of components)
+					if(result)
 					{
-						let fullName = component.qualifiedName(PNamespaceSymbol.delimiter, true, false);
-						this.addImportAlias(component.name, fullName);
+						let components = PUtils.getAllDirectChildSymbolSync(result, PComponentSymbol, undefined);
+						for(let component of components)
+						{
+							let fullName = component.qualifiedName(PNamespaceSymbol.delimiter, true, false);
+							this.addImportAlias(component.name, fullName);
+						}
 					}
+					else
+						console.error("Unable to add any import symbol for "+importPath+(allMembers?".*":""));
 				}
 			}
 		}

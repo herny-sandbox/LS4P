@@ -47,7 +47,7 @@ for(let i = 1; i < ProcessingParser.IDENTIFIER; i++)
 let lastPdeInfo : sketch.PdeContentInfo | undefined;
 let lastParseNodeAtPos : ParseTree | null;
 let lastScopeAtPos : symb.ScopedSymbol | undefined;
-let lastContextType : psymb.PType | undefined;
+let lastContextType : psymb.IPType | undefined;
 let lastSymbols : symb.BaseSymbol [] = [];
 
 export async function collectCandidates(pdeName: string, line: number, posInLine : number, context : lsp.CompletionTriggerKind): Promise<lsp.CompletionItem[]> 
@@ -133,7 +133,7 @@ export async function collectCandidates(pdeName: string, line: number, posInLine
 	return completions;
 }
 
-async function suggestMembers(scopeAtPos: symb.ScopedSymbol, refType:psymb.PType|undefined, localOnly:boolean=false, symbols: symb.BaseSymbol[]) : Promise<lsp.CompletionItem[]>
+async function suggestMembers(scopeAtPos: symb.ScopedSymbol, refType:psymb.IPType|undefined, localOnly:boolean=false, symbols: symb.BaseSymbol[]) : Promise<lsp.CompletionItem[]>
 {
 	let completions : lsp.CompletionItem[] = [];
 
@@ -146,19 +146,19 @@ async function suggestMembers(scopeAtPos: symb.ScopedSymbol, refType:psymb.PType
 		isAccessingByInstance = refType.reference == symb.ReferenceKind.Instance;
 	}
 
-	let vars = psymb.PUtils.getAllSymbolsSync(scopeAtPos, symb.VariableSymbol, undefined, localOnly);
+	let vars = psymb.PUtils.getAllSymbolsSync(scopeAtPos, psymb.PVariableSymbol, undefined, localOnly);
 	for(let child of vars )
 	{
 		if(isAccessingByReference && !child.modifiers.has(symb.Modifier.Static))
 			continue;
 
-		if(child instanceof symb.FieldSymbol)
+		if(child instanceof psymb.PFieldSymbol)
 			completions.push(createCompletionItem(child.name, lsp.CompletionItemKind.Field, symbols.length));
 		else
 			completions.push(createCompletionItem(child.name, lsp.CompletionItemKind.Variable, symbols.length))
 		symbols.push(child);
 	}
-	let methods : symb.MethodSymbol [] = psymb.PUtils.getAllSymbolsSync(scopeAtPos, symb.MethodSymbol, undefined, localOnly);
+	let methods : psymb.PMethodSymbol [] = psymb.PUtils.getAllSymbolsSync(scopeAtPos, psymb.PMethodSymbol, undefined, localOnly);
 	for(let child of methods )
 	{
 		if(isAccessingByReference && !child.modifiers.has(symb.Modifier.Static))
@@ -187,13 +187,13 @@ function createCompletionItem(l : string, k: lsp.CompletionItemKind, i?:number )
 	return { label: l, kind: k, data: { refIndex: i } };
 }
 
-function createMethodCompletionItem(method : symb.MethodSymbol, i?:number ) : lsp.CompletionItem
+function createMethodCompletionItem(method : psymb.PMethodSymbol, i?:number ) : lsp.CompletionItem
 {
 	let k = method.returnType ? lsp.CompletionItemKind.Method : lsp.CompletionItemKind.Constructor;
 	let itf = lsp.InsertTextFormat.Snippet;
 	let it : string = method.name;
 	it += "(";
-	let params = method.getNestedSymbolsOfTypeSync(symb.ParameterSymbol);
+	let params = method.getNestedSymbolsOfTypeSync(psymb.PParameterSymbol);
 	for(let i=0; i < params.length; i++)
 	{
 		if(i>0)
@@ -233,10 +233,10 @@ export function fillCompletionItemDetails(item: lsp.CompletionItem) : lsp.Comple
 	// the return type
 	if(symbol)
 	{
-		if( symbol instanceof symb.MethodSymbol)
-			detailText += psymb.PUtils.convertSymbolTypeToString(psymb.PUtils.typeToPType(symbol.returnType)) + " ";
-		else if( symbol instanceof symb.VariableSymbol)
-			detailText += psymb.PUtils.convertSymbolTypeToString(psymb.PUtils.typeToPType(symbol.type)) + " ";
+		if( symbol instanceof psymb.PMethodSymbol)
+			detailText += psymb.PUtils.convertSymbolTypeToString(symbol.returnType) + " ";
+		else if( symbol instanceof psymb.PVariableSymbol)
+			detailText += psymb.PUtils.convertSymbolTypeToString(symbol.type) + " ";
 	}
 	else if(lastContextType)
 	{
@@ -253,10 +253,10 @@ export function fillCompletionItemDetails(item: lsp.CompletionItem) : lsp.Comple
 	// then the label name
 	detailText += item.label;
 
-	if(symbol instanceof symb.MethodSymbol)
+	if(symbol instanceof psymb.PMethodSymbol)
 	{
 		detailText += "(";
-		let params = symbol.getNestedSymbolsOfTypeSync(symb.ParameterSymbol);
+		let params = symbol.getNestedSymbolsOfTypeSync(psymb.PParameterSymbol);
 		for(let i=0; i<params.length; i++)
 		{
 			if(i!=0)
@@ -264,7 +264,7 @@ export function fillCompletionItemDetails(item: lsp.CompletionItem) : lsp.Comple
 
 			let param = params[i];
 			if(param.type)	
-				detailText += psymb.PUtils.convertSymbolTypeToString(psymb.PUtils.typeToPType(param.type));
+				detailText += psymb.PUtils.convertSymbolTypeToString(param.type);
 
 			if(param.name && param.name.length!=0)
 				detailText += " " + param.name;

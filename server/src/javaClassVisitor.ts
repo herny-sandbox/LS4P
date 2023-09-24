@@ -101,9 +101,9 @@ export class JavaClassVisitor extends ClassVisitor
 		if( isConstructor )
 			name = this.name;
 		if( !isConstructor )
-			returnType = psymb.PUtils.createTypeUnknown();
+			returnType = psymb.PType.createUnknownType();
 
-		let methodSymbol : symb.MethodSymbol = new symb.MethodSymbol(name, returnType);
+		let methodSymbol : psymb.PMethodSymbol = new psymb.PMethodSymbol(name, returnType);
 		if(hasVArgs)
 			psymb.PUtils.setMethodLastVargs(methodSymbol);
 
@@ -142,8 +142,8 @@ export class JavaClassVisitor extends ClassVisitor
 			return null;
 
 		debugSignature = signature?signature:desc;
-		let symbolType : psymb.PType = psymb.PUtils.createTypeUnknown();
-		let fieldSymbol : symb.FieldSymbol = new symb.FieldSymbol(name, null, symbolType);
+		let symbolType : psymb.PType = psymb.PType.createUnknownType();
+		let fieldSymbol : psymb.PFieldSymbol = new psymb.PFieldSymbol(name, null, symbolType);
 		this.classSymbol.addSymbol( fieldSymbol );
 
 		if(isStatic)
@@ -218,7 +218,7 @@ class ClassSignatureVisitor extends DebugSignatureVisitor
 	}
 	public visitClassBound(): SignatureVisitor 
 	{
-		let formalType = psymb.PUtils.createDefaultObjectType();
+		let formalType = psymb.PType.createObjectType();
 		formalType.typeKind = psymb.PTypeKind.Class;
 		formalType.reference = symb.ReferenceKind.Reference;
 		if(this.formalTypes)
@@ -227,7 +227,7 @@ class ClassSignatureVisitor extends DebugSignatureVisitor
 	}
 	public visitInterfaceBound(): SignatureVisitor 
 	{
-		let formalType = psymb.PUtils.createTypeUnknown();
+		let formalType = psymb.PType.createUnknownType();
 		formalType.typeKind = psymb.PTypeKind.Interface;
 		formalType.reference = symb.ReferenceKind.Reference;
 		if(this.formalTypes)
@@ -240,7 +240,7 @@ class ClassSignatureVisitor extends DebugSignatureVisitor
 		if( this.scopedSymbol instanceof psymb.PClassSymbol)
 			ext = this.scopedSymbol.extends;
 		if(!ext)
-			ext = psymb.PUtils.createDefaultObjectType();
+			ext = psymb.PType.createObjectType();
 		return new TypeSignatureVisitor(ext);
  	}
 	public visitInterface(): SignatureVisitor 
@@ -251,7 +251,7 @@ class ClassSignatureVisitor extends DebugSignatureVisitor
 		else if( this.scopedSymbol instanceof psymb.PInterfaceSymbol)
 			interf = this.scopedSymbol.extends[this.interfaceIndex];
 		else 
-			interf = psymb.PUtils.createDefaultObjectType();
+			interf = psymb.PType.createObjectType();
 
 		this.interfaceIndex++;
 		return new TypeSignatureVisitor(interf);
@@ -264,9 +264,9 @@ class ClassSignatureVisitor extends DebugSignatureVisitor
 
 class MethodSignatureVisitor extends DebugSignatureVisitor
 {
-	protected methodSymbol : symb.MethodSymbol;
+	protected methodSymbol : psymb.PMethodSymbol;
 	protected formalTypes : psymb.PType [] | undefined;
-	public constructor(methodSymbol : symb.MethodSymbol) {
+	public constructor(methodSymbol : psymb.PMethodSymbol) {
         super(Opcodes.ASM5);
 		this.methodSymbol = methodSymbol;
     }
@@ -278,7 +278,7 @@ class MethodSignatureVisitor extends DebugSignatureVisitor
 	}
 	public visitClassBound(): SignatureVisitor 
 	{
-		let formalType = psymb.PUtils.createDefaultObjectType();
+		let formalType = psymb.PType.createObjectType();
 		formalType.typeKind = psymb.PTypeKind.Class;
 		formalType.reference = symb.ReferenceKind.Reference;
 		if(this.formalTypes)
@@ -287,7 +287,7 @@ class MethodSignatureVisitor extends DebugSignatureVisitor
 	}
 	public visitInterfaceBound(): SignatureVisitor 
 	{
-		let formalType = psymb.PUtils.createDefaultObjectType();
+		let formalType = psymb.PType.createObjectType();
 		formalType.typeKind = psymb.PTypeKind.Interface;
 		formalType.reference = symb.ReferenceKind.Reference;
 		if(this.formalTypes)
@@ -296,26 +296,22 @@ class MethodSignatureVisitor extends DebugSignatureVisitor
 	}
 	public visitParameterType() : SignatureVisitor
 	{
-		let paramType = psymb.PUtils.createTypeUnknown();
-		this.methodSymbol.addSymbol(new symb.ParameterSymbol("", null, paramType));
+		let paramType = psymb.PType.createUnknownType();
+		this.methodSymbol.addSymbol(new psymb.PParameterSymbol("", null, paramType));
 		return new TypeSignatureVisitor(paramType);
 	}
 	public visitReturnType(): SignatureVisitor 
 	{
 		if( this.methodSymbol.returnType ) // It's a constructor
-		{
-			let newReturnType = psymb.PUtils.typeToPType(this.methodSymbol.returnType)
-			let resultVisitor = new TypeSignatureVisitor(newReturnType);
-			this.methodSymbol.returnType = newReturnType;
-			return resultVisitor;
-		}
-		return new TypeSignatureVisitor(psymb.PUtils.createTypeUnknown()); // We continue with a placeholder
+			return new TypeSignatureVisitor(this.methodSymbol.returnType);
+
+		return new TypeSignatureVisitor(psymb.PType.createUnknownType()); // We continue with a placeholder
 	}
 
 	public visitExceptionType(): SignatureVisitor 
 	{
 		// We aren't going to support exceptions for now
-		return new TypeSignatureVisitor(psymb.PUtils.createTypeUnknown()); // We continue with a placeholder
+		return new TypeSignatureVisitor(psymb.PType.createUnknownType()); // We continue with a placeholder
 	}
 	public visitEnd(): SignatureVisitor
 	{
@@ -343,19 +339,19 @@ class TypeSignatureVisitor extends DebugSignatureVisitor
 	}
 	public visitUnboundedTypeArgument() 
 	{
-		let baseType =  psymb.PUtils.createTypeUnknown();
+		let baseType =  psymb.PType.createUnknownType();
 		baseType.name="?";
 		baseType.typeKind = psymb.PTypeKind.Generic;
 		baseType.reference = symb.ReferenceKind.Reference;
-		this.targetType.baseTypes.push(baseType);
+		this.targetType.genericTypes.push(baseType);
 	}
 	public visitTypeArgument(wildcard:string) : SignatureVisitor 
 	{
-		let baseType =  psymb.PUtils.createTypeUnknown();
+		let baseType =  psymb.PType.createUnknownType();
 		baseType.name = wildcard;
 		baseType.typeKind = psymb.PTypeKind.Generic;
 		baseType.reference = symb.ReferenceKind.Reference;
-		this.targetType.baseTypes.push(baseType);
+		this.targetType.genericTypes.push(baseType);
 		return new TypeSignatureVisitor(baseType);
 	}
 	public visitTypeVariable(name: string) 
@@ -369,8 +365,8 @@ class TypeSignatureVisitor extends DebugSignatureVisitor
 
 	public visitArrayType(): SignatureVisitor 
 	{
-		let baseType = psymb.PUtils.createTypeUnknown();
-		psymb.PUtils.setAsArrayType(this.targetType, baseType);
+		let baseType = psymb.PType.createUnknownType();
+		psymb.PType.setAsArrayType(this.targetType, baseType);
 		return new TypeSignatureVisitor(baseType);
 	}
 
@@ -378,31 +374,31 @@ class TypeSignatureVisitor extends DebugSignatureVisitor
 	public visitBaseType(descriptor: string) 
 	{ 
 		if(descriptor == 'V')
-			psymb.PUtils.setAsVoidType(this.targetType);
+			psymb.PType.setAsVoidType(this.targetType);
 
 		else if(descriptor == 'B')
-			psymb.PUtils.setAsPrimitiveType(this.targetType, psymb.PPrimitiveKind.Byte);
+			psymb.PType.setAsPrimitiveType(this.targetType, psymb.PPrimitiveKind.Byte);
 
 		else if(descriptor == 'C')
-			psymb.PUtils.setAsPrimitiveType(this.targetType, psymb.PPrimitiveKind.Char);
+			psymb.PType.setAsPrimitiveType(this.targetType, psymb.PPrimitiveKind.Char);
 
 		else if(descriptor == 'D')
-			psymb.PUtils.setAsPrimitiveType(this.targetType, psymb.PPrimitiveKind.Double);
+			psymb.PType.setAsPrimitiveType(this.targetType, psymb.PPrimitiveKind.Double);
 
 		else if(descriptor == 'F')
-			psymb.PUtils.setAsPrimitiveType(this.targetType, psymb.PPrimitiveKind.Float);
+			psymb.PType.setAsPrimitiveType(this.targetType, psymb.PPrimitiveKind.Float);
 
 		else if(descriptor == 'I')
-			psymb.PUtils.setAsPrimitiveType(this.targetType, psymb.PPrimitiveKind.Int);
+			psymb.PType.setAsPrimitiveType(this.targetType, psymb.PPrimitiveKind.Int);
 
 		else if(descriptor == 'J')
-			psymb.PUtils.setAsPrimitiveType(this.targetType, psymb.PPrimitiveKind.Long);
+			psymb.PType.setAsPrimitiveType(this.targetType, psymb.PPrimitiveKind.Long);
 
 		else if(descriptor == 'S')
-			psymb.PUtils.setAsPrimitiveType(this.targetType, psymb.PPrimitiveKind.Short);
+			psymb.PType.setAsPrimitiveType(this.targetType, psymb.PPrimitiveKind.Short);
 
 		else if(descriptor == 'Z')
-			psymb.PUtils.setAsPrimitiveType(this.targetType, psymb.PPrimitiveKind.Boolean);
+			psymb.PType.setAsPrimitiveType(this.targetType, psymb.PPrimitiveKind.Boolean);
 	}
 	
 	public override visitEnd() 

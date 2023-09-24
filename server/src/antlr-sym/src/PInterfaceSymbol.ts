@@ -1,9 +1,7 @@
-import { 
-	BaseSymbol,
-	FieldSymbol,
-	MethodSymbol,
-} from "antlr4-c3";
+import { BaseSymbol } from "antlr4-c3";
 import { PComponentSymbol } from "./PComponentSymbol"
+import { PMethodSymbol } from "./PMethodSymbol"
+import { PFieldSymbol } from "./PFieldSymbol"
 import { PType, PTypeKind } from "./PType"
 
 /** Classes and structs. */
@@ -18,7 +16,7 @@ export class PInterfaceSymbol extends PComponentSymbol
 		this.implements = ext;
 	}
 
-    get baseTypes() { return this.implements; }
+    get arrayType() { return this.implements; }
 	get typeKind() { return PTypeKind.Interface; }
 
 	/**
@@ -26,16 +24,16 @@ export class PInterfaceSymbol extends PComponentSymbol
 		 *
 		 * @returns a list of all methods.
 		 */
-	getMethods(includeInherited = false) {
-		return this.getSymbolsOfType(MethodSymbol);
+	getMethods(includeInherited:boolean = false) {
+		return this.getSymbolsOfType(PMethodSymbol);
 	}
 	/**
 	 * @param includeInherited Not used.
 	 *
 	 * @returns all fields.
 	 */
-	getFields(includeInherited = false) {
-		return this.getSymbolsOfType(FieldSymbol);
+	getFields(includeInherited:boolean = false) {
+		return this.getSymbolsOfType(PFieldSymbol);
 	}
 
 	/**

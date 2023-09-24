@@ -1,12 +1,7 @@
-import { 
-	ReferenceKind, 
-	TypeKind, 
-	BaseSymbol,
-	FieldSymbol,
-	MethodSymbol,
-	ScopedSymbol 
-} from "antlr4-c3";
+import { BaseSymbol } from "antlr4-c3";
 import { PInterfaceSymbol } from "./PInterfaceSymbol"
+import { PMethodSymbol } from "./PMethodSymbol"
+import { PFieldSymbol } from "./PFieldSymbol"
 import { PComponentSymbol } from "./PComponentSymbol"
 import { PType, PTypeKind } from "./PType"
 
@@ -31,7 +26,7 @@ export class PClassSymbol extends PComponentSymbol
 		 * @returns a list of all methods.
 		 */
 	getMethods(includeInherited = false) {
-		return this.getSymbolsOfType(MethodSymbol);
+		return this.getSymbolsOfType(PMethodSymbol);
 	}
 	/**
 	 * @param includeInherited Not used.
@@ -39,7 +34,7 @@ export class PClassSymbol extends PComponentSymbol
 	 * @returns all fields.
 	 */
 	getFields(includeInherited = false) {
-		return this.getSymbolsOfType(FieldSymbol);
+		return this.getSymbolsOfType(PFieldSymbol);
 	}
 
 	/**

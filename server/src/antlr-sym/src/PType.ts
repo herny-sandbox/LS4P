@@ -25,12 +25,15 @@ export enum PTypeKind
     Component = 14,
 }
 
-export interface IPType extends Type
+export interface IPType //extends Type
 {
+    name:string;
     genericTypes: PType[];
     outterType : PType | undefined;
-    typeKind: PTypeKind;
     extendType: PType | undefined;
+
+    typeKind: PTypeKind;
+    reference: ReferenceKind;
 }
 
 export enum PPrimitiveKind {
@@ -62,6 +65,7 @@ let primitiveKindNames = [
 const defaultPAppletClassName = "processing.core.PApplet";
 const defaultStringClass = "java.lang.String"
 const defaultObjectClass = "java.lang.Object"
+const defaultClassClass = "java.lang.Class"
 const defaultEnumBaseClass = "java.lang.Enum"
 const defaultNullName = "null"
 
@@ -69,21 +73,21 @@ const defaultNullName = "null"
 // =======================================================================================
 export class PType implements IPType 
 {
-    private static unknownType : PType = new PType(PTypeKind.Unknown, "");
     public static getPrimitiveTypeName(kind:PPrimitiveKind) { return primitiveKindNames[kind]; }
 	public static isDefaultObjectPath(path: string) {return path == defaultObjectClass; }
 	public static isDefaultStringPath(path: string) {return path == defaultStringClass; }
     
     name: string;
     genericTypes: PType[];
-    baseTypes: PType[];
-    primitiveKind : PPrimitiveKind | undefined;
     extendType : PType | undefined;
     outterType : PType | undefined;
 	kind : TypeKind = TypeKind.Unknown;
     typeKind: PTypeKind;
     reference: ReferenceKind;
- 
+
+    arrayType: PType;
+    primitiveKind : PPrimitiveKind | undefined;
+
     constructor(kind : PTypeKind, name: string )
 	{
 		this.name = name;
@@ -101,21 +105,20 @@ export class PType implements IPType
     public setGenericTypes(generics: PType[]) : PType { this.genericTypes = PType.createCloneArray(generics); return this; }
     
     public setPrimitive(primitive: PPrimitiveKind|undefined) : PType { this.primitiveKind = primitive; return this; }
-    public setBaseTypes(baseTypes: PType[]) : PType { this.baseTypes = baseTypes; return this; }
+    public setArrayType(arrayType: PType) : PType { this.arrayType = arrayType; return this; }
 
 
-    public static createUnknownType() : PType
-	{
-		return PType.unknownType;
-	}
+    public static createUnknownType() : PType { return new PType(PTypeKind.Unknown, ""); }
 
 	public static createStringType() : PType { return new PType(PTypeKind.Class, defaultStringClass); }
 
-    public static createObjectClassType() : PType { return new PType(PTypeKind.Class, defaultObjectClass); }
+    public static createObjectType() : PType { return new PType(PTypeKind.Class, defaultObjectClass); }
+
+    public static createClassClassType() : PType { return new PType(PTypeKind.Class, defaultClassClass); }
 
     public static createAppletClassType() : PType
 	{
-		return new PType(PTypeKind.Class, defaultPAppletClassName).setExtend(PType.createObjectClassType());
+		return new PType(PTypeKind.Class, defaultPAppletClassName).setExtend(PType.createObjectType());
 	}
 
     public static createInterfaceType(typeName:string) : PType { return new PType(PTypeKind.Interface, typeName); }
@@ -126,16 +129,23 @@ export class PType implements IPType
 
     public static createComponentType(typeName:string) : PType { return new PType(PTypeKind.Component, typeName); }
 
-    public static createNullType() : PType { return new PType(PTypeKind.Null, "null"); }
+    public static createNullType() : PType { return new PType(PTypeKind.Null, defaultNullName); }
 
 	public static createPrimitiveType(kind:PPrimitiveKind) : PType { return new PType(PTypeKind.Primitive, primitiveKindNames[kind]).setPrimitive(kind); }
 
 	public static createEnumBaseClass(baseOnName:string) : PType { return new PType(PTypeKind.Class, defaultEnumBaseClass).setGenericTypes([PType.createClassType(baseOnName)]); }
 
-	public static createArrayType(baseType:PType) : PType { return new PType(PTypeKind.Array, "Array").setBaseTypes([baseType]);}
+	public static createArrayType(baseType:PType) : PType { return new PType(PTypeKind.Array, "Array").setArrayType(baseType);}
 
 	public static createVoidType() : PType { return new PType(PTypeKind.Void, "void").setReference(ReferenceKind.Irrelevant); }
 
+	public static createEnumType(typeName:string) : PType { return new PType(PTypeKind.Enum, typeName).setExtend(PType.createEnumBaseClass(typeName));}
+
+
+    public static createFromIType(original:IPType) : PType
+    {
+        return new PType(original.typeKind, original.name).setExtend(original.extendType).setOutter(original.outterType).setReference(original.reference).setGenericTypes(original.genericTypes);
+    }
 
     public static createClone(original: PType) : PType
     {
@@ -148,5 +158,25 @@ export class PType implements IPType
         for(let i=0; i< original.length; i++ )
             result.push( PType.createClone(original[i]));
         return result;
+    }
+
+    public static setAsPrimitiveType( target:PType, kind:PPrimitiveKind) 
+    { 
+        target.typeKind = PTypeKind.Primitive;
+        target.name = primitiveKindNames[kind];
+        target.setPrimitive(kind); 
+    }
+
+    public static setAsVoidType( target:PType) 
+    { 
+        target.typeKind = PTypeKind.Void;
+        target.name = "void";
+    }
+
+    public static setAsArrayType( target:PType, arrayType:PType) 
+    { 
+        target.typeKind = PTypeKind.Array;
+        target.name = "Array";
+        target.setArrayType(arrayType);
     }
 }

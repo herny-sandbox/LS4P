@@ -77,7 +77,7 @@ export class PdeContentInfo
 	public linesOffset: number=0;
 
 	private definitionDict : Map<TerminalNode, symb.BaseSymbol> = new Map<TerminalNode, symb.BaseSymbol>();
-	private contextTypeDict : Map<ParseTree, psymb.PType> = new Map<ParseTree, psymb.PType>();
+	private contextTypeDict : Map<ParseTree, psymb.IPType> = new Map<ParseTree, psymb.IPType>();
 	private usageMap : Map<symb.BaseSymbol, lsp.Range[]> = new Map<symb.BaseSymbol, lsp.Range[]>();
 
 
@@ -159,7 +159,7 @@ export class PdeContentInfo
 		return this.definitionDict.get(node);
 	}
 
-	public findNodeContextTypeDefinition(node : ParseTree ) : psymb.PType | undefined
+	public findNodeContextTypeDefinition(node : ParseTree ) : psymb.IPType | undefined
 	{
 		return this.contextTypeDict.get(node);
 	}
@@ -184,7 +184,7 @@ export class PdeContentInfo
 		return declaredSymbol;
 	}
 
-	public registerContextType(node: ParseTree | undefined, ctxType : psymb.PType | undefined)
+	public registerContextType(node: ParseTree | undefined, ctxType : psymb.IPType | undefined)
 	{
 		if(!ctxType)
 			return;

@@ -5,21 +5,19 @@ import {
 	BaseSymbol,
 	IScopedSymbol,
 	VariableSymbol,
-	SymbolTable,
 	SymbolConstructor,
-	MethodSymbol,
 	ScopedSymbol,
 	MethodFlags,
 } from "antlr4-c3";
 import { PClassSymbol} from "./PClassSymbol"
 import { PInterfaceSymbol} from "./PInterfaceSymbol"
+import { PMethodSymbol} from "./PMethodSymbol"
 import { PEnumSymbol} from "./PEnumSymbol"
-import { PFormalParamSymbol } from "./PFormalParamSymbol"
 import { PComponentSymbol} from "./PComponentSymbol"
 import { PSymbolTable } from './PSymbolTable';
 import { PNamespaceSymbol } from './PNamespaceSymbol';
 import { PLibraryTable } from './PLibraryTable';
-import { PType, PTypeKind, PPrimitiveKind } from './PType';
+import { IPType, PType, PTypeKind, PPrimitiveKind } from './PType';
 
 
 
@@ -39,20 +37,23 @@ export class CallContext
 
 export class PUtils 
 {
-
-	public static typeToPType(type: Type|undefined) : PType | undefined
-	{
-		if(type == undefined)
-			return undefined;
-		return new PType(type.typeKind, type.name, type.reference, type.baseTypes);
-	}
-
-	public static isDefaultObjectPath(path: string) {return path == defaultObjectClass; }
-	public static isDefaultStringPath(path: string) {return path == defaultStringClass; }
-
 	public static cloneTypeAsInstance(type: PType) : PType
 	{
 		return PType.createClone(type).setReference(ReferenceKind.Instance);
+	}
+
+	public static ComponentSymbolToPType(comp: PComponentSymbol | undefined) : PType
+	{
+		if(comp === undefined)
+			return PType.createUnknownType();
+		if(comp instanceof PClassSymbol)
+			return PType.createClassType(comp.name);
+		else if(comp instanceof PInterfaceSymbol)
+			return PType.createInterfaceType(comp.name);
+		else if(comp instanceof PEnumSymbol)
+			return PType.createEnumType(comp.name);
+		else if(comp instanceof PNamespaceSymbol)
+			return PType.createNamespaceType(comp.name);
 	}
 	
 	public static getAllSymbolsSync<T extends BaseSymbol, Args extends unknown[]>(ctx: IScopedSymbol, t: SymbolConstructor<T, Args>, name?:string, localOnly?: boolean): T[] 
@@ -288,7 +289,7 @@ export class PUtils
     	return undefined;
 	}
 
-	public static resolveSymbolFromTypeSync(currentScope: ScopedSymbol, type: PType): ScopedSymbol
+	public static resolveSymbolFromTypeSync(currentScope: ScopedSymbol, type: IPType): ScopedSymbol
 	{
 		let result : ScopedSymbol | undefined;
 		if(type instanceof PClassSymbol)
@@ -335,29 +336,29 @@ export class PUtils
 		return;
 	}
 
-	public static comparePrimitiveKind(symbolType : PType, primKind : PPrimitiveKind, scope: ScopedSymbol)
+	public static comparePrimitiveKind(symbolType : IPType, primKind : PPrimitiveKind, scope: ScopedSymbol)
 	{
-		if(symbolType.typeKind == PTypeKind.Primitive)
+		if(symbolType.typeKind == PTypeKind.Primitive && symbolType instanceof PType)
 			return symbolType.primitiveKind == primKind;
 		else if(symbolType.typeKind == PTypeKind.Class || symbolType.typeKind == PTypeKind.Interface)
 		{
 			let classSymb = PUtils.resolveSymbolFromTypeSync(scope, symbolType);
 			if(!classSymb)
 				return false;
-			let callContext = PUtils.resolveSymbolSync(classSymb, MethodSymbol, PType.getPrimitiveTypeName(primKind)+"Value", true );
+			let callContext = PUtils.resolveSymbolSync(classSymb, PMethodSymbol, PType.getPrimitiveTypeName(primKind)+"Value", true );
 			return callContext !== undefined;
 		}
 	}
 
-	public static convertSymbolTypeToString(symbolType : PType | undefined, full:boolean=false) : string
+	public static convertSymbolTypeToString(symbolType : IPType | undefined, full:boolean=false) : string
 	{
 		if(!symbolType)
 			return "<unknown>";
 
-		if(symbolType.typeKind == PTypeKind.Array)
+		if(symbolType.typeKind == PTypeKind.Array && symbolType instanceof PType)
 		{
-			if(symbolType.baseTypes.length==1)
-				return PUtils.convertSymbolTypeToString(symbolType.baseTypes[0], full) + "[]"
+			if(symbolType.arrayType)
+				return PUtils.convertSymbolTypeToString(symbolType.arrayType, full) + "[]"
 			else
 				return "<unknown> []"
 		}
@@ -369,15 +370,15 @@ export class PUtils
 			else
 				result = symbolType.name.substring(symbolType.name.lastIndexOf(".")+1);
 
-			if(symbolType.baseTypes.length > 0)
+			if(symbolType.genericTypes.length > 0)
 				result += "<";
-			for(let i=0; i < symbolType.baseTypes.length; i++ )
+			for(let i=0; i < symbolType.genericTypes.length; i++ )
 			{
 				if(i > 0)
 					result += ", ";
-				result += PUtils.convertSymbolTypeToString(symbolType.baseTypes[i], full)
+				result += PUtils.convertSymbolTypeToString(symbolType.genericTypes[i], full)
 			}
-			if(symbolType.baseTypes.length > 0)
+			if(symbolType.genericTypes.length > 0)
 				result += ">";
 
 			return result;
@@ -386,7 +387,7 @@ export class PUtils
 			return symbolType.name;
 	}
 
-	static checkComparableTypes(left: PType, right: PType, scope: ScopedSymbol) : boolean
+	static checkComparableTypes(left: IPType, right: IPType, scope: ScopedSymbol) : boolean
 	{
 		let comparingInterfaces = left.typeKind == PTypeKind.Interface || right.typeKind == PTypeKind.Interface;
 		let comparingClasses = left.typeKind == PTypeKind.Class || right.typeKind == PTypeKind.Class;
@@ -402,13 +403,13 @@ export class PUtils
 			let primitive = left.typeKind == PTypeKind.Primitive ? left : right;
 			let classType = left.typeKind == PTypeKind.Class ? left : right;
 
-			if(classType.name == "Object" || PUtils.isDefaultObjectPath(classType.name))
+			if(classType.name == "Object" || PType.isDefaultObjectPath(classType.name))
 				return true;
 
 			let classSymb = PUtils.resolveSymbolFromTypeSync(scope, classType);
 			if(!classSymb)
 				return false;
-			let callContext = PUtils.resolveSymbolSync(classSymb, MethodSymbol, primitive.name+"Value", true );
+			let callContext = PUtils.resolveSymbolSync(classSymb, PMethodSymbol, primitive.name+"Value", true );
 			return callContext !== undefined;
 		}
 		if(comparingArray && comparingClasses)
@@ -417,12 +418,12 @@ export class PUtils
 		return left.typeKind == right.typeKind;
 	}
 
-	public static setMethodLastVargs( method : MethodSymbol)
+	public static setMethodLastVargs( method : PMethodSymbol)
 	{
 		method.methodFlags |= MethodFlags.Virtual;
 	} 
 
-	public static hasMethodLastVargs( method : MethodSymbol)
+	public static hasMethodLastVargs( method : PMethodSymbol)
 	{
 		return (method.methodFlags & MethodFlags.Virtual) != 0;
 	} 

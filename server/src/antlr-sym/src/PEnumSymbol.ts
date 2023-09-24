@@ -1,9 +1,4 @@
-import { 
-	ReferenceKind, 
-	TypeKind, 
-} from "antlr4-c3";
 import { PClassSymbol } from "./PClassSymbol"
-import { PUtils } from "./PUtils"
 import { IPType, PType, PTypeKind } from "./PType"
 
 export class PEnumSymbol extends PClassSymbol implements IPType 
@@ -12,9 +7,9 @@ export class PEnumSymbol extends PClassSymbol implements IPType
 
 	constructor(name: string, impl: PType[]=[])
 	{
-		super(name, PUtils.createEnumBaseClass(name), impl);
+		super(name, PType.createEnumBaseClass(name), impl);
 	}
 
-    get baseTypes() { return []; }
+    get arrayType() { return []; }
 	get typeKind() { return PTypeKind.Enum; }
 }

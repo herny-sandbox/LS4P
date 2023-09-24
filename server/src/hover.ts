@@ -82,7 +82,7 @@ export function scheduleHoverInfo(pdeName: string, line: number, pos : number): 
 	if(definition instanceof symb.ScopedSymbol)
 		contextSymbol = definition;
 
-	let callContext : psymb.CallContext = new psymb.CallContext(contextType, contextSymbol);
+	let callContext : psymb.CallContext = new psymb.CallContext(psymb.PType.createFromIType(contextType), contextSymbol);
 
 	if(definition)
 	{
@@ -99,45 +99,43 @@ function formatHoverContent(baseSymbol : symb.BaseSymbol, callContext : psymb.Ca
 	let result = "";
 	if(baseSymbol instanceof psymb.PClassSymbol)
 		result += "(class) ";
-	else if(baseSymbol instanceof symb.MethodSymbol)
+	else if(baseSymbol instanceof psymb.PMethodSymbol)
 		result += "(function) ";
-	else if(baseSymbol instanceof symb.FieldSymbol)
+	else if(baseSymbol instanceof psymb.PFieldSymbol)
 		result += "(field) ";
-	else if(baseSymbol instanceof symb.VariableSymbol)
+	else if(baseSymbol instanceof psymb.PVariableSymbol)
 		result += "(var) ";
 	
-	if(baseSymbol instanceof symb.MethodSymbol)
+	if(baseSymbol instanceof psymb.PMethodSymbol)
 	{
-		let returnType = psymb.PUtils.typeToPType(baseSymbol.returnType);
-		if(returnType)
+		if(baseSymbol.returnType)
 		{
-			if(returnType.typeKind == psymb.PTypeKind.Generic)
-				result +=  extractClassName(parseUtils.convertAliasType(returnType, callContext).name) + " ";
+			if(baseSymbol.returnType.typeKind == psymb.PTypeKind.Generic)
+				result +=  extractClassName(parseUtils.convertAliasType(baseSymbol.returnType, callContext).name) + " ";
 			else
-				result += typeTypeToString(returnType) + " ";
+				result += typeTypeToString(baseSymbol.returnType) + " ";
 		} 
 	}
-	if(baseSymbol instanceof symb.VariableSymbol)
-		result += typeTypeToString(psymb.PUtils.typeToPType(baseSymbol.type)) + " ";
+	if(baseSymbol instanceof psymb.PVariableSymbol)
+		result += typeTypeToString(baseSymbol.type) + " ";
 
 	result += baseSymbol.name;
 
-	if(baseSymbol instanceof symb.MethodSymbol)
+	if(baseSymbol instanceof psymb.PMethodSymbol)
 	{
 		result += "(";
-		let params = baseSymbol.getAllSymbolsSync(ParameterSymbol_1.ParameterSymbol, true);
+		let params = baseSymbol.getAllSymbolsSync(psymb.PParameterSymbol, true);
 		for(let i = 0; i < params.length; i++)
 		{
 			if(i>0)
 				result += ", ";
 			let param = params[i];
-			if( param instanceof symb.ParameterSymbol)
+			if( param instanceof psymb.PParameterSymbol)
 			{
-				let paramType = psymb.PUtils.typeToPType(param.type);
-				if(paramType.typeKind == psymb.PTypeKind.Generic)
-					result +=  extractClassName(parseUtils.convertAliasType(paramType, callContext).name);
+				if(param.type.typeKind == psymb.PTypeKind.Generic)
+					result +=  extractClassName(parseUtils.convertAliasType(param.type, callContext).name);
 				else
-					result += typeTypeToString(paramType);
+					result += typeTypeToString(param.type);
 			}
 		}
 		result += ")";
@@ -156,25 +154,25 @@ function typeTypeToString(type: psymb.PType | undefined) : string
 		return "";
 	
 	if(type.typeKind == psymb.PTypeKind.Array)
-		return typeTypeToString(type.baseTypes[0]) + "[]";
+		return typeTypeToString(type.arrayType) + "[]";
 	if(type.typeKind == psymb.PTypeKind.Generic)
 	{
-		if(type.baseTypes.length==1)
-			return typeTypeToString(type.baseTypes[0]);
+		if(type.genericTypes.length==1)
+			return typeTypeToString(type.genericTypes[0]);
 		else 
 			return type.name;
 	}
 		
 
 	let result = extractClassName(type.name);
-	if(type.baseTypes.length > 0)
+	if(type.genericTypes.length > 0)
 	{
 		result += '{';
-		for(let i=0; i<type.baseTypes.length;i++)
+		for(let i=0; i<type.genericTypes.length;i++)
 		{
 			if(i>0)
 				result += ", ";
-			result += typeTypeToString(type.baseTypes[i]);
+			result += typeTypeToString(type.genericTypes[i]);
 		}
 		result += '}';
 	}
