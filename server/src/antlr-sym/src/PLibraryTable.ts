@@ -17,18 +17,22 @@ export class PLibraryTable extends symb.SymbolTable
 		super(name, options);
 	}
 
-	getOrCreateNamespaceFor(symbolPath:string, delimiter:string="/") : symb.IScopedSymbol
+	getOrCreateFor(symbolPath:string, delimiter:string="/", lastToo:boolean=false, createNamespace:boolean=true, at?:symb.IScopedSymbol|undefined) : symb.IScopedSymbol
 	{
 		const parts = symbolPath.split(delimiter);
         let i = 0;
-        let currentParent : symb.IScopedSymbol = this;
+        let currentParent : symb.IScopedSymbol = at ? at : this;
 
-		while (i < parts.length - 1) 
+		let lastsRemoved = (lastToo?0:1);
+		while (i < parts.length - lastsRemoved) 
 		{
 			let component = PUtils.resolveChildSymbolSync(currentParent, PComponentSymbol, parts[i]);
 			if(component == undefined)
 			{
-                component = new PNamespaceSymbol(parts[i]);
+				if(createNamespace)
+                	component = new PNamespaceSymbol(parts[i]);
+				else
+					component = new PComponentSymbol(parts[i]);
 				currentParent.addSymbol(component);
 			}
             currentParent = component;

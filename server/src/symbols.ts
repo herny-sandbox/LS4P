@@ -252,7 +252,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 					for(let boundTypeCtx of boundTypesCtx)
 						formalTypes.push( parseUtils.convertTypeTypeToSymbolType(boundTypeCtx) );
 				}
-				let typeParam = new psymb.PFormalParamSymbol(identif.text, formalTypes);
+				let typeParam = new psymb.PGenericParamSymbol(identif.text, formalTypes);
 				classSymbol.addSymbol(typeParam);
 			}
 		}
@@ -293,7 +293,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 					for(let boundTypeCtx of boundTypesCtx)
 						formalTypes.push( parseUtils.convertTypeTypeToSymbolType(boundTypeCtx) );
 				}
-				let typeParam = new psymb.PFormalParamSymbol(identif.text, formalTypes);
+				let typeParam = new psymb.PGenericParamSymbol(identif.text, formalTypes);
 				interfSymbol.addSymbol(typeParam);
 			}
 		}
@@ -416,7 +416,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 			else
 				boundTypes.push(psymb.PType.createObjectType());
 
-			this.scope.addSymbol(new psymb.PFormalParamSymbol(paramName, boundTypes));
+			this.scope.addSymbol(new psymb.PGenericParamSymbol(paramName, boundTypes));
 		}
 	}
 

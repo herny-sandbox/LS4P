@@ -18,7 +18,7 @@ export function activate(context: vscode.ExtensionContext)
 		path.join('server', 'out', 'server.js')
 	);
 	
-	let debugOptions = { execArgv: ['--nolazy', '--inspect=6009'] }; // '--inspect-brk=6009'] };
+	let debugOptions = { execArgv: ['--nolazy', '--inspect-brk=6009'] }; // '--inspect-brk=6009'] };
 
 	let serverOptions: ServerOptions = {
 		run: { module: serverModule, transport: TransportKind.ipc },

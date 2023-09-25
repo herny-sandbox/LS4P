@@ -393,7 +393,7 @@ export function convertAliasType( type: psymb.PType, callContext : psymb.CallCon
         return type;
     }
 
-	let genericParams = callContext.symbol.getNestedSymbolsOfTypeSync(psymb.PFormalParamSymbol);
+	let genericParams = callContext.symbol.getNestedSymbolsOfTypeSync(psymb.PGenericParamSymbol);
 	for(let i=0; i < genericParams.length; i++)
 	{
 		if(genericParams[i].name == type.name)

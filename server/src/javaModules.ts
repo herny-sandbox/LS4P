@@ -126,7 +126,11 @@ function loadJarFile(filename:string)
 			
 			const fileContent : Buffer = entry.getData();
 			const visitor = new JavaClassVisitor(libTable, className);
-			new ClassReader(fileContent).accept(visitor);
+			try {
+				new ClassReader(fileContent).accept(visitor);
+			} catch (error) {
+				console.error(`Error reading Java Jar class symbol: ${error} (${className})`);
+			}
 		}
 		
     } catch (error) {
@@ -174,7 +178,7 @@ export function loadJavaSymbolsFile(filename:string)
 			classMap.set(fullname, fileContent);
 		}
 		let i:number=0;
-		for(let [key, val] of classMap)
+		for(let [key, buffer] of classMap)
 		{
 			let fullName = key;
 			if(key.endsWith(".sig"))
@@ -183,9 +187,12 @@ export function loadJavaSymbolsFile(filename:string)
 			className = classFileName.substring(classFileName.indexOf('$')+1);
 
 			const visitor = new JavaClassVisitor(libTable, className);
-			const classData: Buffer = val;
-			new ClassReader(classData).accept(visitor);
-
+			try
+			{
+				new ClassReader(buffer).accept(visitor);
+			} catch (error) {
+				console.error(`Error reading Java class symbol: ${error} (${className})`);
+			}
 			i++;
 		}
 		console.log(`found ${i} elements`);

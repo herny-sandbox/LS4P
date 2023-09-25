@@ -8,7 +8,7 @@ export * from "./src/PLibraryTable";
 export * from "./src/PSymbolTable";
 export * from "./src/PMethodSymbol";
 export * from "./src/PNamespaceSymbol";
-export * from "./src/PFormalParamSymbol";
+export * from "./src/PGenericParamSymbol";
 export * from "./src/PComponentSymbol";
 export * from "./src/PEnumSymbol";
 export * from "./src/PEnumMemberSymbol";

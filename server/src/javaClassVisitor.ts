@@ -52,8 +52,13 @@ export class JavaClassVisitor extends ClassVisitor
 		else
 			this.classSymbol = new psymb.PClassSymbol(this.name, ext, impl);
 
-		pathName = pathName.replace(/[/$]/g, ".");
-		let container = this.libTable.getOrCreateNamespaceFor(pathName, ".");
+		let indexOfClass = pathName.lastIndexOf('/');
+		let container = this.libTable.getOrCreateFor(pathName, "/",false, true);
+		let remainingOutterClasses = pathName.substring(indexOfClass+1);
+		container = this.libTable.getOrCreateFor(remainingOutterClasses, "$", false, false, container);
+	
+		//pathName = pathName.replace(/[/$]/g, ".");
+		//let container = this.libTable.getOrCreateNamespaceFor(pathName, ".");
 
 		let component = psymb.PUtils.resolveChildSymbolSync(container, psymb.PComponentSymbol, this.classSymbol.name);
 		//let component = container.resolveSync(this.classSymbol.name, true);
@@ -119,9 +124,21 @@ export class JavaClassVisitor extends ClassVisitor
 		else if(isProtected)
 			methodSymbol.visibility = symb.MemberVisibility.Protected;
 
-		debugMethodName = "."+name+"(M)"; 
+		debugMethodName = "."+name+"(M)";
+		let srcMethodSignature : string = signature?signature:desc;
 		const visitor = new MethodSignatureVisitor(methodSymbol);
-		new SignatureReader(signature?signature:desc).accept(visitor);
+		try {
+			new SignatureReader(srcMethodSignature).accept(visitor);
+		} catch (error) {
+			console.error(`Error reading Java Jar class symbol: ${error} (${debugClass}:${name})`);
+		}
+		let dstMethodSignature : string = psymb.PUtils.convertToSignature(methodSymbol);
+		if(dstMethodSignature != srcMethodSignature)
+		{
+			console.warn(`Seems that the generated method signature doesn't match the original, please fix! (${debugClass}:${name})`);
+			console.log(`    original signature: ${srcMethodSignature}`);
+			console.log(`    final signature: ${dstMethodSignature}`);
+		}
 		debugMethodName = "";
 
 		return null;
@@ -214,7 +231,7 @@ class ClassSignatureVisitor extends DebugSignatureVisitor
 	public visitFormalTypeParameter(name: string) 
 	{
 		this.formalTypes = [];
-		this.scopedSymbol.addSymbol(new psymb.PFormalParamSymbol(name, this.formalTypes));
+		this.scopedSymbol.addSymbol(new psymb.PGenericParamSymbol(name, this.formalTypes));
 	}
 	public visitClassBound(): SignatureVisitor 
 	{
@@ -274,7 +291,7 @@ class MethodSignatureVisitor extends DebugSignatureVisitor
 	public visitFormalTypeParameter(name: string) 
 	{
 		this.formalTypes = [];
-		this.methodSymbol.addSymbol(new psymb.PFormalParamSymbol(name, this.formalTypes));
+		this.methodSymbol.addSymbol(new psymb.PGenericParamSymbol(name, this.formalTypes));
 	}
 	public visitClassBound(): SignatureVisitor 
 	{
@@ -332,11 +349,34 @@ class TypeSignatureVisitor extends DebugSignatureVisitor
 	public visitSuperclass(): SignatureVisitor { return this; }
 	public visitIdentifier(name: string)
 	{
-		let fixedName = name.replace(/[\/$]/g, psymb.PNamespaceSymbol.delimiter);
-		this.targetType.name = fixedName;
-		this.targetType.typeKind = psymb.PTypeKind.Class;
-		this.targetType.reference = symb.ReferenceKind.Reference;
+		let indexOfInnerClass = name.indexOf('$');
+		if(indexOfInnerClass >= 0)
+		{
+			let outterClass = name.substring(0, indexOfInnerClass);
+			let outterClassName = outterClass.replace(/[\/]/g, psymb.PNamespaceSymbol.delimiter);
+			let innerClasses = name.substring(indexOfInnerClass+1);
+			let innerClassesList = innerClasses.split('$');
+			let focusedType = this.targetType;
+			for( let i=innerClassesList.length-2; i > 0; i-- )
+			{
+				let newOutterType = psymb.PType.createComponentType(innerClassesList[i]);
+				focusedType.outterType = newOutterType;
+				focusedType = newOutterType;
+			}
+			focusedType.outterType = psymb.PType.createComponentType(outterClassName);
+			this.targetType.name = innerClassesList[innerClassesList.length-1];
+			this.targetType.typeKind = psymb.PTypeKind.Component;
+			this.targetType.reference = symb.ReferenceKind.Reference;
+		}
+		else
+		{
+			let componentName = name.replace(/[\/]/g, psymb.PNamespaceSymbol.delimiter);
+			this.targetType.name = componentName;
+			this.targetType.typeKind = psymb.PTypeKind.Component;
+			this.targetType.reference = symb.ReferenceKind.Reference;
+		}
 	}
+
 	public visitUnboundedTypeArgument() 
 	{
 		let baseType =  psymb.PType.createUnknownType();

@@ -18,6 +18,8 @@ import { PSymbolTable } from './PSymbolTable';
 import { PNamespaceSymbol } from './PNamespaceSymbol';
 import { PLibraryTable } from './PLibraryTable';
 import { IPType, PType, PTypeKind, PPrimitiveKind } from './PType';
+import { PGenericParamSymbol } from './PGenericParamSymbol';
+import { PParameterSymbol} from "./PParameterSymbol"
 
 
 
@@ -427,4 +429,57 @@ export class PUtils
 	{
 		return (method.methodFlags & MethodFlags.Virtual) != 0;
 	} 
+
+	public static convertToSignature( method : PMethodSymbol ) : string
+	{
+		let genericParams : PGenericParamSymbol [] = PUtils.getAllDirectChildSymbolSync(method, PGenericParamSymbol);
+		let params : PParameterSymbol [] = PUtils.getAllDirectChildSymbolSync(method, PParameterSymbol);
+		let returnSignature = PUtils.convertPTypeToSignature(method.returnType);
+		let paramsSignature : string = "";
+		for(let param of params)
+		{
+			paramsSignature += PUtils.convertPTypeToSignature(param.type);
+		}
+		let result : string = `(${paramsSignature})${returnSignature}`;
+
+		return result;
+	}
+
+	public static convertPTypeToSignature( type : PType ) : string
+	{
+		if(type.typeKind == PTypeKind.Primitive)
+			return PUtils.convertPrimitiveToSignature(type.primitiveKind);
+		else if(type.typeKind == PTypeKind.Void)
+			return 'V';
+		else if(type.typeKind == PTypeKind.Class || type.typeKind == PTypeKind.Interface || type.typeKind == PTypeKind.Component)
+		{
+			return 'L' + PUtils.convertComponentToSignature(type) + ';';
+		}
+		
+	}
+
+	public static convertPrimitiveToSignature( kind : PPrimitiveKind ) : string
+	{
+		if(kind == PPrimitiveKind.Boolean )
+			return 'Z';
+		else if(kind == PPrimitiveKind.Byte )
+			return 'B';
+		else if(kind == PPrimitiveKind.Char )
+			return 'C';
+		else if(kind == PPrimitiveKind.Double )
+			return 'D';
+		else if(kind == PPrimitiveKind.Float )
+			return 'F';
+		else if(kind == PPrimitiveKind.Int )
+			return 'I';
+		else if(kind == PPrimitiveKind.Long )
+			return 'J';
+		else // if(kind == PPrimitiveKind.Short )
+			return 'S';
+	}
+
+	public static convertComponentToSignature( type : PType ) : string
+	{
+		return type.name.replace(/[.$]/g, "/");
+	}
 }
