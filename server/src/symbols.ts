@@ -1,15 +1,13 @@
 import { ProcessingParserVisitor } from './grammer/ProcessingParserVisitor';
 import { AbstractParseTreeVisitor, ParseTree, TerminalNode } from 'antlr4ts/tree'
-import * as antlr from 'antlr4ts/tree'
+import { PdeContentInfo } from "./sketch";
 import * as symb from 'antlr4-c3'
 import * as pp from './grammer/ProcessingParser';
-import { Diagnostic, DiagnosticSeverity } from 'vscode-languageserver'
 import * as log from './scripts/syslogs'
-import { PdeContentInfo } from "./sketch";
 import * as psymb from "./antlr-sym"
 
 import * as parseUtils from './astutils'
-import { ParserRuleContext } from 'antlr4';
+
 
 const VAR_FIELD = 1;
 const VAR_PARAM = 2;

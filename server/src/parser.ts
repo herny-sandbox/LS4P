@@ -1,11 +1,8 @@
 import * as log from './scripts/syslogs'
-import { ParseTree } from 'antlr4ts/tree/ParseTree'
+import { ParseTree, } from 'antlr4ts/tree/ParseTree'
+import { PredictionMode } from 'antlr4ts/atn'
+import { CharStreams, CommonTokenStream, BailErrorStrategy, DefaultErrorStrategy } from 'antlr4ts/'
 
-const childProcess = require('child_process');
-const fs = require('fs')
-const antlr4ts_1 = require("antlr4ts");
-//const JavaLexer_1 = require("java-ast/dist/parser/JavaLexer");
-//const JavaParser_1 = require("java-ast/dist/parser/JavaParser");
 import { ProcessingParserListener } from "./grammer/ProcessingParserListener";
 import { ProcessingParserVisitor } from "./grammer/ProcessingParserVisitor";
 import { ProcessingErrorListener, clearSyntaxDiagnostics } from "./grammer/ProcessingErrorListener";
@@ -112,15 +109,36 @@ export function parse(source : string) : ProcessingSketchContext | undefined
 		clearSyntaxDiagnostics();
 
 		//console = redirectConsole(console)
-		const chars = new antlr4ts_1.ANTLRInputStream(source);
+		const chars = CharStreams.fromString(source);
 		const lexer = new ProcessingLexer(chars);
-		const tokens = new antlr4ts_1.CommonTokenStream(lexer);
+		let tokens = new CommonTokenStream(lexer);
 		currentParser = new ProcessingParser(tokens);
-		errorListener = new ProcessingErrorListener();
+		currentParser.interpreter.setPredictionMode(PredictionMode.SLL);
+		// we don't want error messages or recovery during first try
 		currentParser.removeErrorListeners();
-		currentParser.addErrorListener(errorListener);
-		const compilationUnit = currentParser.processingSketch();
-		
+		currentParser.errorHandler = new BailErrorStrategy();
+
+		let compilationUnit : ProcessingSketchContext;
+
+		// 
+		//currentParser.removeErrorListeners();
+		// currentParser.addErrorListener(errorListener);
+		try {
+			compilationUnit = currentParser.processingSketch();
+		} catch (ex) {
+			// thrown by BailErrorStrategy
+			tokens = new CommonTokenStream(lexer);
+			// rewind input stream
+			currentParser.reset();
+			// back to standard listeners/handlers
+			errorListener = new ProcessingErrorListener();
+			currentParser.addErrorListener(errorListener);
+			currentParser.errorHandler = new DefaultErrorStrategy();
+			// full now with full LL(*)
+			currentParser.interpreter.setPredictionMode(PredictionMode.LL);
+			compilationUnit = currentParser.processingSketch();
+		}
+
 		//console = consoleOriginal
 		return compilationUnit
 	}
