@@ -21,8 +21,9 @@ export enum PTypeKind
     Map = 10,
     Enum = 11,
     Alias = 12,
-	Generic = 13,
+	GenericDecl = 13,
     Component = 14,
+    Generic = 15,
 }
 
 export interface IPType //extends Type
@@ -94,7 +95,10 @@ export class PType implements IPType
 		this.reference = ReferenceKind.Reference;
 		this.typeKind =  kind;
         this.outterType = undefined;
+        this.genericTypes = []; 
 	}
+
+    public hasGenericParams() { return this.genericTypes.length > 0; }
 
     public setOutter(outter:PType) : PType { this.outterType = outter; return this; }
 
@@ -107,6 +111,8 @@ export class PType implements IPType
     public setPrimitive(primitive: PPrimitiveKind|undefined) : PType { this.primitiveKind = primitive; return this; }
     public setArrayType(arrayType: PType) : PType { this.arrayType = arrayType; return this; }
 
+
+    public static createGenericDeclType(wildcard:string) : PType { return new PType(PTypeKind.GenericDecl, wildcard); }
 
     public static createUnknownType() : PType { return new PType(PTypeKind.Unknown, ""); }
 

@@ -191,7 +191,7 @@ export function loadJavaSymbolsFile(filename:string)
 			{
 				new ClassReader(buffer).accept(visitor);
 			} catch (error) {
-				console.error(`Error reading Java class symbol: ${error} (${className})`);
+				console.error(`Error reading Java class symbol: ${error.stack} (${className})`);
 			}
 			i++;
 		}

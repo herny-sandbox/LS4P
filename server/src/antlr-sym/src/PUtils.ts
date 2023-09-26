@@ -19,8 +19,8 @@ import { PNamespaceSymbol } from './PNamespaceSymbol';
 import { PLibraryTable } from './PLibraryTable';
 import { IPType, PType, PTypeKind, PPrimitiveKind } from './PType';
 import { PGenericParamSymbol } from './PGenericParamSymbol';
-import { PParameterSymbol} from "./PParameterSymbol"
-
+import { PParameterSymbol} from "./PParameterSymbol";
+import { PThrowsSymbol } from "./PThrowsSymbol";
 
 
 
@@ -433,29 +433,83 @@ export class PUtils
 	public static convertToSignature( method : PMethodSymbol ) : string
 	{
 		let genericParams : PGenericParamSymbol [] = PUtils.getAllDirectChildSymbolSync(method, PGenericParamSymbol);
+		let throwsParams : PThrowsSymbol [] = PUtils.getAllDirectChildSymbolSync(method, PThrowsSymbol);
 		let params : PParameterSymbol [] = PUtils.getAllDirectChildSymbolSync(method, PParameterSymbol);
 		let returnSignature = PUtils.convertPTypeToSignature(method.returnType);
 		let paramsSignature : string = "";
-		for(let param of params)
+		let genericSignature : string = "";
+		let throwsSignature : string = "";
+
+		if(genericParams.length>0)
 		{
-			paramsSignature += PUtils.convertPTypeToSignature(param.type);
+			genericSignature += '<';
+			for(let param of genericParams)
+			{
+				genericSignature += param.name;
+				genericSignature += ':';
+				
+				for(let i=0; i < param.extends.length; i++ )
+				{
+					if(i!=0 || param.extends[i].typeKind != PTypeKind.Class)
+						genericSignature += ':';
+					genericSignature += PUtils.convertPTypeToSignature(param.extends[i]);
+				}
+
+			}	
+			genericSignature += '>';
 		}
-		let result : string = `(${paramsSignature})${returnSignature}`;
+
+		for(let param of params)
+			paramsSignature += PUtils.convertPTypeToSignature(param.type);
+
+		for(let throwParam of throwsParams)
+			throwsSignature += '^' + PUtils.convertPTypeToSignature(throwParam.type);
+
+		let result : string = `${genericSignature}(${paramsSignature})${returnSignature}${throwsSignature}`;
 
 		return result;
 	}
 
-	public static convertPTypeToSignature( type : PType ) : string
+	public static convertPTypeToSignature( type : PType | undefined ) : string
 	{
+		if(type == undefined)
+			return 'V';
 		if(type.typeKind == PTypeKind.Primitive)
 			return PUtils.convertPrimitiveToSignature(type.primitiveKind);
 		else if(type.typeKind == PTypeKind.Void)
 			return 'V';
 		else if(type.typeKind == PTypeKind.Class || type.typeKind == PTypeKind.Interface || type.typeKind == PTypeKind.Component)
 		{
-			return 'L' + PUtils.convertComponentToSignature(type) + ';';
+			let result = 'L' + PUtils.convertComponentToSignature(type);
+			if(type.hasGenericParams())
+			{
+				result += '<';
+				for( let genericParam of type.genericTypes)
+				{
+					result += PUtils.convertPTypeToSignature(genericParam);
+				}
+				result += '>';
+			}
+			result += ';';
+			return result;
 		}
-		
+		else if(type.typeKind == PTypeKind.Array)
+			return '['+PUtils.convertPTypeToSignature(type.arrayType);
+		else if(type.typeKind == PTypeKind.GenericDecl)
+		{
+			if(type.name=='?')
+				return '*';
+			else if(type.name=='=')
+				return PUtils.convertPTypeToSignature(type.extendType)
+			else if(type.name=='+')
+				return '+' + PUtils.convertPTypeToSignature(type.extendType);
+			else if(type.name=='-')
+				return '-' + PUtils.convertPTypeToSignature(type.extendType);
+		}
+		else if(type.typeKind == PTypeKind.Generic)
+		{
+			return 'T' + type.name + ';';
+		}
 	}
 
 	public static convertPrimitiveToSignature( kind : PPrimitiveKind ) : string
@@ -480,6 +534,10 @@ export class PUtils
 
 	public static convertComponentToSignature( type : PType ) : string
 	{
-		return type.name.replace(/[.$]/g, "/");
+		let result : string = "";
+		if(type.outterType)
+			result += PUtils.convertComponentToSignature(type.outterType) + "$";
+		result += type.name.replace(/[.$]/g, "/");
+		return result;
 	}
 }

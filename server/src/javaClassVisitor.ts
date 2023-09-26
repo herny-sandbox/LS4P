@@ -137,7 +137,7 @@ export class JavaClassVisitor extends ClassVisitor
 		{
 			console.warn(`Seems that the generated method signature doesn't match the original, please fix! (${debugClass}:${name})`);
 			console.log(`    original signature: ${srcMethodSignature}`);
-			console.log(`    final signature: ${dstMethodSignature}`);
+			console.log(`       final signature: ${dstMethodSignature}`);
 		}
 		debugMethodName = "";
 
@@ -266,7 +266,7 @@ class ClassSignatureVisitor extends DebugSignatureVisitor
 		if( this.scopedSymbol instanceof psymb.PClassSymbol)
 			interf = this.scopedSymbol.implements[this.interfaceIndex];
 		else if( this.scopedSymbol instanceof psymb.PInterfaceSymbol)
-			interf = this.scopedSymbol.extends[this.interfaceIndex];
+			interf = this.scopedSymbol.implements[this.interfaceIndex];
 		else 
 			interf = psymb.PType.createObjectType();
 
@@ -327,8 +327,10 @@ class MethodSignatureVisitor extends DebugSignatureVisitor
 
 	public visitExceptionType(): SignatureVisitor 
 	{
+		let throwType : psymb.PType = psymb.PType.createUnknownType();
+		this.methodSymbol.addSymbol(new psymb.PThrowsSymbol("", throwType));
 		// We aren't going to support exceptions for now
-		return new TypeSignatureVisitor(psymb.PType.createUnknownType()); // We continue with a placeholder
+		return new TypeSignatureVisitor(throwType); // We continue with a placeholder
 	}
 	public visitEnd(): SignatureVisitor
 	{
@@ -357,7 +359,7 @@ class TypeSignatureVisitor extends DebugSignatureVisitor
 			let innerClasses = name.substring(indexOfInnerClass+1);
 			let innerClassesList = innerClasses.split('$');
 			let focusedType = this.targetType;
-			for( let i=innerClassesList.length-2; i > 0; i-- )
+			for( let i=innerClassesList.length-2; i >= 0; i-- )
 			{
 				let newOutterType = psymb.PType.createComponentType(innerClassesList[i]);
 				focusedType.outterType = newOutterType;
@@ -365,14 +367,16 @@ class TypeSignatureVisitor extends DebugSignatureVisitor
 			}
 			focusedType.outterType = psymb.PType.createComponentType(outterClassName);
 			this.targetType.name = innerClassesList[innerClassesList.length-1];
-			this.targetType.typeKind = psymb.PTypeKind.Component;
+			if(this.targetType.typeKind == psymb.PTypeKind.Unknown)
+				this.targetType.typeKind = psymb.PTypeKind.Component;
 			this.targetType.reference = symb.ReferenceKind.Reference;
 		}
 		else
 		{
 			let componentName = name.replace(/[\/]/g, psymb.PNamespaceSymbol.delimiter);
 			this.targetType.name = componentName;
-			this.targetType.typeKind = psymb.PTypeKind.Component;
+			if(this.targetType.typeKind == psymb.PTypeKind.Unknown)
+				this.targetType.typeKind = psymb.PTypeKind.Component;
 			this.targetType.reference = symb.ReferenceKind.Reference;
 		}
 	}
@@ -381,23 +385,22 @@ class TypeSignatureVisitor extends DebugSignatureVisitor
 	{
 		let baseType =  psymb.PType.createUnknownType();
 		baseType.name="?";
-		baseType.typeKind = psymb.PTypeKind.Generic;
+		baseType.typeKind = psymb.PTypeKind.GenericDecl;
 		baseType.reference = symb.ReferenceKind.Reference;
 		this.targetType.genericTypes.push(baseType);
 	}
 	public visitTypeArgument(wildcard:string) : SignatureVisitor 
 	{
-		let baseType =  psymb.PType.createUnknownType();
-		baseType.name = wildcard;
-		baseType.typeKind = psymb.PTypeKind.Generic;
-		baseType.reference = symb.ReferenceKind.Reference;
+		let baseType =  psymb.PType.createGenericDeclType(wildcard);
 		this.targetType.genericTypes.push(baseType);
-		return new TypeSignatureVisitor(baseType);
+
+		baseType.extendType = psymb.PType.createUnknownType();
+		return new TypeSignatureVisitor(baseType.extendType);
 	}
 	public visitTypeVariable(name: string) 
 	{
 		let fixedName = name.replace(/\//g, psymb.PNamespaceSymbol.delimiter);
-		//this.argBaseType = psymb.PUtils.createTypeUnknown();
+
 		this.targetType.name = fixedName;
 		this.targetType.typeKind = psymb.PTypeKind.Generic;
 		this.targetType.reference = symb.ReferenceKind.Reference;
