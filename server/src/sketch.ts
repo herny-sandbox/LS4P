@@ -234,11 +234,10 @@ export function initialize(workspacePath: string)
 
 	mainSymbolTable = new psymb.PSymbolTable("", { allowDuplicateSymbols: true });
 
-	//javaModules.loadDefaultLibraries();
+	javaModules.setLibraryTable(mainSymbolTable.dependencyTable);
 	javaModules.loadJavaSymbolsFile(processingPath+"java/lib/ct.sym");
 	javaModules.loadJarsFromDirectory(processingPath+"core/library/");
 	javaModules.loadJarsFromDirectory(path+"code/");
-	mainSymbolTable.addDependencies(javaModules.libTable);
 	mainSymbolTable.addImport("java.util", true);
 	mainSymbolTable.addImport("java.io", true);
 	mainSymbolTable.addImport("java.lang", true);

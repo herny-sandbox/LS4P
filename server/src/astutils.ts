@@ -393,16 +393,20 @@ export function convertAliasType( type: psymb.PType, callContext : psymb.CallCon
         return type;
     }
 
-	let genericParams = callContext.symbol.getNestedSymbolsOfTypeSync(psymb.PGenericParamSymbol);
+	let genericParams = psymb.PUtils.getAllDirectChildSymbolSync(callContext.symbol, psymb.PGenericParamSymbol);
+	//let genericParams = callContext.symbol.getNestedSymbolsOfTypeSync(psymb.PGenericParamSymbol);
 	for(let i=0; i < genericParams.length; i++)
 	{
 		if(genericParams[i].name == type.name)
 		{
+			// if( genericParams[i].extends && genericParams[i].extends.length >= i )
+			// 	return genericParams[i].extends[0];
 			if( callContext.type.genericTypes.length >= i )
 				return callContext.type.genericTypes[i];
 		}
 	}
-    
+    if(callContext.outter)
+		return convertAliasType(type, callContext.outter);
     console.error("Unable to resolve generic type: "+type.name);
 	return type;
 }

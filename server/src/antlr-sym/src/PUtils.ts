@@ -27,6 +27,7 @@ import { PThrowsSymbol } from "./PThrowsSymbol";
 
 export class CallContext
 {
+	public outter : CallContext | undefined;
 	public type : PType | undefined;
 	public symbol : ScopedSymbol | undefined;
 
@@ -34,6 +35,11 @@ export class CallContext
 	{
 		this.type = callerType;
 		this.symbol = callerSymbol;
+	}
+	setOutter(outter : CallContext | undefined) : CallContext
+	{ 
+		this.outter = outter; 
+		return this;
 	}
 }
 
@@ -101,17 +107,14 @@ export class PUtils
 		}
 		else if(ctx instanceof PSymbolTable)
 		{
-			const symbols = PUtils.getAllDirectChildSymbolSync(ctx, t, name)
+			let symbols = PUtils.getAllDirectChildSymbolSync(ctx, t, name)
 			result.push(...symbols);
 
 			if(name)
 				name = ctx.ensureIsFullPath(name);
 
-			for(let dependency of ctx.getDependencies())
-			{
-				const symbols = PUtils.getAllDirectChildSymbolSync(dependency, t, name)
-				result.push(...symbols);
-			}
+			symbols = PUtils.getAllDirectChildSymbolSync(ctx.dependencyTable, t, name)
+			result.push(...symbols);
 		}
 			
         if (!localOnly && ctx.parent) 
@@ -124,14 +127,18 @@ export class PUtils
 
 	public static resolveChildSymbolSync<T extends BaseSymbol, Args extends unknown[]>(ctx: IScopedSymbol, t: SymbolConstructor<T, Args>, name?:string): T | undefined
 	{
+		let result : T | undefined;
 		for (const child of ctx.children) 
 		{
 			const isNameMatch = !name || (child.name == name);
 			const isRightType = (child instanceof t );
 			if (isRightType && isNameMatch)
-				return child;
+			{
+				result = child;
+				break;
+			}
 		}
-		return undefined;
+		return result;
 	}
 
 	public static getAllDirectChildSymbolSync<T extends BaseSymbol, Args extends unknown[]>(ctx: IScopedSymbol, t: SymbolConstructor<T, Args>, name?:string): T[]
@@ -242,7 +249,19 @@ export class PUtils
         return undefined;
 	}
 
-	public static resolveComponentSync<T extends PComponentSymbol, Args extends unknown[]>(ctx: BaseSymbol, t: SymbolConstructor<T, Args>, name?:string): T | undefined
+	public static resolveComponentSyncFromPType<T extends PComponentSymbol, Args extends unknown[]>(ctx: IScopedSymbol, t: SymbolConstructor<T, Args>, ptype:IPType): T | undefined
+	{
+		let outter : PComponentSymbol | undefined; 
+		if(ptype.outterType)
+			outter = PUtils.resolveComponentSyncFromPType(ctx, PComponentSymbol, ptype.outterType);
+		
+		if(outter)
+			return PUtils.resolveComponentSync(outter, t, ptype.name);
+		else
+			return PUtils.resolveComponentSync(ctx, t, ptype.name);
+	}
+
+	public static resolveComponentSync<T extends PComponentSymbol, Args extends unknown[]>(ctx: IScopedSymbol, t: SymbolConstructor<T, Args>, name?:string): T | undefined
 	{
         let result : T | undefined;
 
@@ -268,18 +287,16 @@ export class PUtils
 		}
 		if(ctx instanceof PSymbolTable)
 		{
+			const resultSymbol = PUtils.resolveChildSymbolSync(ctx.dependencyTable, t, name);
+			if(resultSymbol)
+				return resultSymbol;
+			
 			if(name)
 				name = ctx.ensureIsFullPath(name);
 
-			for(let dependency of ctx.getDependencies())
-			{
-				if(dependency instanceof PLibraryTable)
-				{
-					let component = dependency.resolveComponent(t, name);
-					if(component)
-						return component;
-				}
-			}
+			let component = ctx.dependencyTable.resolveComponent(t, name);
+			if(component)
+				return component;
 		}
 		else  
 		if (ctx.parent) 
@@ -301,9 +318,9 @@ export class PUtils
 		else if(type instanceof PEnumSymbol)
 			result = type;
 		else if(type.typeKind == PTypeKind.Class || type.typeKind == PTypeKind.Interface || 
-				type.typeKind == PTypeKind.Unknown || type.typeKind == PTypeKind.Namespace || type.typeKind == PTypeKind.Enum)
+				type.typeKind == PTypeKind.Component || type.typeKind == PTypeKind.Namespace || type.typeKind == PTypeKind.Enum)
 		{
-			result = PUtils.resolveComponentSync(currentScope, PComponentSymbol, type.name );
+			result = PUtils.resolveComponentSyncFromPType(currentScope, PComponentSymbol, type );
 		}
 		if(!result)
 			result = currentScope;
@@ -393,6 +410,7 @@ export class PUtils
 	{
 		let comparingInterfaces = left.typeKind == PTypeKind.Interface || right.typeKind == PTypeKind.Interface;
 		let comparingClasses = left.typeKind == PTypeKind.Class || right.typeKind == PTypeKind.Class;
+		
 		let comparingArray = left.typeKind == PTypeKind.Array || right.typeKind == PTypeKind.Array;
 		let comparingNull = left.name == "null" || right.name == "null";
 		let comparingPrimitive = left.typeKind == PTypeKind.Primitive || right.typeKind == PTypeKind.Primitive;

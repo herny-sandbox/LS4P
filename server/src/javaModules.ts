@@ -26,8 +26,13 @@ export interface ModuleInfo
 }
 
 let modulesMap : Map<string, ModuleInfo> = new Map<string, ModuleInfo>();
-export let libTable : psymb.PLibraryTable = new psymb.PLibraryTable("", { allowDuplicateSymbols: true});
+export let libTable : psymb.PLibraryTable | undefined;
 export let processingImports : Set<string> = new Set<string>();
+
+export function setLibraryTable(table : psymb.PLibraryTable)
+{
+	libTable = table;
+}
 
 export function loadDefaultLibraries()
 {

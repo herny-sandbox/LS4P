@@ -16,7 +16,6 @@ export class PInterfaceSymbol extends PComponentSymbol
 		this.implements = ext;
 	}
 
-    get arrayType() { return this.implements; }
 	get typeKind() { return PTypeKind.Interface; }
 
 	/**

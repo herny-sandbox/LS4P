@@ -32,6 +32,7 @@ export interface IPType //extends Type
     genericTypes: PType[];
     outterType : PType | undefined;
     extendType: PType | undefined;
+    arrayType: PType | undefined;
 
     typeKind: PTypeKind;
     reference: ReferenceKind;
@@ -155,7 +156,13 @@ export class PType implements IPType
 
     public static createClone(original: PType) : PType
     {
-        return new PType(original.typeKind, original.name).setExtend(original.extendType).setOutter(original.outterType).setReference(original.reference).setGenericTypes(original.genericTypes);
+        return new PType(original.typeKind, original.name)
+                                .setExtend(original.extendType)
+                                .setOutter(original.outterType)
+                                .setReference(original.reference)
+                                .setGenericTypes(original.genericTypes)
+                                .setPrimitive(original.primitiveKind)
+                                .setArrayType(original.arrayType);
     }
 
     public static createCloneArray(original: PType[]) : PType[]

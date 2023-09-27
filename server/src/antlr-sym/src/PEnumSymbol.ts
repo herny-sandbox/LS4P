@@ -10,6 +10,5 @@ export class PEnumSymbol extends PClassSymbol implements IPType
 		super(name, PType.createEnumBaseClass(name), impl);
 	}
 
-    get arrayType() { return []; }
 	get typeKind() { return PTypeKind.Enum; }
 }

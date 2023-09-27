@@ -12,7 +12,7 @@ export class PComponentSymbol extends ScopedSymbol implements IPType
 	private generics: PType[] = [];
 
 
-    get arrayType() { return []; }
+	get arrayType() { return undefined; }
 	get extendType() { return this.extends; }
 	get genericTypes() { return this.generics; }
     get kind() { return TypeKind.Unknown; }

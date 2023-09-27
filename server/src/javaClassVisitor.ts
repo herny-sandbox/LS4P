@@ -63,7 +63,7 @@ export class JavaClassVisitor extends ClassVisitor
 		let component = psymb.PUtils.resolveChildSymbolSync(container, psymb.PComponentSymbol, this.classSymbol.name);
 		//let component = container.resolveSync(this.classSymbol.name, true);
 		container.addSymbol(this.classSymbol);
-		if(component instanceof psymb.PNamespaceSymbol)
+		if(component instanceof psymb.PComponentSymbol)
 		{
 			// We translate all the component childrens to this new symbol
 			let childs = component.children;

@@ -16,45 +16,30 @@ export class PSymbolTable extends SymbolTable
 	//protected imports : Set<string> = new Set<string>();
 	protected importDict : Map<string, string> = new Map<string, string>();
 
+	public dependencyTable : PLibraryTable = new PLibraryTable("", { allowDuplicateSymbols: true});
+
 
 	constructor(name: string, options: SymbolTableOptions)
 	{
 		super(name, options);
 	}
 
-	public getDependencies() : PLibraryTable[] 
-	{ 
-		let result : PLibraryTable[] = [];
-		for( let lib of this.dependencies)
-		{
-			if(lib instanceof PLibraryTable)
-				result.push(lib);
-		} 
-
-		return result;
-	}
 	public addImport(importPath: string, allMembers: boolean) 
 	{ 
 		if(allMembers)
 		{
-			for(let dependency of this.dependencies)
+			let result = this.dependencyTable.resolveComponent(PComponentSymbol, importPath);
+			if(result)
 			{
-				if(dependency instanceof PLibraryTable)
+				let components = PUtils.getAllDirectChildSymbolSync(result, PComponentSymbol, undefined);
+				for(let component of components)
 				{
-					let result = dependency.resolveComponent(PComponentSymbol, importPath);
-					if(result)
-					{
-						let components = PUtils.getAllDirectChildSymbolSync(result, PComponentSymbol, undefined);
-						for(let component of components)
-						{
-							let fullName = component.qualifiedName(PNamespaceSymbol.delimiter, true, false);
-							this.addImportAlias(component.name, fullName);
-						}
-					}
-					else
-						console.error("Unable to add any import symbol for "+importPath+(allMembers?".*":""));
+					let fullName = component.qualifiedName(PNamespaceSymbol.delimiter, true, false);
+					this.addImportAlias(component.name, fullName);
 				}
 			}
+			else
+				console.error("Unable to add any import symbol for "+importPath+(allMembers?".*":""));
 		}
 		else
 		{
@@ -86,22 +71,15 @@ export class PSymbolTable extends SymbolTable
 
     resolveSync(name:string, localOnly = false) : BaseSymbol | undefined
 	{
-		// Little hack so the super class doesn't try to check in the dependencies tables
-		let savedDependencies = this.dependencies;
-		this.dependencies = fakeEmptyDependencies;
 		let result = super.resolveSync(name, localOnly);
-		this.dependencies = savedDependencies;
+
 		if(!result)
 		{
 			let fullName = this.ensureIsFullPath(name)
 			if(!fullName)
 				fullName = name;
-			for(let dependency of savedDependencies)
-			{
-				result = dependency.symbolFromPath(fullName, ".");
-				if(result)
-					break;
-			}
+
+			result = this.dependencyTable.symbolFromPath(fullName, ".");
 		}
 		return result;
     }

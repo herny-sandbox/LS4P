@@ -250,8 +250,8 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 
 			// symbType = psymb.PType.createFromIType(symbType);
 			// symbType.reference = symb.ReferenceKind.Instance;
-			// if(symbType && symbType.typeKind == psymb.PTypeKind.Array && symbType.baseTypes.length > 0)
-			// 	symbType = symbType.baseTypes[0];
+			if(symbType && symbType.typeKind == psymb.PTypeKind.Array && symbType.arrayType)
+			 	symbType = symbType.arrayType;
 			return symbType;
 		}
 		else if(methodCall)													// | methodCall
@@ -304,14 +304,14 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 				else if(ctx.EQUAL() )										// expression '==' expression	
 				{
 					if(!psymb.PUtils.checkComparableTypes(results[0], results[1], currentScope))
-						this.pdeInfo.notifyCompileError(`Incompatible types in expression (${results[0].name}) == (${results[1].name})`, ctx);
+						this.pdeInfo.notifyCompileError(`Incompatible types in expression (${results[0].name}) == (${results[1].name})`, ctx.EQUAL());
 
 					return psymb.PType.createPrimitiveType(psymb.PPrimitiveKind.Boolean);
 				}
 				else if(ctx.NOTEQUAL())										// expression '!=' expression	
 				{
 					if(!psymb.PUtils.checkComparableTypes(results[0], results[1], currentScope))
-						this.pdeInfo.notifyCompileError(`Incompatible types in expression (${results[0].name}) != (${results[1].name})`, ctx);
+						this.pdeInfo.notifyCompileError(`Incompatible types in expression (${results[0].name}) != (${results[1].name})`, ctx.NOTEQUAL());
 
 					return psymb.PType.createPrimitiveType(psymb.PPrimitiveKind.Boolean);
 				}
@@ -324,17 +324,17 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 				else if(ctx.AND() )											// expression '&&' expression
 				{
 					if( !psymb.PUtils.comparePrimitiveKind(results[0], psymb.PPrimitiveKind.Boolean, currentScope) )				
-						this.pdeInfo.notifyCompileError(`Incompatible types. Expression should be boolean (${results[0].name})`, expressions[0])
+						this.pdeInfo.notifyCompileError(`Incompatible types. Left expression should be boolean (${results[0].name})`, expressions[0])
 					if( !psymb.PUtils.comparePrimitiveKind(results[1], psymb.PPrimitiveKind.Boolean, currentScope) )				
-						this.pdeInfo.notifyCompileError(`Incompatible types. Expression should be boolean (${results[1].name})`, expressions[1])
+						this.pdeInfo.notifyCompileError(`Incompatible types. Right expression should be boolean (${results[1].name})`, expressions[1])
 					return psymb.PType.createPrimitiveType(psymb.PPrimitiveKind.Boolean);
 				}
 				else if(ctx.OR() )											// expression '||' expression
 				{
 					if( !psymb.PUtils.comparePrimitiveKind(results[0], psymb.PPrimitiveKind.Boolean, currentScope) )				
-						this.pdeInfo.notifyCompileError(`Incompatible types. Expression should be boolean (${results[0].name})`, expressions[0])
+						this.pdeInfo.notifyCompileError(`Incompatible types. Left expression should be boolean (${results[0].name})`, expressions[0])
 					if( !psymb.PUtils.comparePrimitiveKind(results[1], psymb.PPrimitiveKind.Boolean, currentScope) )				
-						this.pdeInfo.notifyCompileError(`Incompatible types. Expression should be boolean (${results[1].name})`, expressions[1])
+						this.pdeInfo.notifyCompileError(`Incompatible types. Right expression should be boolean (${results[1].name})`, expressions[1])
 					return psymb.PType.createPrimitiveType(psymb.PPrimitiveKind.Boolean);
 				}
 				else if(ctx.ADD() )											// expression '+' expression
@@ -460,8 +460,10 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 		let createdName : pp.CreatedNameContext | undefined = creator.createdName();
 		let typeArguments = createdName.typeArgumentsOrDiamond();
 		let identifiers = createdName.IDENTIFIER();
+		let primitiveType = createdName.primitiveType();
 		let classCreator : pp.ClassCreatorRestContext | undefined = creator.classCreatorRest();
 		let arrayCreator : pp.ArrayCreatorRestContext | undefined = creator.arrayCreatorRest();
+
 		if( classCreator )
 		{
 			let paramExpressionList : pp.ExpressionListContext = classCreator.arguments().expressionList();
@@ -484,7 +486,27 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 		}
 		else if( arrayCreator )
 		{
-			//result = symbolContainer;
+			let expressions = arrayCreator.expression();
+			let initializer =  arrayCreator.arrayInitializer();
+			let classType : psymb.PType;
+
+			if(identifiers.length > 0)
+			{
+				let fullClassPath =  parseUtils.buildFullClassName( identifiers );
+				let className = psymb.PUtils.getClassName(fullClassPath);
+				let methodID = identifiers[identifiers.length-1];
+				this.registerUsageForIdentifiers(identifiers, currentScope);
+	
+				classType = psymb.PType.createClassType(fullClassPath);
+			}
+			else if(primitiveType)
+			{
+				classType = parseUtils.convertPrimitiveTypeToSymbolType(primitiveType)
+			}
+
+			for(let expr of expressions)
+				this.visitAndRegisterExpression(expr, currentScope);
+			result = classType;
 		}
 		return result;
 	}
@@ -583,8 +605,11 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 			callScope = psymb.PUtils.resolveSymbolFromTypeSync(currentScope, callerType);
 		
 		let localOnly = callScope !== currentScope;
-
-		let callContext : psymb.CallContext = new psymb.CallContext(psymb.PType.createFromIType(callerType), callScope);
+		let callContext : psymb.CallContext;
+		if(callerType == undefined)
+			callContext = new psymb.CallContext(undefined, callScope);
+		else
+			callContext = new psymb.CallContext(psymb.PType.createFromIType(callerType), callScope);
 
 		let expressionParams = this.visitAndRegisterExpressionList(paramExpressionList, currentScope);
 
@@ -609,10 +634,15 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 		if(!match.returnType || match.returnType.name == "void")
 			return;
 
-		if(match.returnType.typeKind == psymb.PTypeKind.Generic)
-			return parseUtils.convertAliasType(match.returnType, callContext);
-		else
-			return match.returnType;
+		let result : psymb.PType = match.returnType;
+
+		if(result.typeKind == psymb.PTypeKind.Generic)
+		{
+			result = parseUtils.convertAliasType(result, new psymb.CallContext(callContext.type, match).setOutter(callContext));
+		}
+		
+		this.tryFixComponentType(result, currentScope);
+		return result;
 	}
 
 	visitAndRegisterExpressionList(expressionList: pp.ExpressionListContext|undefined, currentScope: symb.ScopedSymbol) : psymb.IPType []
@@ -733,7 +763,10 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 		{
 			this.pdeInfo.registerDefinition(identifier, varSymbol);
 			if(varSymbol.type)
+			{
+				this.tryFixComponentType(varSymbol.type, varScope);
 				return psymb.PUtils.cloneTypeAsInstance(varSymbol.type);
+			}
 			else
 				return psymb.PType.createUnknownType();
 		}
@@ -803,14 +836,16 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 			let appliedParam : psymb.IPType | undefined = i < userParams.length ? userParams[i] : undefined;
 			if( !appliedParam && isVArg )
 				break;
+
+			if(requiredParam && requiredParam.typeKind == psymb.PTypeKind.Generic)
+				requiredParam = parseUtils.convertAliasType(requiredParam, callContext);
+
 			if( !requiredParam || !appliedParam )
 				return false;
 
+			this.tryFixComponentType(requiredParam, symbolContext);
 			if( perfectMatch && requiredParam.typeKind == psymb.PTypeKind.Class && psymb.PType.isDefaultObjectPath(requiredParam.name) )
 				return true;
-
-			if(requiredParam.typeKind == psymb.PTypeKind.Generic)
-				requiredParam = parseUtils.convertAliasType(requiredParam, callContext);
 
 			if( !this.compareReferenceAgainstInstance(requiredParam, appliedParam, symbolContext, perfectMatch))
 				return false;
@@ -985,34 +1020,32 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 
 	private registerUsageForClassOrInterfaceIdentifiers(identifiers : pp.ClassOrInterfaceIdentifierContext[], currentScope : symb.ScopedSymbol) : psymb.CallContext
 	{
-		let callContext = this.registerUsageForClassOrInterfaceIdentifier(identifiers[0], currentScope, false);
-		let callerSymbol = callContext.symbol;
+		let callContext = this.registerUsageForClassOrInterfaceIdentifier(undefined, identifiers[0], currentScope);
 		let idIndex = 1;
 		while(idIndex < identifiers.length)
 		{
-			callContext = this.registerUsageForClassOrInterfaceIdentifier(identifiers[idIndex], callerSymbol, true);
-			callerSymbol = callContext.symbol;
+			callContext = this.registerUsageForClassOrInterfaceIdentifier(callContext, identifiers[idIndex], currentScope);
 			idIndex++;
 		}
 		return callContext;
 	}
 
-	private registerUsageForClassOrInterfaceIdentifier(ctx : pp.ClassOrInterfaceIdentifierContext, currentScope : symb.ScopedSymbol, onlyChilds:boolean) : psymb.CallContext
+	private registerUsageForClassOrInterfaceIdentifier(callContext:psymb.CallContext|undefined, ctx : pp.ClassOrInterfaceIdentifierContext, currentScope : symb.ScopedSymbol) : psymb.CallContext
 	{
 		let identifier = ctx.IDENTIFIER();
 		let typeArguments = ctx.typeArguments();
 		let idName : string = identifier.text;
 
 
-		let callContext : psymb.PComponentSymbol | undefined;
+		let callSymbol : psymb.PComponentSymbol | undefined;
 		if(currentScope)
 		{
-			if(onlyChilds)
-				callContext = psymb.PUtils.resolveChildSymbolSync(currentScope, PComponentSymbol, idName );
-			else
-				callContext = psymb.PUtils.resolveComponentSync(currentScope, PComponentSymbol, idName );
+			if(callContext == undefined)
+				callSymbol = psymb.PUtils.resolveComponentSync(currentScope, PComponentSymbol, idName );
+			else if(callContext.symbol !== undefined)
+				callSymbol = psymb.PUtils.resolveChildSymbolSync(callContext.symbol, PComponentSymbol, idName );
 		}
-		this.pdeInfo.registerDefinition(identifier, callContext );
+		this.pdeInfo.registerDefinition( identifier, callSymbol );
 
 		let genericArguments : psymb.PType[] = [];
 		if(typeArguments)
@@ -1025,16 +1058,16 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 					genericArguments.push( this.registerUsageForTypeType(typeType, currentScope).type );
 			}
 		}
-		if(callContext instanceof psymb.PNamespaceSymbol)
-			return new psymb.CallContext(psymb.PType.createNamespaceType(idName), callContext);
-		else if(callContext instanceof psymb.PEnumSymbol)
-			return new psymb.CallContext(psymb.PType.createEnumType(idName), callContext);
-		else if(callContext instanceof psymb.PClassSymbol)
-			return new psymb.CallContext(psymb.PType.createClassType(idName).setGenericTypes(genericArguments), callContext);
-		else if(callContext instanceof psymb.PInterfaceSymbol)
-			return new psymb.CallContext(psymb.PType.createInterfaceType(idName).setGenericTypes(genericArguments), callContext);
+		if(callSymbol instanceof psymb.PNamespaceSymbol)
+			return new psymb.CallContext(psymb.PType.createNamespaceType(idName), callSymbol);
+		else if(callSymbol instanceof psymb.PEnumSymbol)
+			return new psymb.CallContext(psymb.PType.createEnumType(idName), callSymbol);
+		else if(callSymbol instanceof psymb.PClassSymbol)
+			return new psymb.CallContext(psymb.PType.createClassType(idName).setGenericTypes(genericArguments), callSymbol);
+		else if(callSymbol instanceof psymb.PInterfaceSymbol)
+			return new psymb.CallContext(psymb.PType.createInterfaceType(idName).setGenericTypes(genericArguments), callSymbol);
 
-		return new psymb.CallContext(psymb.PType.createUnknownType().setGenericTypes(genericArguments), callContext);
+		return new psymb.CallContext(psymb.PType.createUnknownType().setGenericTypes(genericArguments), callSymbol);
 	}
 
 	private registerUsageForTypeType(typeCtx : pp.TypeTypeContext, currentScope : symb.ScopedSymbol) : psymb.CallContext
@@ -1082,5 +1115,25 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 		return false;
 	}
 
+	tryFixComponentType( type: psymb.PType, scope : symb.IScopedSymbol )
+	{
+		if(type == undefined)
+			return;
+
+		if(type.typeKind == psymb.PTypeKind.Component)
+		{
+			let typeSymbol = psymb.PUtils.resolveComponentSyncFromPType(scope, PComponentSymbol, type);
+			if(typeSymbol instanceof psymb.PClassSymbol)
+				type.typeKind = psymb.PTypeKind.Class;
+			else if(typeSymbol instanceof psymb.PInterfaceSymbol)
+				type.typeKind = psymb.PTypeKind.Interface;
+			else if(typeSymbol instanceof psymb.PEnumSymbol)
+				type.typeKind = psymb.PTypeKind.Enum;
+			else
+				type.typeKind = psymb.PTypeKind.Unknown;
+		}
+		else if(type.typeKind == psymb.PTypeKind.Array)
+			this.tryFixComponentType(type.arrayType, scope);
+	}
 
 }
