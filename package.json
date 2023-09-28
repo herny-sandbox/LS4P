@@ -4,6 +4,10 @@
   "author": "Processing Foundation",
   "license": "MIT",
   "version": "0.2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/herny-sandbox/LS4P"
+  },
   "publisher": "Processing",
   "categories": [],
   "keywords": [
@@ -12,6 +16,9 @@
   "engines": {
     "vscode": "^1.82.2"
   },
+  "activationEvents": [
+    "onLanguage:Processing"
+  ],
   "main": "./client/out/extension",
   "contributes": {
     "languages": [
@@ -35,8 +42,13 @@
       "properties": {
         "vscode-processing-ls.processing.path": {
           "type": "string",
-          "default": "processing-java",
+          "default": "",
           "description": "Path to Processing. Leave default if you've added processing to your path, otherwise enter the path to processing here.\nExample: 'C:\\Program Files\\processing-4.2' for Windows"
+        },
+        "vscode-processing-ls.processing.launcher": {
+          "type": "string",
+          "default": "processing-java",
+          "description": "Path to the Processing java compiler.\n  Example: 'processing-java.exe' for Windows\n  Example: 'processing-java' for Mac"
         },
         "processing.maxNumberOfProblems": {
           "scope": "resource",

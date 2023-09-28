@@ -234,9 +234,9 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 		if(primary) 														// : primary
 			return this.visitAndRegisterPrimary(primary, currentScope);
 
-		else if(expressions.length == 1 && ctx.DOT() && identif)
-			return this.visitAndRegisterVariable(expression, ctx.DOT(), identif, currentScope);
-		
+		else if(expressions.length == 1 && dotToken && identif )
+			return this.visitAndRegisterVariable(expression, dotToken, identif, currentScope);
+
 		else if(expressions.length == 2 && ctx.LBRACK() ) 					// | expression '[' expression ']'
 		{
 			let symbType = this.visitAndRegisterExpression(expressions[0], currentScope);
@@ -273,6 +273,12 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 			let expressionType = this.visitAndRegisterExpression(expression, currentScope);
 			this.registerUsageForDeclarationType(typeTypeCtx);
 			return psymb.PType.createPrimitiveType(psymb.PPrimitiveKind.Boolean);
+		}
+		else if( expressions.length == 1 && dotToken )
+		{
+			let	expressionType = this.visitAndRegisterExpression(expressions[0], currentScope);
+			this.pdeInfo.registerContextType(expression, expressionType);
+			this.pdeInfo.registerContextType(dotToken, expressionType);
 		}
 		else if(expressions)
 		{

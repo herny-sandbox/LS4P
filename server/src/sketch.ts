@@ -162,7 +162,8 @@ export class PdeContentInfo
 	public findNodeSymbolDefinition( node : TerminalNode )  : symb.BaseSymbol | undefined
 	{
 		let qualifiedName = this.definitionDict.get(node);
-		return mainSymbolTable.resolveSync(qualifiedName);
+		return psymb.PUtils.resolveSymbolSync(mainSymbolTable, symb.BaseSymbol, qualifiedName);
+		//return mainSymbolTable.resolveSync(qualifiedName);
 	}
 
 	public findNodeSymbolDefinitionName( node : TerminalNode )  : string | undefined

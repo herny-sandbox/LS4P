@@ -172,16 +172,17 @@ export class PUtils
 		if(name && name.indexOf('.')>=0)
 		{
 			let nameParts : string [] = name.split(".");
-			let callContext = PUtils.resolveSymbolSync(ctx, PComponentSymbol, nameParts[0], false );
+			let callContext = PUtils.resolveSymbolSync(ctx, ScopedSymbol, nameParts[0], false );
 			let partIndex = 1;
-			while(callContext && partIndex < nameParts.length)
+			while(callContext && partIndex < nameParts.length-1)
 			{
-				callContext = PUtils.resolveChildSymbolSync(callContext, PComponentSymbol, nameParts[partIndex]);
+				callContext = PUtils.resolveChildSymbolSync(callContext, ScopedSymbol, nameParts[partIndex]);
 				partIndex++;
 			}
-			if(callContext instanceof t)
-				return callContext;
-			return undefined;
+			return PUtils.resolveChildSymbolSync(callContext, t, nameParts[partIndex] );
+			// if(callContext instanceof t)
+			// 	return callContext;
+			// return undefined;
 		}
 
 		if(ctx instanceof PClassSymbol)
