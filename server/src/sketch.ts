@@ -78,7 +78,7 @@ export class PdeContentInfo
 
 	private definitionDict : Map<TerminalNode, symb.BaseSymbol> = new Map<TerminalNode, symb.BaseSymbol>();
 	private contextTypeDict : Map<ParseTree, psymb.IPType> = new Map<ParseTree, psymb.IPType>();
-	private usageMap : Map<symb.BaseSymbol, lsp.Range[]> = new Map<symb.BaseSymbol, lsp.Range[]>();
+	private usageMap : Map<string, lsp.Range[]> = new Map<string, lsp.Range[]>();
 
 
 	static createPdeContentInfo(pdeName: string, newContent: string, linesCount: number): PdeContentInfo 
@@ -151,7 +151,7 @@ export class PdeContentInfo
 
 	public getUsageReferencesFor( decl : symb.BaseSymbol ) : lsp.Range[] | undefined
 	{
-		return this.usageMap.get(decl);
+		return this.usageMap.get(decl.qualifiedName('.', true, false));
 	}
 
 	public findNodeSymbolDefinition( node : TerminalNode )  : symb.BaseSymbol | undefined
@@ -168,13 +168,14 @@ export class PdeContentInfo
 	{
 		if(declaredSymbol !== undefined)
 		{
+			let qualifiedName = declaredSymbol.qualifiedName('.', true, false);
 			this.definitionDict.set(node, declaredSymbol);
 			let idText = node.text;
 			if(idText != "this" && idText != "super" )
 			{
-				let lst = this.usageMap.get(declaredSymbol);
+				let lst = this.usageMap.get(qualifiedName);
 				if(lst === undefined)
-					this.usageMap.set(declaredSymbol, lst = []);
+					this.usageMap.set(qualifiedName, lst = []);
 				lst.push(parseUtils.calcRangeFromParseTree(node));
 			}
 		}

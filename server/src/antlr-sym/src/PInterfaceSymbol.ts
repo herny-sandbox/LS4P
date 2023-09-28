@@ -17,6 +17,7 @@ export class PInterfaceSymbol extends PComponentSymbol
 	}
 
 	get typeKind() { return PTypeKind.Interface; }
+	get implementTypes() { return this.implements; }
 
 	/**
 		 * @param includeInherited Not used.

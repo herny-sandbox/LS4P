@@ -32,6 +32,7 @@ export interface IPType //extends Type
     genericTypes: PType[];
     outterType : PType | undefined;
     extendType: PType | undefined;
+    implementTypes: PType[];
     arrayType: PType | undefined;
 
     typeKind: PTypeKind;
@@ -64,6 +65,19 @@ let primitiveKindNames = [
     "color"
 ]
 
+let primitiveWrapperNames = [
+    "",
+    "Byte",
+    "Character",
+    "Double",
+    "Float",
+    "Integer",
+    "Long",
+    "Short",
+    "Boolean",
+    ""
+]
+
 const defaultPAppletClassName = "processing.core.PApplet";
 const defaultStringClass = "java.lang.String"
 const defaultObjectClass = "java.lang.Object"
@@ -82,6 +96,7 @@ export class PType implements IPType
     name: string;
     genericTypes: PType[];
     extendType : PType | undefined;
+    implementTypes: PType[];
     outterType : PType | undefined;
 	kind : TypeKind = TypeKind.Unknown;
     typeKind: PTypeKind;
@@ -97,7 +112,10 @@ export class PType implements IPType
 		this.typeKind =  kind;
         this.outterType = undefined;
         this.genericTypes = []; 
+        this.implementTypes = [];
 	}
+
+
 
     public hasGenericParams() { return this.genericTypes.length > 0; }
 
@@ -108,10 +126,21 @@ export class PType implements IPType
     public setExtend(extType: PType|undefined) : PType { this.extendType = extType; return this; }
 
     public setGenericTypes(generics: PType[]) : PType { this.genericTypes = PType.createCloneArray(generics); return this; }
+    public setImplementTypes(implementTypes: PType[]) : PType { this.implementTypes = PType.createCloneArray(implementTypes); return this; }
     
     public setPrimitive(primitive: PPrimitiveKind|undefined) : PType { this.primitiveKind = primitive; return this; }
     public setArrayType(arrayType: PType) : PType { this.arrayType = arrayType; return this; }
 
+
+    public static canClassBeBoxedOrAutoboxed(classType : IPType, primKind : PPrimitiveKind ) : boolean
+    {
+        let primWrapperName = primitiveWrapperNames[primKind];
+        if(primWrapperName == "")
+            return false;
+        if( classType.name == primWrapperName )
+            return true;
+        return classType.name == "java.lang."+primWrapperName;
+    }
 
     public static createGenericDeclType(wildcard:string) : PType { return new PType(PTypeKind.GenericDecl, wildcard); }
 
@@ -131,6 +160,8 @@ export class PType implements IPType
     public static createInterfaceType(typeName:string) : PType { return new PType(PTypeKind.Interface, typeName); }
 
     public static createNamespaceType(typeName:string) : PType 	{ return new PType(PTypeKind.Namespace, typeName); }
+
+    public static createGenericType(typeName:string) : PType 	{ return new PType(PTypeKind.Generic, typeName); }
 
     public static createClassType(typeName:string) : PType 	{ return new PType(PTypeKind.Class, typeName); }
 
@@ -162,7 +193,8 @@ export class PType implements IPType
                                 .setReference(original.reference)
                                 .setGenericTypes(original.genericTypes)
                                 .setPrimitive(original.primitiveKind)
-                                .setArrayType(original.arrayType);
+                                .setArrayType(original.arrayType)
+                                .setImplementTypes(original.implementTypes);
     }
 
     public static createCloneArray(original: PType[]) : PType[]

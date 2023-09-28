@@ -387,7 +387,7 @@ export function findPdeName(baseSymbol : symb.BaseSymbol) : string | undefined
 
 export function convertAliasType( type: psymb.PType, callContext : psymb.CallContext ) : psymb.PType
 {
-    if( !callContext.symbol || !callContext.type  )
+    if( !callContext.symbol )
     {
         console.error("Unable to resolve Generic Alias: "+type.name)
         return type;
@@ -399,10 +399,16 @@ export function convertAliasType( type: psymb.PType, callContext : psymb.CallCon
 	{
 		if(genericParams[i].name == type.name)
 		{
-			// if( genericParams[i].extends && genericParams[i].extends.length >= i )
-			// 	return genericParams[i].extends[0];
-			if( callContext.type.genericTypes.length >= i )
-				return callContext.type.genericTypes[i];
+			if(callContext.type==undefined)
+			{
+				if( genericParams[i].extends && genericParams[i].extends.length >= i )
+					return genericParams[i].extends[0];
+			}
+			else
+			{
+				if( callContext.type.genericTypes.length >= i )
+					return callContext.type.genericTypes[i];
+			}
 		}
 	}
     if(callContext.outter)

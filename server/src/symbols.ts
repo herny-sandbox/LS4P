@@ -213,7 +213,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 	{
 		let classIdentifier = ctx.IDENTIFIER();
 		let classBody = ctx.classBody();
-		let typeParams = ctx.typeParameters();
+		let genericParams = ctx.typeParameters();
 		let extendsCtx = ctx.typeType();
 		let implemCtx =ctx.typeList();
 
@@ -235,25 +235,8 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		let classSymbol = new psymb.PClassSymbol(className, ext, impl);
 		this.pdeInfo?.registerDefinition(classIdentifier, classSymbol );
 
-		if(typeParams)
-		{
-			let params = typeParams.typeParameter();
-			for(let param of params)
-			{
-				let identif = param.IDENTIFIER();
-				let bound = param.typeBound();
-				let formalTypes : psymb.PType [] = [];
-
-				if(bound)
-				{
-					let boundTypesCtx = bound.typeType();
-					for(let boundTypeCtx of boundTypesCtx)
-						formalTypes.push( parseUtils.convertTypeTypeToSymbolType(boundTypeCtx) );
-				}
-				let typeParam = new psymb.PGenericParamSymbol(identif.text, formalTypes);
-				classSymbol.addSymbol(typeParam);
-			}
-		}
+		if(genericParams)
+			this.tryDeclareGenericParams(genericParams, classSymbol);
 
 		return this.addScope(ctx, classSymbol, () => this.visitChildren(classBody));
 	}
@@ -323,7 +306,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 										modifiers);
 	}
 
-	tryDeclareMethodRaw(typeParameters: pp.TypeParametersContext|undefined, 
+	tryDeclareMethodRaw(genericParams: pp.TypeParametersContext|undefined, 
 						returnTypeOrVoid: pp.TypeTypeOrVoidContext|undefined, 
 						identif: TerminalNode, 
 						params: pp.FormalParameterListContext|undefined,
@@ -334,35 +317,32 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 	{
 		let signatureName : string = identif.text;
 
-		let returnType : psymb.PType | undefined;
-		if(returnTypeOrVoid)
-		{
-			let returnTypeCtx = returnTypeOrVoid.typeType();
-	
-			if(returnTypeCtx)
-				returnType = parseUtils.convertTypeTypeToSymbolType(returnTypeCtx);
-			else
-				returnType = psymb.PType.createVoidType();
-			
-			if(!returnType)
-				returnType = psymb.PType.createUnknownType();
-		}
-
-		let method : psymb.PMethodSymbol = new psymb.PMethodSymbol(signatureName, returnType);
+		let method : psymb.PMethodSymbol = new psymb.PMethodSymbol(signatureName, undefined);
 		this.applyModifiers(method, visibility, modifiers);
 
 		this.pdeInfo?.registerDefinition(identif, method );
 
-		if(!identif.parent)
-			return this.defaultResult();
+		// if(!identif.parent)
+		// 	return this.defaultResult();
 	
 		this.addChildSymbol(identif.parent, method);
 		this.scope = method;
 
 		try {
 
-			if(typeParameters)
-				this.tryDeclareTypeParams(typeParameters);
+			if(genericParams)
+				this.tryDeclareGenericParams(genericParams, method);
+
+			if(returnTypeOrVoid)
+			{
+				let returnTypeCtx = returnTypeOrVoid.typeType();
+		
+				if(returnTypeCtx)
+					method.returnType = parseUtils.convertTypeTypeToSymbolType(returnTypeCtx);
+				else
+					method.returnType = psymb.PType.createVoidType();
+			}
+
 			if(params)
 			{
 				let paramList = params.formalParameter();
@@ -385,24 +365,28 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 
 	tryDeclareGenericMethod(ctx: pp.GenericMethodDeclarationContext, visibility:symb.MemberVisibility, modifiers:symb.Modifier[]) : symb.SymbolTable
 	{
-		let typeParameters = ctx.typeParameters();
+		let genericParams = ctx.typeParameters();
 		let methodDecl = ctx.methodDeclaration();
 
-		return this.tryDeclareMethod(typeParameters, methodDecl, visibility, modifiers);
+		return this.tryDeclareMethod(genericParams, methodDecl, visibility, modifiers);
 	}
 
-	private tryDeclareTypeParams(typeParameters: pp.TypeParametersContext) {
+	private tryDeclareGenericParams(typeParameters: pp.TypeParametersContext, scope : symb.ScopedSymbol) 
+	{
 		let typeParameterArray = typeParameters.typeParameter();
 		let boundTypes: psymb.PType[] = [];
-		for (let i = 0; i < typeParameterArray.length; i++) {
+		for (let i = 0; i < typeParameterArray.length; i++) 
+		{
 			//let baseType: symb.Type;
 			let paramName = typeParameterArray[i].IDENTIFIER().text;
+			let extendDecl = typeParameterArray[i].EXTENDS();
 			let typeBound = typeParameterArray[i].typeBound();
-			//let extendDecl = typeParameterArray[i].EXTENDS();
 
-			if (typeBound) {
+			if (typeBound) 
+			{
 				let boundedTypes = typeBound.typeType();
-				for (let i = 0; i < boundedTypes.length; i++) {
+				for (let i = 0; i < boundedTypes.length; i++) 
+				{
 					let symbolType = parseUtils.convertTypeTypeToSymbolType(boundedTypes[i]);
 					if (!symbolType) {
 						symbolType = psymb.PType.createUnknownType();
@@ -414,7 +398,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 			else
 				boundTypes.push(psymb.PType.createObjectType());
 
-			this.scope.addSymbol(new psymb.PGenericParamSymbol(paramName, boundTypes));
+			scope.addSymbol(new psymb.PGenericParamSymbol(paramName, boundTypes));
 		}
 	}
 

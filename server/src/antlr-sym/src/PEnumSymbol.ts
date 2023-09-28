@@ -11,4 +11,5 @@ export class PEnumSymbol extends PClassSymbol implements IPType
 	}
 
 	get typeKind() { return PTypeKind.Enum; }
+	get implementTypes() { return this.implements; }
 }

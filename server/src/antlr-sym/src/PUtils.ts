@@ -249,6 +249,31 @@ export class PUtils
         return undefined;
 	}
 
+	public static resolveGenericParamSymbol(ctx: IScopedSymbol, ptype:IPType) : PGenericParamSymbol | undefined
+	{
+		if(ptype.outterType)
+			return undefined;
+		if(ptype.name.indexOf('.') >= 0 )
+			return undefined;
+
+		return PUtils.resolveGenericParamSymbolByName(ctx, ptype.name);
+	}
+
+	public static resolveGenericParamSymbolByName(ctx: IScopedSymbol, genericName:string) : PGenericParamSymbol | undefined
+	{
+		let result : PGenericParamSymbol | undefined; 
+		while(ctx)
+		{
+			result = PUtils.resolveChildSymbolSync(ctx, PGenericParamSymbol, genericName);
+			if(result)
+				break;
+			if( !(ctx.parent instanceof PClassSymbol) && !(ctx.parent instanceof PInterfaceSymbol) )
+				break;
+			ctx = ctx.parent;
+		}
+		return result;
+	}
+
 	public static resolveComponentSyncFromPType<T extends PComponentSymbol, Args extends unknown[]>(ctx: IScopedSymbol, t: SymbolConstructor<T, Args>, ptype:IPType): T | undefined
 	{
 		let outter : PComponentSymbol | undefined; 

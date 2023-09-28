@@ -74,7 +74,7 @@ export function scheduleHoverInfo(pdeName: string, line: number, pos : number): 
 	else
 		definition = pdeInfo.findNodeSymbolDefinition(parseNode);
 	
-	let contextType = pdeInfo.findNodeContextTypeDefinition(parseNode);
+	let contextIType = pdeInfo.findNodeContextTypeDefinition(parseNode);
 
 	let hover : Hover | null = null;
 	let contextSymbol : symb.ScopedSymbol | undefined;
@@ -82,7 +82,12 @@ export function scheduleHoverInfo(pdeName: string, line: number, pos : number): 
 	if(definition instanceof symb.ScopedSymbol)
 		contextSymbol = definition;
 
-	let callContext : psymb.CallContext = new psymb.CallContext(psymb.PType.createFromIType(contextType), contextSymbol);
+	let contextType : psymb.PType | undefined;
+	if(contextIType)
+		contextType = psymb.PType.createFromIType(contextIType);
+
+
+	let callContext : psymb.CallContext = new psymb.CallContext(contextType, contextSymbol);
 
 	if(definition)
 	{

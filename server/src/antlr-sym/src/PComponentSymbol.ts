@@ -14,6 +14,7 @@ export class PComponentSymbol extends ScopedSymbol implements IPType
 
 	get arrayType() { return undefined; }
 	get extendType() { return this.extends; }
+	get implementTypes() { return []; }
 	get genericTypes() { return this.generics; }
     get kind() { return TypeKind.Unknown; }
 	get outterType() { return undefined; }

@@ -7,7 +7,7 @@ import { PNamespaceSymbol } from "./PNamespaceSymbol"
 import { PComponentSymbol } from "./PComponentSymbol"
 import { PLibraryTable } from './PLibraryTable';
 import { PUtils } from './PUtils';
-
+import { IPType } from './PType';
 
 const fakeEmptyDependencies : Set<SymbolTable> = new Set<SymbolTable>();
 
@@ -55,6 +55,15 @@ export class PSymbolTable extends SymbolTable
 	private addImportAlias(name:string, fullpath:string)
 	{
 		this.importDict.set(name, fullpath);
+	}
+
+	public getFullPath(ptype: IPType, checkAliasToo:boolean=true) : string
+	{
+		if(ptype.outterType)
+			return this.getFullPath(ptype.outterType, false) + '.' + ptype.name;
+		else if(checkAliasToo)
+			return this.ensureIsFullPath(ptype.name);
+		return ptype.name;
 	}
 
 	public ensureIsFullPath(name: string) : string

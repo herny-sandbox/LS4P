@@ -19,6 +19,7 @@ export class PClassSymbol extends PComponentSymbol
 	}
 
 	get typeKind() { return PTypeKind.Class; }
+	get implementTypes() { return this.implements; }
 
 	/**
 		 * @param includeInherited Not used.
