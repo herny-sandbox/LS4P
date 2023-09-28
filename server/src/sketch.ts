@@ -76,7 +76,7 @@ export class PdeContentInfo
 	public linesCount : number=0;
 	public linesOffset: number=0;
 
-	private definitionDict : Map<TerminalNode, symb.BaseSymbol> = new Map<TerminalNode, symb.BaseSymbol>();
+	private definitionDict : Map<TerminalNode, string> = new Map<TerminalNode, string>();
 	private contextTypeDict : Map<ParseTree, psymb.IPType> = new Map<ParseTree, psymb.IPType>();
 	private usageMap : Map<string, lsp.Range[]> = new Map<string, lsp.Range[]>();
 
@@ -151,10 +151,21 @@ export class PdeContentInfo
 
 	public getUsageReferencesFor( decl : symb.BaseSymbol ) : lsp.Range[] | undefined
 	{
-		return this.usageMap.get(decl.qualifiedName('.', true, false));
+		return this.getUsageReferencesForQualifiedName(decl.qualifiedName('.', true, false));
+	}
+
+	public getUsageReferencesForQualifiedName( declName : string ) : lsp.Range[] | undefined
+	{
+		return this.usageMap.get(declName);
 	}
 
 	public findNodeSymbolDefinition( node : TerminalNode )  : symb.BaseSymbol | undefined
+	{
+		let qualifiedName = this.definitionDict.get(node);
+		return mainSymbolTable.resolveSync(qualifiedName);
+	}
+
+	public findNodeSymbolDefinitionName( node : TerminalNode )  : string | undefined
 	{
 		return this.definitionDict.get(node);
 	}
@@ -169,7 +180,7 @@ export class PdeContentInfo
 		if(declaredSymbol !== undefined)
 		{
 			let qualifiedName = declaredSymbol.qualifiedName('.', true, false);
-			this.definitionDict.set(node, declaredSymbol);
+			this.definitionDict.set(node, qualifiedName);
 			let idText = node.text;
 			if(idText != "this" && idText != "super" )
 			{

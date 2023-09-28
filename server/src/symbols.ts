@@ -231,14 +231,20 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		for(let interf of impl)
 			interf.typeKind = psymb.PTypeKind.Interface;
 
+		let savedScope = this.scope;
 		let className = classIdentifier.text;
 		let classSymbol = new psymb.PClassSymbol(className, ext, impl);
+		this.addChildSymbol(ctx, classSymbol);
+		this.scope = classSymbol;
+
 		this.pdeInfo?.registerDefinition(classIdentifier, classSymbol );
 
 		if(genericParams)
 			this.tryDeclareGenericParams(genericParams, classSymbol);
 
-		return this.addScope(ctx, classSymbol, () => this.visitChildren(classBody));
+		this.visitChildren(classBody);
+		this.scope = savedScope;
+		return this.defaultResult();
 	}
 
 	visitInterfaceDeclaration(ctx: pp.InterfaceDeclarationContext) 
@@ -255,8 +261,12 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		for(let ext of exts)
 			ext.typeKind = psymb.PTypeKind.Interface;
 
+		let savedScope = this.scope;
 		let interfName = identifier.text;
 		let interfSymbol = new psymb.PInterfaceSymbol(interfName, exts);
+		this.addChildSymbol(ctx, interfSymbol);
+		this.scope = interfSymbol;
+
 		this.pdeInfo?.registerDefinition(identifier, interfSymbol );
 
 		if(typeParams)
@@ -278,8 +288,9 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 				interfSymbol.addSymbol(typeParam);
 			}
 		}
-
-		return this.addScope(ctx, interfSymbol, () => this.visitChildren(interfaceBody));
+		this.visitChildren(interfaceBody);
+		this.scope = savedScope;
+		return this.defaultResult();
 	}
 
 	visitClassCreatorRest(ctx: pp.ClassCreatorRestContext) : symb.SymbolTable
@@ -319,14 +330,14 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 
 		let method : psymb.PMethodSymbol = new psymb.PMethodSymbol(signatureName, undefined);
 		this.applyModifiers(method, visibility, modifiers);
+		this.addChildSymbol(identif.parent, method);
+		this.scope = method;
 
 		this.pdeInfo?.registerDefinition(identif, method );
 
 		// if(!identif.parent)
 		// 	return this.defaultResult();
 	
-		this.addChildSymbol(identif.parent, method);
-		this.scope = method;
 
 		try {
 
@@ -439,9 +450,9 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 
 		let savedScope = this.scope;
 		let enumSymbol = new psymb.PEnumSymbol(enumID.text, implementing)
-		this.pdeInfo?.registerDefinition( enumID, enumSymbol );
 		this.addChildSymbol(ctx, enumSymbol);
 		this.scope = enumSymbol;
+		this.pdeInfo?.registerDefinition( enumID, enumSymbol );
 
 		let enumContantArray = enumMembers.enumConstant();
 		for(let enumConstant of enumContantArray)
@@ -580,8 +591,8 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 			let exceptionSymbol = new psymb.PVariableSymbol(identif.text, null, exceptionType);
 
 			this.applyModifiers(exceptionSymbol, symb.MemberVisibility.Private, modifiers);
-			this.pdeInfo?.registerDefinition(identif, exceptionSymbol );
 			this.addChildSymbol(ctx, exceptionSymbol);
+			this.pdeInfo?.registerDefinition(identif, exceptionSymbol );
 		}
 		this.visit(ctx.block());
 		this.scope = savedSymbol;
@@ -681,8 +692,8 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 				symbol = new psymb.PVariableSymbol(terminalNode.text, null, varType);
 
 			this.applyModifiers(symbol, visibility, modifiers);
-			this.pdeInfo?.registerDefinition(terminalNode, symbol );
 			this.addChildSymbol(ctx, symbol);
+			this.pdeInfo?.registerDefinition(terminalNode, symbol );
 		}
 		catch(e)
 		{

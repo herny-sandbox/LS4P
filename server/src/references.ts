@@ -26,20 +26,20 @@ export async function scheduleLookUpReference(pdeName : string, line : number, p
 	if(!parseNode)
 		return null;
 	
-	let focusedDecl : symbols.BaseSymbol | undefined;
+	let focusedDeclFullName : string | undefined;
 
 	if(scopeAtPos.context === parseNode.parent)
-		focusedDecl = scopeAtPos;
+		focusedDeclFullName = scopeAtPos.qualifiedName('.', true, false);
 	else
-		focusedDecl = pdeInfo.findNodeSymbolDefinition(parseNode);
+		focusedDeclFullName = pdeInfo.findNodeSymbolDefinitionName(parseNode);
 
-	if(!focusedDecl)
+	if(!focusedDeclFullName)
 		return null;
 
 	for (let pdeInfo of sketch.getAllPdeInfos()) 
 	{
 		let pdeUri : string = sketch.getUriFromPdeName(pdeInfo.name);
-		let result : Range[] | undefined = pdeInfo.getUsageReferencesFor(focusedDecl)
+		let result : Range[] | undefined = pdeInfo.getUsageReferencesForQualifiedName(focusedDeclFullName)
 		if(result)
 		{
 			for(let candidate of result)
