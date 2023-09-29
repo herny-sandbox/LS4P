@@ -662,12 +662,17 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		{
 			let varDeclarator = variableDeclarators[i];
 			let decl = varDeclarator.variableDeclaratorId();
+			let initializer = varDeclarator.variableInitializer();
 
-			this.addTypedSymbol(symbolType, decl, kind, visibility, modifiers);
+			let constantValue:string|undefined;
+			if(psymb.PUtils.hasModifier(modifiers, symb.Modifier.Final) && initializer)
+				constantValue = initializer.text;
+
+			this.addTypedSymbol(symbolType, decl, kind, visibility, modifiers, constantValue);
 		}
 	}
 
-	protected addTypedSymbol(varType : psymb.PType, ctx: pp.VariableDeclaratorIdContext, kind : number = 1, visibility:symb.MemberVisibility, modifiers:symb.Modifier[] )
+	protected addTypedSymbol(varType : psymb.PType, ctx: pp.VariableDeclaratorIdContext, kind : number = 1, visibility:symb.MemberVisibility, modifiers:symb.Modifier[], val:string|null=null )
 	{
 		let terminalNode = ctx.IDENTIFIER();
 		let arraySize = ctx.LBRACK().length;
@@ -685,11 +690,11 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		{
 			let symbol : symb.BaseSymbol;
 			if(kind == VAR_PARAM)
-				symbol = new psymb.PParameterSymbol(terminalNode.text, null, varType);
+				symbol = new psymb.PParameterSymbol(terminalNode.text, val, varType);
 			else if(kind == VAR_FIELD)
-				symbol = new psymb.PFieldSymbol(terminalNode.text, null, varType);
+				symbol = new psymb.PFieldSymbol(terminalNode.text, val, varType);
 			else
-				symbol = new psymb.PVariableSymbol(terminalNode.text, null, varType);
+				symbol = new psymb.PVariableSymbol(terminalNode.text, val, varType);
 
 			this.applyModifiers(symbol, visibility, modifiers);
 			this.addChildSymbol(ctx, symbol);

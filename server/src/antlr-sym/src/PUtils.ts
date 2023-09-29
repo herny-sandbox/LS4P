@@ -8,6 +8,7 @@ import {
 	SymbolConstructor,
 	ScopedSymbol,
 	MethodFlags,
+	Modifier,
 } from "antlr4-c3";
 import { PClassSymbol} from "./PClassSymbol"
 import { PInterfaceSymbol} from "./PInterfaceSymbol"
@@ -45,6 +46,16 @@ export class CallContext
 
 export class PUtils 
 {
+	public static hasModifier(modifiers:Modifier[], find:Modifier) : boolean
+	{
+		for(let mod of modifiers)
+		{
+			if(mod==find)
+				return true;
+		}
+		return false;
+	} 
+
 	public static cloneTypeAsInstance(type: PType) : PType
 	{
 		return PType.createClone(type).setReference(ReferenceKind.Instance);

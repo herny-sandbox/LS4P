@@ -126,6 +126,9 @@ function formatHoverContent(baseSymbol : symb.BaseSymbol, callContext : psymb.Ca
 
 	result += baseSymbol.name;
 
+	if(baseSymbol instanceof psymb.PVariableSymbol && baseSymbol.value != null )
+		result += " = " + baseSymbol.value;
+	
 	if(baseSymbol instanceof psymb.PMethodSymbol)
 	{
 		result += "(";
