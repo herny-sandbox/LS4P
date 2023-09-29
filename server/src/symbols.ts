@@ -481,7 +481,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 
 	visitBlock(ctx: pp.BlockContext) : symb.SymbolTable
 	{
-		let fakeSymbolName : string = "";
+		let fakeSymbolName : string = "block"+ctx.start.startIndex;
 		let newSymbol : symb.ScopedSymbol = new symb.ScopedSymbol(fakeSymbolName);
 		return this.addScope(ctx, newSymbol, () => this.visitChildren(ctx));
 	}
@@ -580,7 +580,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 				modifiers.push(symb.Modifier.Final);
 		}
 		let savedSymbol = this.scope;
-		let catchSymbol : symb.ScopedSymbol = new symb.ScopedSymbol("");
+		let catchSymbol : symb.ScopedSymbol = new symb.ScopedSymbol("catch"+ctx.start.startIndex);
 		this.addChildSymbol(ctx, catchSymbol);
 		this.scope = catchSymbol;
 
@@ -609,7 +609,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 	
 	visitForLoop(ctx: pp.ForLoopContext) : symb.SymbolTable
 	{
-		let fakeSymbolName : string = "";//"for"+ctx.start.startIndex;
+		let fakeSymbolName : string = "for"+ctx.start.startIndex;
 		let newSymbol : symb.ScopedSymbol = new symb.ScopedSymbol(fakeSymbolName);
 		return this.addScope(ctx, newSymbol, () => this.visitChildren(ctx));
 	};
