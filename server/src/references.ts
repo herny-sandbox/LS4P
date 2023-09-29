@@ -18,7 +18,7 @@ export async function scheduleLookUpReference(pdeName : string, line : number, p
 	if(!pdeInfo || !pdeInfo.syntaxTokens)
 		return null;
 
-	let scopeAtPos : symbols.BaseSymbol | undefined = parseUtils.findScopeAtPositionFromSymbols(pdeInfo.symbols, line, pos);
+	let scopeAtPos : symbols.BaseSymbol | undefined = parseUtils.findLeafSymbolAtPositionFromSymbols(pdeInfo.symbols, line, pos);
 	if(!scopeAtPos || !scopeAtPos.context)
 		return null;
 	

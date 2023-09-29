@@ -58,7 +58,7 @@ export function scheduleHoverInfo(pdeName: string, line: number, pos : number): 
 	let definition : symb.BaseSymbol | undefined;
 	//let definition : symbols.BaseSymbol | undefined = await lookUpSymbolDefinition(pdeInfo.symbols, line, pos);
 	// Finds for the symbol (block or scope) that contains our searched identifier
-	let symbolContainer : symb.BaseSymbol | undefined =  parseUtils.findScopeAtPositionFromSymbols(pdeInfo.symbols, line, pos);
+	let symbolContainer : symb.BaseSymbol | undefined =  parseUtils.findLeafSymbolAtPositionFromSymbols(pdeInfo.symbols, line, pos);
 	if(!symbolContainer || !symbolContainer.context)
 		return null;
 	

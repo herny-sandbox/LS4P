@@ -84,6 +84,24 @@ export function findParseTreeAtPosition(ctx: ParseTree, line: number, pos: numbe
 	return null;
 }
 
+export function findLeafSymbolAtPositionFromSymbols(symbols: symb.BaseSymbol[], line: number, pos: number): symb.BaseSymbol | undefined 
+{
+	let result : symb.BaseSymbol | undefined;
+	for( let i : number = 0; i < symbols.length; i++ )
+	{
+		let sym : symb.BaseSymbol = symbols[i];
+		if(sym instanceof symb.ScopedSymbol)
+		{
+			result = findScopeAtPosition(sym, line, pos);
+			if(result)
+				break			
+		}
+		else if( checkParseNodeBounds(sym.context, line, pos) )
+			return sym;
+	}
+	return result;
+}
+
 export function findScopeAtPositionFromSymbols(symbols: symb.BaseSymbol[], line: number, pos: number): symb.ScopedSymbol | undefined 
 {
 	let result : symb.ScopedSymbol | undefined;
