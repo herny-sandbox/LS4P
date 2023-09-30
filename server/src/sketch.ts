@@ -13,8 +13,8 @@ import * as lsp from 'vscode-languageserver'
 import * as psymb from './antlr-sym';
 import * as javaModules from './javaModules'
 import * as parseUtils from './astutils'
+import * as fs from 'fs';
 
-const fs = require('fs')
 const pathM = require('path')
 const childProcess = require('child_process');
 
@@ -22,6 +22,7 @@ let processingPath : string;
 
 let sketchInfo : Info;
 let initialized = false;
+let processingInitialized = false;
 
 let unProcessedCode : string = ''
 let processedCode: string = ''
@@ -33,6 +34,8 @@ let jrePath:string = ''
 let symbolTableVisitor : SymbolTableVisitor;
 let mainSymbolTable : psymb.PSymbolTable;
 let mainClass : psymb.PClassSymbol;
+
+
 /** 
  * Map which maps the line in the java file to the line in the .pde file (tab). 
  * Index is the java file number.
@@ -235,6 +238,9 @@ export function setProcessingPath(path: string)
  */
 export function initialize(workspacePath: string) 
 {
+	//outputChannel = vscode.window.createOutputChannel("Processing Sketch", "Processing");
+	
+
 	let uri = workspacePath;
 	let path = getPathFromUri(uri);
 	let name = pathM.basename(path);
@@ -243,51 +249,103 @@ export function initialize(workspacePath: string)
 		path : path,
 		name : name
 	}
+	//outputChannel.appendLine(`Loading ${name} Sketch.`);
+
 	jrePath = `${__dirname.substring(0,__dirname.length-11)}/jre/bin`;
 
 	mainSymbolTable = new psymb.PSymbolTable("", { allowDuplicateSymbols: true });
 
-	javaModules.setLibraryTable(mainSymbolTable.dependencyTable);
-	javaModules.loadJavaSymbolsFile(processingPath+"java/lib/ct.sym");
-	javaModules.loadJarsFromDirectory(processingPath+"core/library/");
-	javaModules.loadJarsFromDirectory(path+"code/");
-	mainSymbolTable.addImport("java.util", true);
-	mainSymbolTable.addImport("java.io", true);
-	mainSymbolTable.addImport("java.lang", true);
-	mainSymbolTable.addImport("processing.core", true);
-	mainSymbolTable.addImport("processing.data", true);
-	mainSymbolTable.addImport("processing.event", true);
-	mainSymbolTable.addImport("processing.opengl", true);
+	tryInitializeProcessing(processingPath);
 
-	for(let procImport of javaModules.processingImports)
-		mainSymbolTable.addImport(procImport, true);
+	// Loading custom libraries required by the user specific project
+	tryInitializeSketchCode(path);
 
+	// Now we can prepare the workspace sketch
 	mainClass = new psymb.PClassSymbol(name, psymb.PType.createAppletClassType());
 	mainSymbolTable.addSymbol(mainClass);
 
 	symbolTableVisitor = new SymbolTableVisitor(mainSymbolTable, mainClass);
 	
-	tryAddPdeFile(sketchInfo.name+'.pde')
-
-	try
+	let mainSketchFilename = sketchInfo.name+'.pde';
+	if(isPathValid(sketchInfo.path+mainSketchFilename))
 	{
-		let fileNames = fs.readdirSync(sketchInfo.path);
-		for(let fileName of fileNames)
+		tryAddPdeFile(mainSketchFilename)
+
+		if(isPathValid(sketchInfo.path))
 		{
-			if (fileName.endsWith('.pde') && !fileName.includes(sketchInfo.name))
-				tryAddPdeFile(fileName);
+			let fileNames = fs.readdirSync(sketchInfo.path);
+			for(let fileName of fileNames)
+			{
+				if (fileName.endsWith('.pde') && !fileName.includes(sketchInfo.name))
+					tryAddPdeFile(fileName);
+			}
 		}
 	}
-	catch(e) 
-	{
-		log.write("Some thing went wrong while loading the other files", log.severity.ERROR);
-		log.write(e, log.severity.ERROR);
-		return false;
-	}
+	else
+		console.error('Something went wrong. The main sketch file must have the same name as the sketch folder.');
+
 	
 	cookPdeContentOffsets();
 	initialized = true
 	return true
+}
+
+function tryInitializeSketchCode(path: string) 
+{
+	if(!isPathValid(path))
+		return;
+
+	let codeDirectoryPath = path + "code/";
+	if(!isPathValid(codeDirectoryPath))
+		return;
+
+	let loadedNamespaces : Set<string> = new Set<string>();
+	javaModules.loadJarsFromDirectory(codeDirectoryPath, mainSymbolTable.codeDependencyTable, loadedNamespaces);
+
+	// Adding the custom libraries import aliasses
+	for (let procImport of loadedNamespaces)
+		mainSymbolTable.addImport(procImport, true, mainSymbolTable.codeDependencyTable);
+}
+
+function tryInitializeProcessing(processingPath:string)
+{
+	processingInitialized = false;
+	if(!isPathValid(processingPath))
+	{
+		console.error(`Unable to locate processing at the given path ('${processingPath}'). \nMake sure to setup the correct configuration in the Processing extension settings`);
+		return;
+	}
+
+	let javaSymbolsFilename = processingPath + "java/lib/ct.sym";
+	let processingCoreDirectory = processingPath + "core/library/";
+	if(!isPathValid(javaSymbolsFilename))
+		return;
+	if(!isPathValid(processingCoreDirectory))
+		return;
+
+	javaModules.loadJavaSymbolsFromFile(javaSymbolsFilename, mainSymbolTable.procDependencyTable);
+	javaModules.loadJarsFromDirectory(processingCoreDirectory, mainSymbolTable.procDependencyTable);
+
+	// Adding all the processing library import aliases
+	mainSymbolTable.addImport("java.util", true, mainSymbolTable.procDependencyTable);
+	mainSymbolTable.addImport("java.io", true, mainSymbolTable.procDependencyTable);
+	mainSymbolTable.addImport("java.lang", true, mainSymbolTable.procDependencyTable);
+	mainSymbolTable.addImport("processing.core", true, mainSymbolTable.procDependencyTable);
+	mainSymbolTable.addImport("processing.data", true, mainSymbolTable.procDependencyTable);
+	mainSymbolTable.addImport("processing.event", true, mainSymbolTable.procDependencyTable);
+	mainSymbolTable.addImport("processing.opengl", true, mainSymbolTable.procDependencyTable);
+	processingInitialized = true;
+}
+
+function isPathValid(directoryPath: string): boolean 
+{
+	try {
+	  const stat = fs.statSync(directoryPath);
+	  return stat != null;
+	} catch (error) {
+	  // If an error occurs, it means the directory doesn't exist or there was an issue accessing it.
+	  return false;
+	}
 }
 
 export function prepareSketch(sketchFolder : string)

@@ -1,9 +1,11 @@
 {
-  "name": "vscode-processing-ls",
+  "name": "processing-ls",
+  "displayName": "Processing LSP",
   "description": "Processing language server",
   "author": "Processing Foundation",
   "license": "MIT",
-  "version": "0.2.0",
+  "version": "0.2.4",
+  "icon": "fileicons/images/processingImg.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/herny-sandbox/LS4P"
@@ -16,9 +18,7 @@
   "engines": {
     "vscode": "^1.82.2"
   },
-  "activationEvents": [
-    "onLanguage:Processing"
-  ],
+  "activationEvents": [],
   "main": "./client/out/extension",
   "contributes": {
     "languages": [
@@ -40,14 +40,14 @@
       "type": "object",
       "title": "Processing",
       "properties": {
-        "vscode-processing-ls.processing.path": {
+        "processing.path": {
           "type": "string",
           "default": "",
-          "description": "Path to Processing. Leave default if you've added processing to your path, otherwise enter the path to processing here.\nExample: 'C:\\Program Files\\processing-4.2' for Windows"
+          "description": "Path to Processing. Leave default if you've added processing to your path, otherwise enter the path to processing here.\nExample: 'C:\\Program Files\\processing-4.2\\' for Windows"
         },
-        "vscode-processing-ls.processing.launcher": {
+        "processing.launcher": {
           "type": "string",
-          "default": "processing-java",
+          "default": "processing-java.exe",
           "description": "Path to the Processing java compiler.\n  Example: 'processing-java.exe' for Windows\n  Example: 'processing-java' for Mac"
         },
         "processing.maxNumberOfProblems": {
@@ -103,6 +103,7 @@
   },
   "dependencies": {
     "@types/vscode": "^1.23.0",
-    "lru-cache": "^6.0.0"
+    "lru-cache": "^6.0.0",
+    "minimatch": "^5.1.0"
   }
 }

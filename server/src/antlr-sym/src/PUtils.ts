@@ -124,7 +124,10 @@ export class PUtils
 			if(name)
 				name = ctx.ensureIsFullPath(name);
 
-			symbols = PUtils.getAllDirectChildSymbolSync(ctx.dependencyTable, t, name)
+			symbols = PUtils.getAllDirectChildSymbolSync(ctx.procDependencyTable, t, name)
+			result.push(...symbols);
+
+			symbols = PUtils.getAllDirectChildSymbolSync(ctx.codeDependencyTable, t, name)
 			result.push(...symbols);
 		}
 			
@@ -324,14 +327,22 @@ export class PUtils
 		}
 		if(ctx instanceof PSymbolTable)
 		{
-			const resultSymbol = PUtils.resolveChildSymbolSync(ctx.dependencyTable, t, name);
+			let resultSymbol = PUtils.resolveChildSymbolSync(ctx.procDependencyTable, t, name);
 			if(resultSymbol)
 				return resultSymbol;
+
+			resultSymbol = PUtils.resolveChildSymbolSync(ctx.codeDependencyTable, t, name);
+			if(resultSymbol)
+					return resultSymbol;
 			
 			if(name)
 				name = ctx.ensureIsFullPath(name);
 
-			let component = ctx.dependencyTable.resolveComponent(t, name);
+			let component = ctx.procDependencyTable.resolveComponent(t, name);
+			if(component)
+				return component;
+
+			component = ctx.codeDependencyTable.resolveComponent(t, name);
 			if(component)
 				return component;
 		}

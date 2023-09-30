@@ -1,102 +1,30 @@
-import * as symb from 'antlr4-c3'
 import * as psymb from "./antlr-sym"
 import { ClassReader } from "@xmcl/asm"
 import { JavaClassVisitor } from "./javaClassVisitor"
+import * as fs from 'fs'
 
-import * as path from 'path';
-
-const fs = require('fs');
 const AdmZip = require('adm-zip');
 
-const containerPath = `${__dirname}/processing/`;
-
-let extractionModuleType = [
-	'core',
-	'awt',
-	'data',
-	'event',
-	'javafx',
-	'opengl'
-]
-
-export interface ModuleInfo
+export function loadJarsFromDirectory(directoryPath: string, libTable : psymb.PLibraryTable, resultNamespaces?:Set<string>) : boolean
 {
-	type : string,
-	symbols : symb.SymbolTable;
-}
-
-let modulesMap : Map<string, ModuleInfo> = new Map<string, ModuleInfo>();
-export let libTable : psymb.PLibraryTable | undefined;
-export let processingImports : Set<string> = new Set<string>();
-
-export function setLibraryTable(table : psymb.PLibraryTable)
-{
-	libTable = table;
-}
-
-export function loadDefaultLibraries()
-{
-	loadDefaultJavaSymbolsFile("ct.sym");
-
-	importModuleInfo("customcontainer/", "", "custom");
-
-	for(let _counter: number = 0; _counter < extractionModuleType.length; _counter++)
-		importModuleInfo("container/", "extractor/processing/", extractionModuleType[_counter]);
-}
-
-function importModuleInfo(moduleDeclPath:string, classesRoute:string, modType:string) : ModuleInfo | undefined
-{
-	try 
-	{   
-		let filePath = containerPath + moduleDeclPath + modType + ".txt";
-		let data = fs.readFileSync(filePath, 'utf-8')
-		let tempSplit = data.split('\n');
-
- 
-		for(let i : number=0; i < tempSplit.length; i++)
+	try
+	{
+		// Read the contents of the directory
+		let fileNames = fs.readdirSync(directoryPath);
+		for(let fileName of fileNames)
 		{
-			let classFileName : string = tempSplit[i];
-			if( classFileName.includes('.class') )
-			{
-				let fullClassPath : string = `${containerPath}${classesRoute}${modType}/${classFileName}`;
-				
-				try
-				{
-					let className : string = classFileName.substring(classFileName.lastIndexOf('$')+1, classFileName.lastIndexOf('.'));
-
-					const visitor = new JavaClassVisitor(libTable, className);
-					const classData: Buffer = fs.readFileSync(fullClassPath);
-					new ClassReader(classData).accept(visitor);
-				}
-				catch(e)
-				{
-					console.error("Unable to load class symbols for: "+fullClassPath);
-				}
-			}
+			if (fileName.endsWith('.jar') )
+				loadJarFile(directoryPath+fileName, libTable, resultNamespaces);
 		}
-
-		let module : ModuleInfo = { type: modType,  symbols: libTable };
-		return module;
-	} 
-	catch(e) 
-	{
-
+		return true;
 	}
-	return;
-}
-
-export function loadJarsFromDirectory(directoryPath: string)
-{
-	  // Read the contents of the directory
-	let fileNames = fs.readdirSync(directoryPath);
-	for(let fileName of fileNames)
+	catch(ex)
 	{
-		if (fileName.endsWith('.jar') )
-		  	loadJarFile(directoryPath+fileName);
+		return false;
 	}
 }
 
-function loadJarFile(filename:string)
+function loadJarFile(filename:string, libTable : psymb.PLibraryTable, resultNamespaces?:Set<string>)
 {
 	try 
 	{
@@ -127,7 +55,8 @@ function loadJarFile(filename:string)
 			let classFileName = fullName.substring(packageEndIndex+1);
 			let className : string = classFileName.substring(classFileName.indexOf('$')+1);
 
-			processingImports.add(packageName);
+			if(resultNamespaces)
+				resultNamespaces.add(packageName);
 			
 			const fileContent : Buffer = entry.getData();
 			const visitor = new JavaClassVisitor(libTable, className);
@@ -143,12 +72,7 @@ function loadJarFile(filename:string)
     }
 }
 
-export function loadDefaultJavaSymbolsFile(filename:string)
-{
-	loadJavaSymbolsFile(containerPath + filename)
-}
-
-export function loadJavaSymbolsFile(filename:string)
+export function loadJavaSymbolsFromFile(filename:string, libTable : psymb.PLibraryTable)
 {
 	let filePath = filename;
 	let classMap : Map<string, Buffer> = new Map<string, Buffer>();

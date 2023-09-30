@@ -9,11 +9,14 @@
     "vscode": "^1.60.0"
   },
   "dependencies": {
-    "adm-zip": "^0.5.10",
-    "vscode-languageclient": "^8.2.0-next.3"
+    "balanced-match": "^1.0.0",
+    "brace-expansion": "^2.0.1",
+    "minimatch": "^5.1.0",
+    "semver": "^7.3.7",
+    "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
-    "@types/adm-zip": "^0.5.1",
+    "@types/semver": "^7.5.3",
     "@types/vscode": "^1.80.0"
   }
 }

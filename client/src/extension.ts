@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
-const childProcess = require('child_process');
+import * as childProcess from 'child_process';
 
 import {
 	LanguageClient,
@@ -13,10 +13,8 @@ let client: LanguageClient;
 
 export function activate(context: vscode.ExtensionContext) 
 {
-	
-	let serverModule = context.asAbsolutePath(
-		path.join('server', 'out', 'server.js')
-	);
+	console.log("Processing Client activation");
+	let serverModule = context.asAbsolutePath( path.join('server', 'out', 'server.js') );
 	
 	let debugOptions = { execArgv: ['--nolazy', '--inspect=6009'] }; // '--inspect-brk=6009'] };
 

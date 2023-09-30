@@ -2,9 +2,8 @@ import * as os from "os"
 import { ChildProcess, spawn } from 'child_process';
 import { BufferedOutputChannel } from "./utils/outputBuffer";
 import * as vscode from "vscode";
-
-const fs = require('fs')
-const path = require('path')
+import * as fs from "fs";
+import * as path from "path";
 
 /**
  *  Responable for starting a compiled sketch
