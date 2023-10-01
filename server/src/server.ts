@@ -20,9 +20,10 @@ import {
 	DocumentSymbol,
 	TextDocuments,
 	TextDocumentSyncKind,
+
 	InitializeResult
 } from 'vscode-languageserver/node';
-
+import { DidChangeWatchedFilesNotification, WatchKind } from 'vscode-languageserver-protocol';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { DocumentSymbols } from "./DocumentSymbols";
 
@@ -66,9 +67,10 @@ connection.onInitialize((params: InitializeParams) => {
 		sketch.setProcessingPath(processingPath);
 	}
 	if(params.workspaceFolders && params.workspaceFolders.length > 0)
-		forcedDelayedStart(params.workspaceFolders[0].uri);
-
-
+	{
+		sketch.prepareSketch(params.workspaceFolders[0].uri);
+		sketch.tryRecompile(false);
+	}
 
 	const result: InitializeResult = 
 	  {
@@ -104,7 +106,20 @@ connection.onInitialized(() => {
 	if (hasConfigurationCapability) {
 		connection.client.register(DidChangeConfigurationNotification.type, undefined);
 	}
+
+	connection.client.register(DidChangeWatchedFilesNotification.type, {
+		watchers: [
+		  {
+			globPattern: '**/*.pde', // Replace 'your-extension' with the actual file extension
+			kind: WatchKind.Change | WatchKind.Create | WatchKind.Delete, // You can specify other kinds of events as needed
+		  },
+		],
+	  });
+
 	if (hasWorkspaceFolderCapability) {
+
+
+
 		connection.workspace.onDidChangeWorkspaceFolders(_event => {
 			log.write('Workspace folder change event received.', log.severity.EVENT);
 		});
@@ -189,52 +204,46 @@ documents.onDidClose((e: { document: { uri: string; }; }) => {
 	// pdeInfo.syntaxTokens = null;
 });
 
-let sketchRefreshInProgress = false
+//let sketchRefreshInProgress = false
 
 documents.onDidChangeContent((change: { document: TextDocument; }) => {
+	// Not an actual change? we skip it since we already have it
+	if(change.document.version == 1)
+		return;
+
 	log.write(`Content changed`, log.severity.EVENT);
+
+	//if( document instanceof FullTextDocument )
 	const pdeName : string = path.basename(sketch.getPathFromUri(change.document.uri));
 	sketch.updatePdeContent(pdeName, change.document.getText(), change.document.lineCount);
-	tryNotifySketchChanged();
+	sketch.tryRecompile(true);
 });
 
 
 // -----------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------
-function tryNotifySketchChanged()
-{
-	if(sketchRefreshInProgress==false)
-		notifySketchChanged();
-}
 
-async function notifySketchChanged() 
-{
-	log.write(`notifySketchChanged`, log.severity.EVENT)
-	sketchRefreshInProgress = true
-	await sleep(300);
 
-	sketch.rebuildReferences();
-	//sketch.startPreprocessing();
-	//diagnostics.checkForSyntaxDiagnostics(globalSettings.maxNumberOfProblems);
-	//try
-	//{
-		//sketch.build();
-		//diagnostics.checkForRealtimeDiagnostics(globalSettings.maxNumberOfProblems);
-	//}catch(Exception){}
-	sketchRefreshInProgress = false
-}
+// async function notifySketchChanged() 
+// {
+// 	log.write(`notifySketchChanged`, log.severity.EVENT)
+// 	sketchRefreshInProgress = true
+// 	await sleep(300);
 
-async function forcedDelayedStart(projectUri: string)
-{
-	//await sleep(4000);
+// 	sketch.rebuildReferences();
+// 	//sketch.startPreprocessing();
+// 	//diagnostics.checkForSyntaxDiagnostics(globalSettings.maxNumberOfProblems);
+// 	//try
+// 	//{
+// 		//sketch.build();
+// 		//diagnostics.checkForRealtimeDiagnostics(globalSettings.maxNumberOfProblems);
+// 	//}catch(Exception){}
+// 	sketchRefreshInProgress = false
+// }
 
-	sketch.prepareSketch(projectUri);
-	tryNotifySketchChanged();
-}
-
-function sleep(ms: number) {
-	return new Promise(resolve => setTimeout(resolve, ms));
-}
+// function sleep(ms: number) {
+// 	return new Promise(resolve => setTimeout(resolve, ms));
+// }
 
 connection.onDidChangeWatchedFiles(_change => {
 	log.write('Files in workspace have changed', log.severity.EVENT);
@@ -246,9 +255,15 @@ connection.onDidChangeWatchedFiles(_change => {
 		switch (change.type) {
 		  case FileChangeType.Created:
 			sketch.addPdeToSketch(change.uri)
+			sketch.tryRecompile(true);
 			break;
 		  case FileChangeType.Deleted:
 			sketch.removePdeFromSketch(change.uri)
+			sketch.tryRecompile(true);
+			break;
+		  case FileChangeType.Changed:
+			sketch.UpdatePdeFromSketch(change.uri);
+			sketch.tryRecompile(true);
 			break;
 		  default:
 			// do nothing
@@ -267,7 +282,13 @@ connection.onDidChangeWatchedFiles(_change => {
 // Implementation for `goto definition` goes here
 connection.onDefinition( async (params: TextDocumentPositionParams): Promise<Definition | null> => {
 		const pdeName : string = path.basename(sketch.getPathFromUri(params.textDocument.uri));
-		return definition.scheduleLookUpDefinition(pdeName, params.position.line+1, params.position.character);
+		let pdeInfo : sketch.PdeContentInfo | undefined = sketch.getPdeContentInfo(pdeName);
+		if(!pdeInfo || !pdeInfo.syntaxTokens)
+			return null;
+
+		await waitForCodeRebuild(pdeInfo);		
+		
+		return definition.scheduleLookUpDefinition(pdeInfo, params.position.line+1, params.position.character);
 	}
 )
 
@@ -275,7 +296,13 @@ connection.onDefinition( async (params: TextDocumentPositionParams): Promise<Def
 connection.onReferences( async (params: ReferenceParams): Promise<Location[] | null> => {
 		// _referenceParams.position.line, _referenceParams.position.character -> lineNumber, column from the arguments sent along with the command in the code lens
 		const pdeName : string = path.basename(sketch.getPathFromUri(params.textDocument.uri));
-		return reference.scheduleLookUpReference(pdeName, params.position.line+1, params.position.character)
+		let pdeInfo : sketch.PdeContentInfo | undefined = sketch.getPdeContentInfo(pdeName);
+		if(!pdeInfo || !pdeInfo.syntaxTokens)
+			return null;
+
+		await waitForCodeRebuild(pdeInfo);
+
+		return reference.scheduleLookUpReference(pdeInfo, params.position.line+1, params.position.character)
 	}
 )
 
@@ -315,11 +342,17 @@ connection.onCompletion( async (params: CompletionParams): Promise<CompletionIte
 	const posInLine : number = params.position.character;
 	const context : CompletionContext | undefined = params.context;
 
-	return await completion.collectCandidates(pdeName, line+1, posInLine, context?.triggerKind??1)
+	let pdeInfo : sketch.PdeContentInfo | undefined = sketch.getPdeContentInfo(pdeName);
+	if(!pdeInfo || !pdeInfo.syntaxTokens)
+		return [];
+
+	await waitForCodeRebuild(pdeInfo);
+
+	return await completion.collectCandidates(pdeInfo, line+1, posInLine, context?.triggerKind??1)
 });
 
 // Completion Resolved suspended for now -> TODO: Refactoring required with real data points
-connection.onCompletionResolve( (item: CompletionItem): CompletionItem => 
+connection.onCompletionResolve( async (item: CompletionItem): Promise<CompletionItem> => 
 {
 	return completion.fillCompletionItemDetails(item);
 });
@@ -332,7 +365,7 @@ connection.onCompletionResolve( (item: CompletionItem): CompletionItem =>
 
 
 // Implementation for Hover request
-connection.onHover(	(params: TextDocumentPositionParams): Hover | null => 
+connection.onHover( async(params: TextDocumentPositionParams): Promise<Hover | null> => 
 {
 	//let hoverResult: Hover | null = null;
 	//let compileErrors : sketch.CompileError[] = sketch.getCompileErrors();
@@ -348,7 +381,13 @@ connection.onHover(	(params: TextDocumentPositionParams): Hover | null =>
 	//log.write("Hover Invoked, result: "+hoverResult?.contents, log.severity.EVENT)
 	//return hoverResult;
 	const pdeName : string = path.basename(sketch.getPathFromUri(params.textDocument.uri));
-	return hover.scheduleHoverInfo(pdeName, params.position.line+1, params.position.character);
+	let pdeInfo : sketch.PdeContentInfo | undefined = sketch.getPdeContentInfo(pdeName);
+	if(!pdeInfo)
+		return null;
+
+	await waitForCodeRebuild(pdeInfo);
+
+	return hover.scheduleHoverInfo(pdeInfo, params.position.line+1, params.position.character);
 });
 
 // ================================================================================================
@@ -356,12 +395,14 @@ connection.onHover(	(params: TextDocumentPositionParams): Hover | null =>
 // ================================================================================================
 // ================================================================================================
 // When the client requests document symbols
-connection.onDocumentSymbol((params: DocumentSymbolParams) => 
+connection.onDocumentSymbol(async (params: DocumentSymbolParams) => 
 {
 	const pdeName : string = path.basename(sketch.getPathFromUri(params.textDocument.uri));
 	let pdeInfo : sketch.PdeContentInfo | undefined = sketch.getPdeContentInfo(pdeName);
 	if(!pdeInfo)
 		return null;
+
+	await waitForCodeRebuild(pdeInfo);
 
 	let offset : number = pdeInfo.linesOffset;
 	let tokens = pdeInfo.syntaxTokens;
@@ -377,3 +418,10 @@ connection.onDocumentSymbol((params: DocumentSymbolParams) =>
 
 documents.listen(connection);
 connection.listen();
+
+
+async function waitForCodeRebuild(pdeInfo: sketch.PdeContentInfo) : Promise<void> {
+	while( pdeInfo.isBeingRebuilt() ) {
+		await new Promise(resolve => setTimeout(resolve, 100));
+	}
+}

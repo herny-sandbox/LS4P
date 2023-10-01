@@ -1,11 +1,12 @@
 import * as log from './scripts/syslogs'
 import { ParseTree, } from 'antlr4ts/tree/ParseTree'
 import { PredictionMode } from 'antlr4ts/atn'
-import { CharStreams, CommonTokenStream, BailErrorStrategy, DefaultErrorStrategy } from 'antlr4ts/'
+import { CharStreams, CommonTokenStream, BailErrorStrategy, ParserRuleContext } from 'antlr4ts'
 
 import { ProcessingParserListener } from "./grammer/ProcessingParserListener";
 import { ProcessingParserVisitor } from "./grammer/ProcessingParserVisitor";
-import { ProcessingErrorListener, clearSyntaxDiagnostics } from "./grammer/ProcessingErrorListener";
+import { ProcessingErrorStrategy } from './grammer/ProcessingErrorStrategy'
+import { ProcessingErrorListener, clearSyntaxDiagnostics, IDiagnosticReporter } from "./grammer/ProcessingErrorListener";
 import { ProcessingLexer } from "./grammer/ProcessingLexer";
 import { ProcessingParser, ProcessingSketchContext } from "./grammer/ProcessingParser";
 
@@ -30,7 +31,7 @@ export function parseAST(processedText: string) : [ParseTree, ParseTree][]
  * @param ast processing sketch context to generate a parsetree from
  * @returns Parse tree
  */
-export function buildTokenArray( ast : ProcessingSketchContext | undefined ) : [ParseTree, ParseTree][] 
+export function buildTokenArray( ast : ParserRuleContext | undefined ) : [ParseTree, ParseTree][] 
 {
 	let tokenArray: [ParseTree, ParseTree][] = new Array();
 	let _tokenCounter = -1
@@ -101,7 +102,7 @@ export function lineMap(line: string) : [string, number, number][]
  * @param source string to be parsed
  * @returns Compilation unit
  */
-export function parse(source : string) : ProcessingSketchContext | undefined
+export function parse(source : string, diagnosticReporter?:IDiagnosticReporter|undefined) : ParserRuleContext | undefined
 {
 	//let consoleOriginal = console
 	try 
@@ -118,7 +119,7 @@ export function parse(source : string) : ProcessingSketchContext | undefined
 		currentParser.removeErrorListeners();
 		currentParser.errorHandler = new BailErrorStrategy();
 
-		let compilationUnit : ProcessingSketchContext;
+		let compilationUnit : ParserRuleContext;
 
 		// 
 		//currentParser.removeErrorListeners();
@@ -128,15 +129,26 @@ export function parse(source : string) : ProcessingSketchContext | undefined
 		} catch (ex) {
 			// thrown by BailErrorStrategy
 			tokens = new CommonTokenStream(lexer);
+			//tokens.reset();
 			// rewind input stream
 			currentParser.reset();
 			// back to standard listeners/handlers
-			errorListener = new ProcessingErrorListener();
-			currentParser.addErrorListener(errorListener);
-			currentParser.errorHandler = new DefaultErrorStrategy();
+			if(diagnosticReporter)
+			{
+				errorListener = new ProcessingErrorListener(diagnosticReporter);
+				currentParser.addErrorListener(errorListener);
+				currentParser.errorHandler = new ProcessingErrorStrategy(diagnosticReporter);
+			}
 			// full now with full LL(*)
-			currentParser.interpreter.setPredictionMode(PredictionMode.LL);
-			compilationUnit = currentParser.processingSketch();
+			currentParser.interpreter.setPredictionMode(PredictionMode.LL_EXACT_AMBIG_DETECTION);
+			try
+			{
+				compilationUnit = currentParser.activeProcessingSketch();
+			}
+			catch(ex2)
+			{
+				return;
+			}
 		}
 
 		//console = consoleOriginal

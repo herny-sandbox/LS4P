@@ -1,6 +1,7 @@
 import * as log from './scripts/syslogs'
 import * as parser from './parser'
 import * as pStandards from './grammer/terms/processingStandards'
+import { IDiagnosticReporter } from "./grammer/ProcessingErrorListener";
 import * as preprocessor from './preprocessing'
 import { ProcessingSketchContext } from "./grammer/ProcessingParser";
 import { SymbolTableVisitor } from './symbols';
@@ -23,7 +24,10 @@ let processingPath : string;
 let sketchInfo : Info;
 let initialized = false;
 let processingInitialized = false;
+let logPdeChanges : boolean = false;
+let recompiling : boolean = false;
 
+let dirtyPdeCount = 0;
 let unProcessedCode : string = ''
 let processedCode: string = ''
 let processedSketchTokens : ProcessingSketchContext
@@ -34,7 +38,6 @@ let jrePath:string = ''
 let symbolTableVisitor : SymbolTableVisitor;
 let mainSymbolTable : psymb.PSymbolTable;
 let mainClass : psymb.PClassSymbol;
-
 
 /** 
  * Map which maps the line in the java file to the line in the .pde file (tab). 
@@ -63,15 +66,17 @@ export interface CompileError
 	message: string
 }
 
-export class PdeContentInfo
+export class PdeContentInfo implements IDiagnosticReporter
 {
 	public name : string = "";
 	public rawContent : string = "";
 	public syntaxTokens : ParserRuleContext | null = null;
 	public symbols : symb.BaseSymbol [] = [];
 	
+	public dirty : boolean = false;
 	public requireDeclarationsRebuild : boolean = false;
 	public requireReferencesRebuild : boolean = false;
+	public diagnosticsChanged : boolean = false;
 
 	public diagnostics : lsp.Diagnostic[] = [];
 
@@ -93,14 +98,28 @@ export class PdeContentInfo
 		return result;
 	}
 
+	public isBeingRebuilt() : boolean
+	{
+		return(this.dirty || this.requireDeclarationsRebuild || this.requireReferencesRebuild );
+	}
+
+	public markForRecompile()
+	{
+		this.dirty = true;
+	}
+
 	public tryRebuildSymbolDeclarations()
 	{
-		if(this.requireDeclarationsRebuild)
+		if(this.dirty)
 			this.buildDeclarationSymbols();
 	}
 
 	public buildDeclarationSymbols() 
 	{
+		this.requireDeclarationsRebuild = true;
+		this.dirty = false;
+		this.diagnosticsChanged = true;
+
 		this.definitionDict.clear();
 		this.contextTypeDict.clear();
 		this.usageMap.clear();
@@ -108,19 +127,24 @@ export class PdeContentInfo
 
 		this.removeSymbolsFromMainClass();
 
-		//log.write(`building <${this.name}> declaration symbols.`, log.severity.EVENT);
+		if(logPdeChanges)
+			log.write(`building <${this.name}> declaration symbols.`, log.severity.EVENT);
 
 		try
 		{
-			this.syntaxTokens = parser.parse(this.rawContent) as ParserRuleContext;
+			this.syntaxTokens = parser.parse(this.rawContent, this) as ParserRuleContext;
 		
 			symbolTableVisitor.visitPdeLinked(this);
-			this.requireDeclarationsRebuild = false;
 			this.requireReferencesRebuild = true;
 		}
 		catch(e)
 		{
-			this.notifyCompileError("Unable to parse pde file.\n"+e)
+			console.error("Unable to parse pde file.\n"+e.stack)
+		}
+		finally
+		{
+			this.requireDeclarationsRebuild = false;
+			markAsRebuildCompleted(this);
 		}
 	}
 
@@ -132,14 +156,26 @@ export class PdeContentInfo
 
 	buildSymbolReferences() 
 	{
-		//log.write(`building <${this.name}> references.`, log.severity.EVENT);
+		if(logPdeChanges)
+			log.write(`building <${this.name}> references.`, log.severity.EVENT);
 
 		if(this.syntaxTokens)
 			new dm.UsageVisitor(mainSymbolTable, mainClass, this).visit(this.syntaxTokens);
 
+		//log.write(`<${this.name}> errors: ${this.diagnostics.length}`, log.severity.EVENT);
+		
 		this.requireReferencesRebuild = false;
-		let fileUri = sketchInfo.uri+this.name
-		server.connection.sendDiagnostics({uri: fileUri, diagnostics: this.diagnostics})
+
+		markAsRebuildCompleted(this);
+	}
+
+	public trySendDiagnostics()
+	{
+		if(!this.diagnosticsChanged)
+			return;
+		let fileUri = sketchInfo.uri+this.name;
+		server.connection.sendDiagnostics({uri: fileUri, diagnostics: this.diagnostics});
+		this.diagnosticsChanged = false;
 	}
 
 	public removeSymbolsFromMainClass()
@@ -195,7 +231,7 @@ export class PdeContentInfo
 			}
 		}
 		else
-			this.notifyCompileError(`Unable to find declaration for ${node.text}`, node);
+			this.notifyDiagnostic(`Unable to find declaration for ${node.text}`, node);
 
 		return declaredSymbol;
 	}
@@ -209,11 +245,16 @@ export class PdeContentInfo
 		this.contextTypeDict.set(node, ctxType);
 	}
 
-	public notifyCompileError(msg:string, node?:ParseTree|undefined)
+	public notifyDiagnostic(msg:string, node?:ParseTree|undefined, severity:lsp.DiagnosticSeverity=lsp.DiagnosticSeverity.Error )
+	{
+		this.notifyDiagnosticRange(msg, parseUtils.calcRangeFromParseTree(node), severity);
+	}
+
+	public notifyDiagnosticRange(msg:string, rg:lsp.Range, severity:lsp.DiagnosticSeverity=lsp.DiagnosticSeverity.Error )
 	{
 		let diagnostic: lsp.Diagnostic = {
-			severity: lsp.DiagnosticSeverity.Error,
-			range: parseUtils.calcRangeFromParseTree(node),
+			severity: severity,
+			range: rg,
 			message: msg,
 			source: this.name
 	   }
@@ -354,7 +395,23 @@ export function prepareSketch(sketchFolder : string)
 	initialize(sketchFolder+'/');
 }
 
-export function rebuildReferences()
+export async function tryRecompile(logOn:boolean)
+{
+	if(recompiling)
+		return;
+
+	recompiling = true;
+
+	logPdeChanges = logOn;
+	await rebuildReferences();
+	// An additional recompile in case changes were made while we compile large amount of files...
+	if(dirtyPdeCount > 0)
+		await rebuildReferences();
+	
+	recompiling = false;
+}
+
+export async function rebuildReferences()
 {
 	log.write("Rebuilding definitions...", log.severity.EVENT);
 	for (let pdeInfo of getAllPdeInfos()) 
@@ -363,6 +420,11 @@ export function rebuildReferences()
 	log.write("Rebuilding references...", log.severity.EVENT);
 	for (let pdeInfo of getAllPdeInfos()) 
 		pdeInfo.tryRebuildSymbolReferences();
+
+	await new Promise(resolve => setTimeout(resolve, 200));
+	log.write("Sending diagnostics...", log.severity.EVENT);
+	for (let pdeInfo of getAllPdeInfos())
+		pdeInfo.trySendDiagnostics();
 	log.write("Rebuild definitions & references ENDED", log.severity.EVENT);
 }
 
@@ -478,7 +540,23 @@ export function removePdeFromSketch(uri: string)
 		pdeMap.delete(fileName);
 }
 
+/**
+ * Appends the name and content of a .pde file (tab)
+ * to the content map of the sketch
+ * 
+ * @param uri Location to the file that needs adding
+ */
+export function UpdatePdeFromSketch(uri: string) 
+{
+   if (!initialized)
+	   return;
 
+   let fileName = pathM.basename(uri)
+   if (fileName.endsWith('.pde')) 
+	   tryUpdatePdeFile(fileName);
+
+   cookPdeContentOffsets();
+}
 
 /**
  * Provides the basic sketch info
@@ -879,9 +957,7 @@ export function updatePdeContent(pdeName : string, newContent : string, linesCou
 	if(offsetsChanged)
 		cookPdeContentOffsets();
 
-	pdeInfo.requireDeclarationsRebuild = true;
-	//pdeInfo.buildDeclarationSymbols(newContent);
-	//pdeInfo.buildSymbolReferences();
+	markAsRequireRebuild(pdeInfo);
 
 	return pdeInfo;
 }
@@ -892,6 +968,13 @@ function tryAddPdeFile(pdeFilename : string)
 	addPdeContent(pdeFilename, fileContent);
 }
 
+function tryUpdatePdeFile(pdeFilename : string)
+{
+	let fileContent = fs.readFileSync(sketchInfo.path+pdeFilename, 'utf-8');
+	let	linesCount : number = fileContent.split(/\r?\n/).length;
+	updatePdeContent(pdeFilename, fileContent, linesCount);
+}
+
 function addPdeContent(pdeName : string, newContent : string) : PdeContentInfo
 {
 	//log.write(`loading ${pdeName} content.`, log.severity.EVENT);
@@ -899,9 +982,21 @@ function addPdeContent(pdeName : string, newContent : string) : PdeContentInfo
 
 	let result : PdeContentInfo = PdeContentInfo.createPdeContentInfo(pdeName, newContent, linesCount);
 	pdeMap.set(pdeName, result);
-	result.requireDeclarationsRebuild = true;
-	//result.buildDeclarationSymbols(newContent);
-	//result.buildSymbolReferences();
-
+	markAsRequireRebuild(result);
 	return result;
+}
+
+function markAsRequireRebuild(pdeInfo: PdeContentInfo)
+{
+	if(pdeInfo.dirty)
+		return;
+	pdeInfo.markForRecompile();
+	dirtyPdeCount++;
+}
+
+function markAsRebuildCompleted(pdeInfo: PdeContentInfo)
+{
+	if(pdeInfo.requireDeclarationsRebuild || pdeInfo.requireReferencesRebuild)
+		return;
+	dirtyPdeCount--;
 }

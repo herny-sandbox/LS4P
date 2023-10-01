@@ -49,10 +49,9 @@ try{
 	log.write(e, log.severity.ERROR)
 }
 
-export function scheduleHoverInfo(pdeName: string, line: number, pos : number): lsp.Hover | null
+export function scheduleHoverInfo(pdeInfo: sketch.PdeContentInfo, line: number, pos : number): lsp.Hover | null
 {
-	let pdeInfo : sketch.PdeContentInfo | undefined = sketch.getPdeContentInfo(pdeName);
-	if(!pdeInfo || !pdeInfo.syntaxTokens)
+	if( !pdeInfo.syntaxTokens)
 		return null;
 
 	let definition : symb.BaseSymbol | undefined;

@@ -104,9 +104,9 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 				let currentScope = this.findScopeAtToken(comparerExpression.start);
 				let expressionResult = this.visitAndRegisterExpression(comparerExpression, currentScope);
 				if(expressionResult && !psymb.PUtils.comparePrimitiveKind(expressionResult, psymb.PPrimitiveKind.Boolean, currentScope) )
-					this.pdeInfo.notifyCompileError(`Incompatible types. Expression should be boolean (${expressionResult.name})`, comparerExpression)
+					this.pdeInfo.notifyDiagnostic(`Incompatible types. Expression should be boolean (${expressionResult.name})`, comparerExpression)
 				else if(!expressionResult)
-					this.pdeInfo.notifyCompileError(`Unable to evaluate expression (${comparerExpression.text})`, comparerExpression)
+					this.pdeInfo.notifyDiagnostic(`Unable to evaluate expression (${comparerExpression.text})`, comparerExpression)
 			}
 			if(updateExpression)
 				this.visitChildren(updateExpression);
@@ -244,7 +244,7 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 
 			if(!symbType)
 			{
-				this.pdeInfo.notifyCompileError("Unable to evaluate expression: "+expressions[0].text, expressions[0]);
+				this.pdeInfo.notifyDiagnostic("Unable to evaluate expression: "+expressions[0].text, expressions[0]);
 				symbType = psymb.PType.createUnknownType();
 			}
 
@@ -310,37 +310,37 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 				else if(ctx.EQUAL() )										// expression '==' expression	
 				{
 					if(!psymb.PUtils.checkComparableTypes(results[0], results[1], currentScope))
-						this.pdeInfo.notifyCompileError(`Incompatible types in expression (${results[0].name}) == (${results[1].name})`, ctx.EQUAL());
+						this.pdeInfo.notifyDiagnostic(`Incompatible types in expression (${results[0].name}) == (${results[1].name})`, ctx.EQUAL());
 
 					return psymb.PType.createPrimitiveType(psymb.PPrimitiveKind.Boolean);
 				}
 				else if(ctx.NOTEQUAL())										// expression '!=' expression	
 				{
 					if(!psymb.PUtils.checkComparableTypes(results[0], results[1], currentScope))
-						this.pdeInfo.notifyCompileError(`Incompatible types in expression (${results[0].name}) != (${results[1].name})`, ctx.NOTEQUAL());
+						this.pdeInfo.notifyDiagnostic(`Incompatible types in expression (${results[0].name}) != (${results[1].name})`, ctx.NOTEQUAL());
 
 					return psymb.PType.createPrimitiveType(psymb.PPrimitiveKind.Boolean);
 				}
 				else if(ctx.LE() || ctx.GE() )								// expression ('<='|'>=') expression
 				{
 					if( results[0].typeKind != results[1].typeKind )				
-						this.pdeInfo.notifyCompileError(`Incompatible types in expression: possible lossy conversion (${results[0].name})`, expressions[0])
+						this.pdeInfo.notifyDiagnostic(`Incompatible types in expression: possible lossy conversion (${results[0].name})`, expressions[0])
 					return psymb.PType.createPrimitiveType(psymb.PPrimitiveKind.Boolean);
 				}
 				else if(ctx.AND() )											// expression '&&' expression
 				{
 					if( !psymb.PUtils.comparePrimitiveKind(results[0], psymb.PPrimitiveKind.Boolean, currentScope) )				
-						this.pdeInfo.notifyCompileError(`Incompatible types. Left expression should be boolean (${results[0].name})`, expressions[0])
+						this.pdeInfo.notifyDiagnostic(`Incompatible types. Left expression should be boolean (${results[0].name})`, expressions[0])
 					if( !psymb.PUtils.comparePrimitiveKind(results[1], psymb.PPrimitiveKind.Boolean, currentScope) )				
-						this.pdeInfo.notifyCompileError(`Incompatible types. Right expression should be boolean (${results[1].name})`, expressions[1])
+						this.pdeInfo.notifyDiagnostic(`Incompatible types. Right expression should be boolean (${results[1].name})`, expressions[1])
 					return psymb.PType.createPrimitiveType(psymb.PPrimitiveKind.Boolean);
 				}
 				else if(ctx.OR() )											// expression '||' expression
 				{
 					if( !psymb.PUtils.comparePrimitiveKind(results[0], psymb.PPrimitiveKind.Boolean, currentScope) )				
-						this.pdeInfo.notifyCompileError(`Incompatible types. Left expression should be boolean (${results[0].name})`, expressions[0])
+						this.pdeInfo.notifyDiagnostic(`Incompatible types. Left expression should be boolean (${results[0].name})`, expressions[0])
 					if( !psymb.PUtils.comparePrimitiveKind(results[1], psymb.PPrimitiveKind.Boolean, currentScope) )				
-						this.pdeInfo.notifyCompileError(`Incompatible types. Right expression should be boolean (${results[1].name})`, expressions[1])
+						this.pdeInfo.notifyDiagnostic(`Incompatible types. Right expression should be boolean (${results[1].name})`, expressions[1])
 					return psymb.PType.createPrimitiveType(psymb.PPrimitiveKind.Boolean);
 				}
 				else if(ctx.ADD() )											// expression '+' expression
@@ -364,33 +364,33 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 				else if(ctx.BITAND())										// expression '&' expression
 				{
 					if( !this.validateExpressionAsPrimitiveType(results[0], integralTypes, currentScope) )
-						this.pdeInfo.notifyCompileError(`Incompatible type in expression (${results[0].name})`, expressions[0])
+						this.pdeInfo.notifyDiagnostic(`Incompatible type in expression (${results[0].name})`, expressions[0])
 					if( !this.validateExpressionAsPrimitiveType(results[1], integralTypes, currentScope) )
-						this.pdeInfo.notifyCompileError(`Incompatible type in expression (${results[1].name})`, expressions[1])
+						this.pdeInfo.notifyDiagnostic(`Incompatible type in expression (${results[1].name})`, expressions[1])
 					return results[0];
 				}
 				else if(ctx.BITOR())										// expression '|' expression
 				{
 					if( !this.validateExpressionAsPrimitiveType(results[0], integralTypes, currentScope) )
-						this.pdeInfo.notifyCompileError(`Incompatible type in expression (${results[0].name})`, expressions[0])
+						this.pdeInfo.notifyDiagnostic(`Incompatible type in expression (${results[0].name})`, expressions[0])
 					if( !this.validateExpressionAsPrimitiveType(results[1], integralTypes, currentScope) )
-						this.pdeInfo.notifyCompileError(`Incompatible type in expression (${results[1].name})`, expressions[1])
+						this.pdeInfo.notifyDiagnostic(`Incompatible type in expression (${results[1].name})`, expressions[1])
 					return results[0];
 				}
 				else if(ctx.CARET())										// expression '^' expression
 				{
 					if( !this.validateExpressionAsPrimitiveType(results[0], integralTypes, currentScope) )
-						this.pdeInfo.notifyCompileError(`Incompatible type in expression (${results[0].name})`, expressions[0])
+						this.pdeInfo.notifyDiagnostic(`Incompatible type in expression (${results[0].name})`, expressions[0])
 					if( !this.validateExpressionAsPrimitiveType(results[1], integralTypes, currentScope) )
-						this.pdeInfo.notifyCompileError(`Incompatible type in expression (${results[1].name})`, expressions[1])
+						this.pdeInfo.notifyDiagnostic(`Incompatible type in expression (${results[1].name})`, expressions[1])
 					return results[0];
 				}
 				else if(ctx.MOD())											// expression '%' expression
 				{
 					if( !this.validateExpressionAsPrimitiveType(results[0], integralTypes, currentScope) )
-						this.pdeInfo.notifyCompileError(`Incompatible type in expression (${results[0].name})`, expressions[0])
+						this.pdeInfo.notifyDiagnostic(`Incompatible type in expression (${results[0].name})`, expressions[0])
 					if( !this.validateExpressionAsPrimitiveType(results[1], integralTypes, currentScope) )
-						this.pdeInfo.notifyCompileError(`Incompatible type in expression (${results[1].name})`, expressions[1])
+						this.pdeInfo.notifyDiagnostic(`Incompatible type in expression (${results[1].name})`, expressions[1])
 					return results[0];
 				}
 				else if(lt.length==2 || gt.length==2)						// expression ('<<' | '>>') expression
@@ -425,25 +425,25 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 				if(ctx.BANG())												// '!' expression
 				{
 					if( !psymb.PUtils.comparePrimitiveKind(results[0], psymb.PPrimitiveKind.Boolean, currentScope) )
-						this.pdeInfo.notifyCompileError(`Incompatible type. Expression should be of boolean type (${results[0].name})`, expressions[0]);
+						this.pdeInfo.notifyDiagnostic(`Incompatible type. Expression should be of boolean type (${results[0].name})`, expressions[0]);
 					return psymb.PType.createPrimitiveType(psymb.PPrimitiveKind.Boolean);
 				}
 				else if(ctx.TILDE())										// '~' expression
 				{
 					if( !this.validateExpressionAsPrimitiveType(results[0], integralTypes, currentScope) )
-						this.pdeInfo.notifyCompileError(`Incompatible type in expression: possible lossy conversion (${results[0].name})`, expressions[0]);
+						this.pdeInfo.notifyDiagnostic(`Incompatible type in expression: possible lossy conversion (${results[0].name})`, expressions[0]);
 					return results[0]
 				}
 				else if(ctx.INC())											// '++' expression
 				{
 					if( !this.validateExpressionAsPrimitiveType(results[0], incrementableTypes, currentScope) )
-						this.pdeInfo.notifyCompileError(`Incompatible type using operator ++ (${results[0].name})`, expressions[0]);
+						this.pdeInfo.notifyDiagnostic(`Incompatible type using operator ++ (${results[0].name})`, expressions[0]);
 					return results[0];
 				}
 				else if(ctx.DEC())											// '--' expression
 				{
 					if( !this.validateExpressionAsPrimitiveType(results[0], incrementableTypes, currentScope) )
-						this.pdeInfo.notifyCompileError(`Incompatible types using operator -- (${results[0].name})`, expressions[0]);
+						this.pdeInfo.notifyDiagnostic(`Incompatible types using operator -- (${results[0].name})`, expressions[0]);
 					return results[0];
 				}
 				else if(ctx.ADD())											// '+' expression

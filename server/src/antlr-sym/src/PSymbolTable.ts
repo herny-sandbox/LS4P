@@ -24,11 +24,19 @@ export class PSymbolTable extends SymbolTable
 		super(name, options);
 	}
 
-	public addImport(importPath: string, allMembers: boolean, libTable:PLibraryTable) 
+	public addImport(importPath: string, allMembers: boolean, libTable?:PLibraryTable|undefined) 
 	{ 
 		if(allMembers)
 		{
-			let result = libTable.resolveComponent(PComponentSymbol, importPath);
+			let result : PComponentSymbol | undefined;
+			if(libTable)
+				result = libTable.resolveComponent(PComponentSymbol, importPath);
+			else
+			{
+				result = this.procDependencyTable.resolveComponent(PComponentSymbol, importPath);
+				if(!result)
+					result = this.codeDependencyTable.resolveComponent(PComponentSymbol, importPath);
+			}
 			if(result)
 			{
 				let components = PUtils.getAllDirectChildSymbolSync(result, PComponentSymbol, undefined);

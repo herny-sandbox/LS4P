@@ -4,14 +4,11 @@ import { Definition, LocationLink, Location, Range } from 'vscode-languageserver
 import * as ast from 'antlr4ts/tree'
 import * as symbols from 'antlr4-c3'
 import { DocumentUri } from 'vscode-languageserver-textdocument'
-import * as symb from './symbols'
 import * as pp from './grammer/ProcessingParser';
-import * as psymb from "./antlr-sym"
 
-export async function scheduleLookUpDefinition(pdeName: string, line: number, pos: number): Promise<Definition | null>
+export async function scheduleLookUpDefinition(pdeInfo: sketch.PdeContentInfo, line: number, pos: number): Promise<Definition | null>
 {
-	let pdeInfo : sketch.PdeContentInfo | undefined = sketch.getPdeContentInfo(pdeName);
-	if(!pdeInfo || !pdeInfo.syntaxTokens)
+	if(!pdeInfo.syntaxTokens)
 		return null;
 
 	let definition : symbols.BaseSymbol | undefined;
@@ -34,7 +31,7 @@ export async function scheduleLookUpDefinition(pdeName: string, line: number, po
 
 	if(!definition)
 	{
-		console.error(`Unable to find the symbol definition at ${pdeName}. (${(line)}:${pos})`);
+		console.error(`Unable to find the symbol definition at ${pdeInfo.name}. (${(line)}:${pos})`);
 		return null;
 	}
 	let definitionPdeName : string | undefined = parseUtils.findPdeName(definition);

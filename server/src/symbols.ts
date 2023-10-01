@@ -23,7 +23,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 	private mainClass : psymb.PClassSymbol;
 	protected scope : symb.ScopedSymbol;
 	protected pdeInfo: PdeContentInfo | undefined;
-	public symbolTable;
+	public symbolTable : psymb.PSymbolTable;
 
 	constructor(symbolTable : psymb.PSymbolTable, mainClass : psymb.PClassSymbol)
 	{
@@ -401,7 +401,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 					let symbolType = parseUtils.convertTypeTypeToSymbolType(boundedTypes[i]);
 					if (!symbolType) {
 						symbolType = psymb.PType.createUnknownType();
-						this.pdeInfo?.notifyCompileError("", boundedTypes[i]);
+						this.pdeInfo?.notifyDiagnostic("", boundedTypes[i]);
 					}
 					boundTypes.push(symbolType);
 				}

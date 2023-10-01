@@ -1,21 +1,17 @@
 import * as sketch from './sketch'
 import * as parseUtils from './astutils'
-import * as log from './scripts/syslogs'
 import * as symbols from 'antlr4-c3'
-import * as definitions from './definition'
 import { AbstractParseTreeVisitor, ParseTree, TerminalNode } from 'antlr4ts/tree'
 import { ProcessingParserVisitor } from './grammer/ProcessingParserVisitor';
 import { Location, Range } from 'vscode-languageserver'
-import * as pp from './grammer/ProcessingParser'
 import { ParserRuleContext } from 'antlr4ts'
 
 
-export async function scheduleLookUpReference(pdeName : string, line : number, pos : number): Promise<Location[] | null>
+export async function scheduleLookUpReference(pdeInfo : sketch.PdeContentInfo, line : number, pos : number): Promise<Location[] | null>
 {
 	let resultant: Location[] = [];
 	
-	let pdeInfo : sketch.PdeContentInfo | undefined = sketch.getPdeContentInfo(pdeName);
-	if(!pdeInfo || !pdeInfo.syntaxTokens)
+	if( !pdeInfo.syntaxTokens)
 		return null;
 
 	let scopeAtPos : symbols.BaseSymbol | undefined = parseUtils.findLeafSymbolAtPositionFromSymbols(pdeInfo.symbols, line, pos);

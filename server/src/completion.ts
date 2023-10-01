@@ -50,10 +50,9 @@ let lastScopeAtPos : symb.ScopedSymbol | undefined;
 let lastContextType : psymb.IPType | undefined;
 let lastSymbols : symb.BaseSymbol [] = [];
 
-export async function collectCandidates(pdeName: string, line: number, posInLine : number, context : lsp.CompletionTriggerKind): Promise<lsp.CompletionItem[]> 
+export async function collectCandidates(pdeInfo: sketch.PdeContentInfo, line: number, posInLine : number, context : lsp.CompletionTriggerKind): Promise<lsp.CompletionItem[]> 
 {
-	let pdeInfo : sketch.PdeContentInfo | undefined = sketch.getPdeContentInfo(pdeName);
-	if(!pdeInfo || !pdeInfo.syntaxTokens)
+	if( !pdeInfo.syntaxTokens)
 		return [];
 
 	// Finds for the symbol (block or scope) that contains our searched identifier
@@ -76,7 +75,7 @@ export async function collectCandidates(pdeName: string, line: number, posInLine
 	let core = new symb.CodeCompletionCore(parser.currentParser);
 	// Most tokens are provided in the form of snippets, so ignoring from completion candidates
 	core.ignoredTokens = new Set(ignoredTokens);
-	core.preferredRules = new Set([ ProcessingParser.IDENTIFIER ]);
+	core.preferredRules = new Set([ ProcessingParser.IDENTIFIER, ProcessingParser.RULE_primary, ProcessingParser.RULE_expression, ProcessingParser.RULE_methodCall ]);
 
 	
 	let contextType = pdeInfo.findNodeContextTypeDefinition(parseNode);
@@ -90,8 +89,8 @@ export async function collectCandidates(pdeName: string, line: number, posInLine
 	let completions : lsp.CompletionItem[] = []; 
 	let symbols: symb.BaseSymbol[] = [];
 
-	// if(candidates.tokens.has(ProcessingParser.IDENTIFIER))
-	// {
+	if(candidates.tokens.has(ProcessingParser.IDENTIFIER))
+	{
 		let members : lsp.CompletionItem[] = [];
 		if(contextType)
 		{
@@ -111,7 +110,7 @@ export async function collectCandidates(pdeName: string, line: number, posInLine
 		}
 		for(let child of members )
 			completions.push(child);
-	// }
+	}
 	
 	candidates.tokens.forEach((_, k) => {
 		if( k == ProcessingParser.IDENTIFIER)
