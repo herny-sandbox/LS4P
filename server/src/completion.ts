@@ -38,11 +38,34 @@ let itemKindNames = [
     "TypeParameter",
 ]
 
-let ignoredTokens : number [] = [];
-
-for(let i = 1; i < ProcessingParser.IDENTIFIER; i++)
+let ignoredTokens : number [] = [
+	ProcessingParser.SEMI,
+	ProcessingParser.IF,
+	ProcessingParser.DO,
+	ProcessingParser.DOT,
+	ProcessingParser.SWITCH,
+	ProcessingParser.WHILE,
+];
+for(let i = ProcessingParser.DECIMAL_LITERAL; i <= ProcessingParser.MULTI_STRING_LIT; i++)
+	ignoredTokens.push(i);	
+for(let i = ProcessingParser.LPAREN; i < ProcessingParser.IDENTIFIER; i++)
 	ignoredTokens.push(i);	
 
+
+let preferingRules : number [] = 
+[
+	ProcessingParser.SUPER,
+	ProcessingParser.THIS,
+	ProcessingParser.IDENTIFIER, 
+	ProcessingParser.RULE_primary, 
+	ProcessingParser.RULE_methodCall,
+	//ProcessingParser.RULE_expression, 
+];
+for(let i = ProcessingParser.IDENTIFIER; i <= ProcessingParser.RULE_hexColorLiteral; i++)
+{
+	if(preferingRules.indexOf(i) < 0)
+		preferingRules.push(i);	
+}
 
 let lastPdeInfo : sketch.PdeContentInfo | undefined;
 let lastParseNodeAtPos : ParseTree | null;
@@ -75,7 +98,7 @@ export async function collectCandidates(pdeInfo: sketch.PdeContentInfo, line: nu
 	let core = new symb.CodeCompletionCore(parser.currentParser);
 	// Most tokens are provided in the form of snippets, so ignoring from completion candidates
 	core.ignoredTokens = new Set(ignoredTokens);
-	core.preferredRules = new Set([ ProcessingParser.IDENTIFIER, ProcessingParser.RULE_primary, ProcessingParser.RULE_expression, ProcessingParser.RULE_methodCall ]);
+	core.preferredRules = new Set(preferingRules);
 
 	
 	let contextType = pdeInfo.findNodeContextTypeDefinition(parseNode);
@@ -111,19 +134,29 @@ export async function collectCandidates(pdeInfo: sketch.PdeContentInfo, line: nu
 		for(let child of members )
 			completions.push(child);
 	}
-	
-	candidates.tokens.forEach((_, k) => {
-		if( k == ProcessingParser.IDENTIFIER)
+	for(let candidateRule of candidates.rules)
+	{
+		let ruleIndex = candidateRule[0];
+		if(ruleIndex == ProcessingParser.RULE_primary && !contextType)
 		{
+			completions.push({ label: "this", kind: lsp.CompletionItemKind.Keyword });
+			completions.push({ label: "super", kind: lsp.CompletionItemKind.Keyword });
 		}
-		else
+	}
+	if(!contextType)
+	{
+		for(let candidateToken of candidates.tokens)
 		{
-			let symbolicName : string | undefined = parser.currentParser.vocabulary.getSymbolicName(k);
+			let tokenIndex = candidateToken[0];
+			if(tokenIndex == ProcessingParser.IDENTIFIER)
+				continue;
+
+			
+			let symbolicName : string | undefined = parser.currentParser.vocabulary.getSymbolicName(tokenIndex);
 			if(symbolicName)
 				completions.push({ label: symbolicName.toLowerCase()});
 		}
-	});
-
+	}
 	lastPdeInfo = pdeInfo;
 	lastParseNodeAtPos = parseNode;
 	lastScopeAtPos = scopeAtPos;

@@ -193,10 +193,10 @@ export class PUtils
 				callContext = PUtils.resolveChildSymbolSync(callContext, ScopedSymbol, nameParts[partIndex]);
 				partIndex++;
 			}
-			return PUtils.resolveChildSymbolSync(callContext, t, nameParts[partIndex] );
-			// if(callContext instanceof t)
-			// 	return callContext;
-			// return undefined;
+			if(callContext)
+				return PUtils.resolveChildSymbolSync(callContext, t, nameParts[partIndex] );
+			else
+				return undefined;
 		}
 
 		if(ctx instanceof PClassSymbol)
@@ -244,7 +244,12 @@ export class PUtils
 		}
 		else if(ctx instanceof PSymbolTable)
 		{
-			const resultSymbol = PUtils.resolveChildSymbolSync(ctx, t, name);
+			let resultSymbol = PUtils.resolveChildSymbolSync(ctx, t, name);
+			if(!resultSymbol)
+				resultSymbol = PUtils.resolveChildSymbolSync(ctx.procDependencyTable, t, name);
+			if(!resultSymbol)
+				resultSymbol = PUtils.resolveChildSymbolSync(ctx.codeDependencyTable, t, name);
+			
 			if(resultSymbol)
 				return resultSymbol;
 		}

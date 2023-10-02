@@ -16,6 +16,38 @@ export class ProcessingErrorStrategy extends DefaultErrorStrategy
         super();
     }
 
+	// recover(recognizer: ProcessingParser, e: RecognitionException): void {
+    //     let input = recognizer.inputStream;
+    //     let tokens = recognizer.getExpectedTokens();
+
+    //     // Check if the error is due to a missing semicolon
+    //     if (this.isMissingSemicolonError(e)) {
+    //         console.error('Missing semicolon error detected.');
+    //         // Handle missing semicolon error differently (e.g., add a semicolon)
+    //         this.handleMissingSemicolon(tokens);
+    //         return;
+    //     }
+
+    //     // Handle other syntax errors using the default recovery strategy
+    //     super.recover(recognizer, e);
+    // }
+
+	// // Custom logic to check for missing semicolon error
+	// private isMissingSemicolonError(e: RecognitionException): boolean {
+	// 	const offendingToken = e.getOffendingToken();
+	// 	// Add your logic to detect missing semicolon error here
+	// 	// For example, you can check if the offending token is of a certain type or context
+	// 	// Return true if it's a missing semicolon error, false otherwise
+	// 	return false;
+	// }
+
+	// // Custom logic to handle missing semicolon error
+	// private handleMissingSemicolon(tokens: Token[]): void {
+	// 	// Add your logic to handle missing semicolon error here
+	// 	// For example, you can insert a semicolon token into the token stream
+	// 	// to recover from the error
+	// }
+
 	reportMissingToken(recognizer: Parser) 
 	{
         if (this.inErrorRecoveryMode(recognizer))

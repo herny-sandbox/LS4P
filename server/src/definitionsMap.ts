@@ -633,7 +633,7 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 
 		let expressionParams = this.visitAndRegisterExpressionList(paramExpressionList, currentScope);
 
-		let candidates = psymb.PUtils.getAllSymbolsSync(callScope, psymb.PMethodSymbol, methodName, localOnly);
+		let candidates = psymb.PUtils.getAllSymbolsSync(callScope, psymb.PMethodSymbol, methodName, localOnly); 
 		let match : psymb.PMethodSymbol | undefined;
 
 		if(candidates.length == 1)
@@ -661,7 +661,7 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 			result = parseUtils.convertAliasType(result, new psymb.CallContext(callContext.type, match).setOutter(callContext));
 		}
 		
-		this.tryFixComponentType(result, currentScope);
+		this.tryFixComponentType(result, currentScope,callScope);
 		return result;
 	}
 
@@ -872,11 +872,13 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 			if( !requiredParam || !appliedParam )
 				return false;
 
-
+ 
 			if( requiredParam.typeKind == psymb.PTypeKind.Generic)
 			{
 				if( this.compareObjectAgainstGeneric(appliedParam, requiredParam, symbolContext, callContext, perfectMatch) )
 					continue;
+				else
+					return false;
 			}
 
 			this.tryFixComponentType(requiredParam, symbolContext);
@@ -916,8 +918,12 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 							}
 							return false;
 						}
-						else if(this.compareObjectAgainstRequired(objectType, extendType, symbolContext, perfectMatch))
-							return true;
+						else
+						{
+							this.tryFixComponentType(extendType, symbolContext);
+							if(this.compareObjectAgainstRequired(objectType, extendType, symbolContext, perfectMatch))
+								return true;
+						}
 					}
 				}
 				else
@@ -1248,7 +1254,7 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 		return false;
 	}
 
-	tryFixComponentType( type: psymb.PType, scope : symb.IScopedSymbol )
+	tryFixComponentType( type: psymb.PType, scope : symb.IScopedSymbol, callerScope ?: symb.IScopedSymbol | undefined )
 	{
 		if(type == undefined)
 			return;
@@ -1270,8 +1276,13 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 					type.typeKind = psymb.PTypeKind.Interface;
 				else if(typeSymbol instanceof psymb.PEnumSymbol)
 					type.typeKind = psymb.PTypeKind.Enum;
+				else if( callerScope )
+					this.tryFixComponentType(type, callerScope);
 				else
-					type.typeKind = psymb.PTypeKind.Unknown;
+				{
+					console.error(`Unable to fix component type: ${type.name} at ...`);
+				}
+//					type.typeKind = psymb.PTypeKind.Unknown;
 			}
 		}
 		else if(type.typeKind == psymb.PTypeKind.Array)
