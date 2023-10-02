@@ -341,11 +341,11 @@ function tryInitializeSketchCode(path: string)
 		return;
 
 	let loadedNamespaces : Set<string> = new Set<string>();
-	javaModules.loadJarsFromDirectory(codeDirectoryPath, mainSymbolTable.codeDependencyTable, loadedNamespaces);
+	javaModules.loadJarsFromDirectory(codeDirectoryPath, mainSymbolTable.dependencyTable, loadedNamespaces);
 
 	// Adding the custom libraries import aliasses
 	for (let procImport of loadedNamespaces)
-		mainSymbolTable.addImport(procImport, true, mainSymbolTable.codeDependencyTable);
+		mainSymbolTable.addImport(procImport, true, mainSymbolTable.dependencyTable);
 }
 
 function tryInitializeProcessing(processingPath:string)
@@ -364,17 +364,17 @@ function tryInitializeProcessing(processingPath:string)
 	if(!isPathValid(processingCoreDirectory))
 		return;
 
-	javaModules.loadJavaSymbolsFromFile(javaSymbolsFilename, mainSymbolTable.procDependencyTable);
-	javaModules.loadJarsFromDirectory(processingCoreDirectory, mainSymbolTable.procDependencyTable);
+	javaModules.loadJavaSymbolsFromFile(javaSymbolsFilename, mainSymbolTable.dependencyTable);
+	javaModules.loadJarsFromDirectory(processingCoreDirectory, mainSymbolTable.dependencyTable);
 
 	// Adding all the processing library import aliases
-	mainSymbolTable.addImport("java.util", true, mainSymbolTable.procDependencyTable);
-	mainSymbolTable.addImport("java.io", true, mainSymbolTable.procDependencyTable);
-	mainSymbolTable.addImport("java.lang", true, mainSymbolTable.procDependencyTable);
-	mainSymbolTable.addImport("processing.core", true, mainSymbolTable.procDependencyTable);
-	mainSymbolTable.addImport("processing.data", true, mainSymbolTable.procDependencyTable);
-	mainSymbolTable.addImport("processing.event", true, mainSymbolTable.procDependencyTable);
-	mainSymbolTable.addImport("processing.opengl", true, mainSymbolTable.procDependencyTable);
+	mainSymbolTable.addImport("java.util", true, mainSymbolTable.dependencyTable);
+	mainSymbolTable.addImport("java.io", true, mainSymbolTable.dependencyTable);
+	mainSymbolTable.addImport("java.lang", true, mainSymbolTable.dependencyTable);
+	mainSymbolTable.addImport("processing.core", true, mainSymbolTable.dependencyTable);
+	mainSymbolTable.addImport("processing.data", true, mainSymbolTable.dependencyTable);
+	mainSymbolTable.addImport("processing.event", true, mainSymbolTable.dependencyTable);
+	mainSymbolTable.addImport("processing.opengl", true, mainSymbolTable.dependencyTable);
 	processingInitialized = true;
 }
 

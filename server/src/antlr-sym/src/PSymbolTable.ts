@@ -16,8 +16,7 @@ export class PSymbolTable extends SymbolTable
 	//protected imports : Set<string> = new Set<string>();
 	protected importDict : Map<string, string> = new Map<string, string>();
 
-	public procDependencyTable : PLibraryTable = new PLibraryTable("", { allowDuplicateSymbols: true});
-	public codeDependencyTable : PLibraryTable = new PLibraryTable("", { allowDuplicateSymbols: true});
+	public dependencyTable : PLibraryTable = new PLibraryTable("", { allowDuplicateSymbols: true});
 
 	constructor(name: string, options: SymbolTableOptions)
 	{
@@ -32,11 +31,8 @@ export class PSymbolTable extends SymbolTable
 			if(libTable)
 				result = libTable.resolveComponent(PComponentSymbol, importPath);
 			else
-			{
-				result = this.procDependencyTable.resolveComponent(PComponentSymbol, importPath);
-				if(!result)
-					result = this.codeDependencyTable.resolveComponent(PComponentSymbol, importPath);
-			}
+				result = this.dependencyTable.resolveComponent(PComponentSymbol, importPath);
+
 			if(result)
 			{
 				let components = PUtils.getAllDirectChildSymbolSync(result, PComponentSymbol, undefined);
@@ -96,9 +92,7 @@ export class PSymbolTable extends SymbolTable
 			if(!fullName)
 				fullName = name;
 
-			result = this.procDependencyTable.symbolFromPath(fullName, ".");
-			if(!result)
-				result = this.codeDependencyTable.symbolFromPath(fullName, ".");
+			result = this.dependencyTable.symbolFromPath(fullName, ".");
 		}
 		return result;
     }

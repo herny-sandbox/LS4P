@@ -124,10 +124,7 @@ export class PUtils
 			if(name)
 				name = ctx.ensureIsFullPath(name);
 
-			symbols = PUtils.getAllDirectChildSymbolSync(ctx.procDependencyTable, t, name)
-			result.push(...symbols);
-
-			symbols = PUtils.getAllDirectChildSymbolSync(ctx.codeDependencyTable, t, name)
+			symbols = PUtils.getAllDirectChildSymbolSync(ctx.dependencyTable, t, name)
 			result.push(...symbols);
 		}
 			
@@ -246,9 +243,7 @@ export class PUtils
 		{
 			let resultSymbol = PUtils.resolveChildSymbolSync(ctx, t, name);
 			if(!resultSymbol)
-				resultSymbol = PUtils.resolveChildSymbolSync(ctx.procDependencyTable, t, name);
-			if(!resultSymbol)
-				resultSymbol = PUtils.resolveChildSymbolSync(ctx.codeDependencyTable, t, name);
+				resultSymbol = PUtils.resolveChildSymbolSync(ctx.dependencyTable, t, name);
 			
 			if(resultSymbol)
 				return resultSymbol;
@@ -332,22 +327,14 @@ export class PUtils
 		}
 		if(ctx instanceof PSymbolTable)
 		{
-			let resultSymbol = PUtils.resolveChildSymbolSync(ctx.procDependencyTable, t, name);
+			let resultSymbol = PUtils.resolveChildSymbolSync(ctx.dependencyTable, t, name);
 			if(resultSymbol)
 				return resultSymbol;
-
-			resultSymbol = PUtils.resolveChildSymbolSync(ctx.codeDependencyTable, t, name);
-			if(resultSymbol)
-					return resultSymbol;
 			
 			if(name)
 				name = ctx.ensureIsFullPath(name);
 
-			let component = ctx.procDependencyTable.resolveComponent(t, name);
-			if(component)
-				return component;
-
-			component = ctx.codeDependencyTable.resolveComponent(t, name);
+			let component = ctx.dependencyTable.resolveComponent(t, name);
 			if(component)
 				return component;
 		}

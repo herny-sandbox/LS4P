@@ -41,21 +41,6 @@ export class PLibraryTable extends symb.SymbolTable
         return currentParent;
 	}
 
-	// resolveSync(name: string, localOnly?: boolean | undefined): symb.BaseSymbol | undefined 
-	// {
-	// 	let result ;
-	// 	for(let child of this.children)
-	// 	{
-	// 		if(child instanceof PNamespaceSymbol)
-	// 			result = child.resolveSync(name, localOnly);
-	// 		else if(child.name === name)
-	// 			result = child;
-	// 		if(result)
-	// 			break;
-	// 	}
-	// 	return result;	
-	// }
-
 	resolveComponent<T extends PComponentSymbol, Args extends unknown[]>(t: symb.SymbolConstructor<T, Args>, name:string) : T | undefined
 	{
 		if(name.indexOf('.')>=0)
