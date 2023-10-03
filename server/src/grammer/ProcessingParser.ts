@@ -4644,14 +4644,14 @@ export class ProcessingParser extends Parser {
 				case 1:
 					{
 					this.state = 1005;
-					_localctx._constantExpression = this.expression(0);
+					_localctx._enumConstantName = this.match(ProcessingParser.IDENTIFIER);
 					}
 					break;
 
 				case 2:
 					{
 					this.state = 1006;
-					_localctx._enumConstantName = this.match(ProcessingParser.IDENTIFIER);
+					_localctx._constantExpression = this.expression(0);
 					}
 					break;
 				}
@@ -8260,7 +8260,7 @@ export class ProcessingParser extends Parser {
 		"\u03E8\u03EA\x03\x02\x02\x02\u03E9\u03EB\x05\x86D\x02\u03EA\u03E9\x03" +
 		"\x02\x02\x02\u03EB\u03EC\x03\x02\x02\x02\u03EC\u03EA\x03\x02\x02\x02\u03EC" +
 		"\u03ED\x03\x02\x02\x02\u03ED\x9B\x03\x02\x02\x02\u03EE\u03F1\x07\b\x02" +
-		"\x02\u03EF\u03F2\x05\xAAV\x02\u03F0\u03F2\x07u\x02\x02\u03F1\u03EF\x03" +
+		"\x02\u03EF\u03F2\x07u\x02\x02\u03F0\u03F2\x05\xAAV\x02\u03F1\u03EF\x03" +
 		"\x02\x02\x02\u03F1\u03F0\x03\x02\x02\x02\u03F2\u03F3\x03\x02\x02\x02\u03F3" +
 		"\u03F7\x07";
 	private static readonly _serializedATNSegment2: string =
@@ -11835,14 +11835,14 @@ export class SwitchBlockStatementGroupContext extends ParserRuleContext {
 
 
 export class SwitchLabelContext extends ParserRuleContext {
-	public _constantExpression!: ExpressionContext;
 	public _enumConstantName!: Token;
+	public _constantExpression!: ExpressionContext;
 	public CASE(): TerminalNode | undefined { return this.tryGetToken(ProcessingParser.CASE, 0); }
 	public COLON(): TerminalNode { return this.getToken(ProcessingParser.COLON, 0); }
+	public IDENTIFIER(): TerminalNode | undefined { return this.tryGetToken(ProcessingParser.IDENTIFIER, 0); }
 	public expression(): ExpressionContext | undefined {
 		return this.tryGetRuleContext(0, ExpressionContext);
 	}
-	public IDENTIFIER(): TerminalNode | undefined { return this.tryGetToken(ProcessingParser.IDENTIFIER, 0); }
 	public DEFAULT(): TerminalNode | undefined { return this.tryGetToken(ProcessingParser.DEFAULT, 0); }
 	constructor(parent: ParserRuleContext | undefined, invokingState: number) {
 		super(parent, invokingState);

@@ -444,7 +444,7 @@ switchBlockStatementGroup
     ;
 
 switchLabel
-    : CASE (constantExpression=expression | enumConstantName=IDENTIFIER) ':'
+    : CASE (enumConstantName=IDENTIFIER | constantExpression=expression) ':'
     | DEFAULT ':'
     ;
 

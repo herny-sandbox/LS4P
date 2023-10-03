@@ -199,34 +199,6 @@ export function calcRangeFromParseTree(ctx: ParseTree|undefined) : ls.Range
 	return ls.Range.create(0, 0, 0, 1);
 }  
 
-export function constructClassParams(tokenArr: [ParseTree, ParseTree][]){
-	tokenArr.forEach(function(node, index){
-		// Contains all local class declarations, local memberVariable and memberFunction declaration
-		if(node[1] instanceof pp.ClassDeclarationContext && node[0].text == `class`){
-			classNames[numberOfClasses] = tokenArr[index+1][0].text
-			numberOfClasses += 1
-		}
-		if(node[1] instanceof pp.MethodDeclarationContext){
-			// MethodDeclarationContext -> MemberDeclarationContext -> ClassBodyDeclarationContext -> ClassBodyContext -> ClassDeclarationContext -> 
-			// 2nd Child [Terminal Node: Class name]
-			memberAndClass[MCCount] = [node[1]._parent!._parent!._parent!._parent!.getChild(1).text,node[0].text]
-			MCCount += 1
-			memberNames[numberOfMembers] = node[0].text
-			numberOfMembers += 1
-		}
-		if(node[1] instanceof pp.VariableDeclaratorIdContext){
-			// VariableDeclaratorIdContext -> VariableDeclaratorContext -> VariableDeclaratorsContext -> FieldDeclarationContext -> MemberDeclarationContext ->
-			// ClassBodyDeclarationContext -> ClassBodyContext -> ClassDeclarationContext -> 2nd Child [Terminal Node : Class Name]
-			// Any of the parent can be `undefined` while traversing up.
-			fieldAndClass[FCCount] = [node[1]._parent!._parent!._parent!._parent!._parent!._parent!._parent!.getChild(1).text,node[0].text]
-			FCCount += 1
-			fieldNames[numberOfFields] = node[0].text
-			numberOfFields += 1
-		}
-	})
-	log.writeLog(`Local Class completion Invoked`)
-}
-
 export function clearClassName(){
 	classNames = []
 	numberOfClasses = 0
@@ -410,23 +382,21 @@ export function convertAliasType( type: psymb.PType, callContext : psymb.CallCon
         console.error("Unable to resolve Generic Alias: "+type.name)
         return type;
     }
-
+	let resolved = callContext.getResolvedGeneric(type.name);
+	if(resolved)
+		return resolved;
+		
 	let genericParams = psymb.PUtils.getAllDirectChildSymbolSync(callContext.symbol, psymb.PGenericParamSymbol);
 	//let genericParams = callContext.symbol.getNestedSymbolsOfTypeSync(psymb.PGenericParamSymbol);
 	for(let i=0; i < genericParams.length; i++)
 	{
 		if(genericParams[i].name == type.name)
 		{
-			if(callContext.type==undefined)
-			{
-				if( genericParams[i].extends && genericParams[i].extends.length >= i )
-					return genericParams[i].extends[0];
-			}
-			else
-			{
-				if( callContext.type.genericTypes.length >= i )
-					return callContext.type.genericTypes[i];
-			}
+			if(callContext.type && i < callContext.type.genericTypes.length )
+				return callContext.type.genericTypes[i];
+
+			if( genericParams[i].extends && i < genericParams[i].extends.length )
+				return genericParams[i].extends[0];
 		}
 	}
     if(callContext.outter)

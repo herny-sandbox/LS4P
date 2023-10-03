@@ -31,21 +31,53 @@ export class CallContext
 	public outter : CallContext | undefined;
 	public type : PType | undefined;
 	public symbol : ScopedSymbol | undefined;
+	public generics : Map<string, PType> = new Map<string, PType>(); 
 
 	constructor( callerType : PType, callerSymbol : ScopedSymbol | undefined )
 	{
 		this.type = callerType;
 		this.symbol = callerSymbol;
+		PUtils.tryDefineCallGenerics(this);
 	}
 	setOutter(outter : CallContext | undefined) : CallContext
 	{ 
 		this.outter = outter; 
 		return this;
 	}
+	defineGeneric(name:string, asType : PType)
+	{
+		this.generics.set(name, asType);
+	}
+	getResolvedGeneric(name : string) : PType | undefined
+	{
+		let result : PType; 
+		result = this.generics.get(name);
+		if(!result && this.outter)
+			result = this.outter.getResolvedGeneric(name);
+		return result;
+	}
 }
 
 export class PUtils 
 {
+	public static tryDefineCallGenerics(caller : CallContext)
+	{
+		if(!caller.symbol || !caller.type ) 
+			return;
+		let genericParams = PUtils.getAllDirectChildSymbolSync(caller.symbol, PGenericParamSymbol);
+		// what kind of generic were defined for this called symbol
+		for(let i=0; i < genericParams.length; i++)
+		{
+			let genericName = genericParams[i].name;
+			let definedType : PType | undefined;
+			if(i < caller.type.genericTypes.length)
+				definedType = caller.type.genericTypes[i];
+
+			if(definedType)
+				caller.defineGeneric(genericName, definedType);
+		}
+	}
+
 	public static hasModifier(modifiers:Modifier[], find:Modifier) : boolean
 	{
 		for(let mod of modifiers)

@@ -17,7 +17,15 @@ let integralTypes = [
 	psymb.PPrimitiveKind.Short,
 	psymb.PPrimitiveKind.Color
  ];
- let incrementableTypes = [
+ let moddeableTypes = [
+	psymb.PPrimitiveKind.Int,
+	psymb.PPrimitiveKind.Long,
+	psymb.PPrimitiveKind.Byte,
+	psymb.PPrimitiveKind.Short,
+	psymb.PPrimitiveKind.Float,
+	psymb.PPrimitiveKind.Double,
+]
+let incrementableTypes = [
 	psymb.PPrimitiveKind.Char,
 	psymb.PPrimitiveKind.Int,
 	psymb.PPrimitiveKind.Long,
@@ -193,25 +201,57 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 			this.visit(blockStatement[i]);
 	}
 
-	visitAndRegisterSwithLabel(ctx: pp.SwitchLabelContext, currentScope: symb.ScopedSymbol, switchType:psymb.IPType|undefined) 
+	visitAndRegisterSwithLabel(ctx: pp.SwitchLabelContext, currentScope: symb.ScopedSymbol, switchType:psymb.IPType|undefined)  : psymb.PType
 	{
 		if(ctx.DEFAULT())
 			return;
 
+		let expression = ctx.expression();
 		let labelType : psymb.IPType | undefined;
-		if( ctx._constantExpression )
-			labelType = this.visitAndRegisterExpression(ctx._constantExpression, currentScope );
-		if( ctx._enumConstantName )
+		let identifier = ctx.IDENTIFIER();
+		if(switchType.typeKind == psymb.PTypeKind.Enum)
 		{
-			let enumMember : psymb.PEnumMemberSymbol | undefined;
-			if(switchType)
+			if(identifier)
 			{
+				let enumMember : psymb.PEnumMemberSymbol | undefined;
 				let callContext = psymb.PUtils.resolveComponentSync(currentScope, PComponentSymbol, switchType.name );
 				if(callContext)
 					enumMember = psymb.PUtils.resolveChildSymbolSync(callContext, psymb.PEnumMemberSymbol, ctx._enumConstantName.text);
+				this.pdeInfo.registerDefinition(ctx.IDENTIFIER(), enumMember );
 			}
-			this.pdeInfo.registerDefinition(ctx.IDENTIFIER(), enumMember );
 		}
+		else if(expression)
+		{
+			labelType = this.visitAndRegisterExpression(ctx._constantExpression, currentScope );
+		}
+		else if(identifier)
+		{
+			let varSymbol : psymb.PVariableSymbol | undefined = psymb.PUtils.resolveSymbolSync(currentScope, psymb.PVariableSymbol, identifier.text, false );
+			if(varSymbol)
+			{
+				// TODO: Should I check if it has the 'final' modifier?
+				this.pdeInfo.registerDefinition(identifier, varSymbol);
+				if(varSymbol.type)
+				{
+					this.tryFixComponentType(varSymbol.type, currentScope);
+					return psymb.PUtils.cloneTypeAsInstance(varSymbol.type);
+				}
+				else
+					return psymb.PType.createUnknownType();
+			}
+		}
+	}
+
+	visitAndRegisterEnumConstant(ctx: pp.SwitchLabelContext, currentScope: symb.ScopedSymbol, enumType:psymb.IPType|undefined)
+	{
+		let enumMember : psymb.PEnumMemberSymbol | undefined;
+		if(enumType)
+		{
+			let callContext = psymb.PUtils.resolveComponentSync(currentScope, PComponentSymbol, enumType.name );
+			if(callContext)
+				enumMember = psymb.PUtils.resolveChildSymbolSync(callContext, psymb.PEnumMemberSymbol, ctx._enumConstantName.text);
+		}
+		this.pdeInfo.registerDefinition(ctx.IDENTIFIER(), enumMember );
 	}
 
 	visitAndRegisterExpression(ctx: pp.ExpressionContext, currentScope: symb.ScopedSymbol) : psymb.IPType | undefined
@@ -387,9 +427,9 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 				}
 				else if(ctx.MOD())											// expression '%' expression
 				{
-					if( !this.validateExpressionAsPrimitiveType(results[0], integralTypes, currentScope) )
+					if( !this.validateExpressionAsPrimitiveType(results[0], moddeableTypes, currentScope) )
 						this.pdeInfo.notifyDiagnostic(`Incompatible type in expression (${results[0].name})`, expressions[0])
-					if( !this.validateExpressionAsPrimitiveType(results[1], integralTypes, currentScope) )
+					if( !this.validateExpressionAsPrimitiveType(results[1], moddeableTypes, currentScope) )
 						this.pdeInfo.notifyDiagnostic(`Incompatible type in expression (${results[1].name})`, expressions[1])
 					return results[0];
 				}
@@ -634,10 +674,10 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 		let expressionParams = this.visitAndRegisterExpressionList(paramExpressionList, currentScope);
 
 		let candidates = psymb.PUtils.getAllSymbolsSync(callScope, psymb.PMethodSymbol, methodName, localOnly); 
-		let match : psymb.PMethodSymbol | undefined;
+		let match : psymb.CallContext | undefined;
 
 		if(candidates.length == 1)
-			match = candidates[0];
+			match = new psymb.CallContext(undefined, candidates[0]).setOutter(callContext);
 		else if(candidates.length > 1)
 		{
 			match = this.resolveMethodOverloading(callContext, candidates, expressionParams, currentScope, true);
@@ -646,22 +686,26 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 		}
 		else if(candidates.length == 0 && callScope.name == methodName ) // Is a constructor? could be not explicity defined
 			return;
-		
-		this.pdeInfo.registerDefinition(methodID, match);
+
 		if(!match)
 			return;
-
-		if(!match.returnType || match.returnType.name == "void")
+		
+		let method : psymb.PMethodSymbol | undefined = match.symbol instanceof psymb.PMethodSymbol ? match.symbol : undefined;
+		this.pdeInfo.registerDefinition(methodID, method);
+		if(!method)
 			return;
 
-		let result : psymb.PType = match.returnType;
+		if(!method.returnType || method.returnType.name == "void")
+			return;
+
+		let result : psymb.PType = method.returnType;
 
 		if(result.typeKind == psymb.PTypeKind.Generic)
 		{
-			result = parseUtils.convertAliasType(result, new psymb.CallContext(callContext.type, match).setOutter(callContext));
+			result = parseUtils.convertAliasType(result, match);//new psymb.CallContext(callContext.type, method).setOutter(callContext));
 		}
 		
-		this.tryFixComponentType(result, currentScope,callScope);
+		this.tryFixComponentType(result, currentScope, method);
 		return result;
 	}
 
@@ -811,9 +855,9 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 		}
 	}
 
-	resolveMethodOverloading(callContext : psymb.CallContext, candidates: psymb.PMethodSymbol[], expressionList: psymb.IPType[], callContainer: symb.ScopedSymbol, perfectMatch:boolean=false) : psymb.PMethodSymbol | undefined
+	resolveMethodOverloading(callContext : psymb.CallContext, candidates: psymb.PMethodSymbol[], expressionList: psymb.IPType[], callContainer: symb.ScopedSymbol, perfectMatch:boolean=false) : psymb.CallContext | undefined
 	{
-		let finalCandidates: psymb.PMethodSymbol[] = []
+		let finalCandidates: psymb.CallContext[] = []
 		for (let candidate of candidates) 
 		{
 			let lastIsVarg = psymb.PUtils.hasMethodLastVargs(candidate);
@@ -831,7 +875,7 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 			if (!this.compareMethodParameters(methodCallContext, requiredParams, lastIsVarg, expressionList, callContainer, perfectMatch))
 				continue;
 
-			finalCandidates.push(candidate)
+			finalCandidates.push(methodCallContext)
 		}
 		if(finalCandidates.length==0)
 			return undefined;
@@ -873,22 +917,76 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 				return false;
 
  
-			if( requiredParam.typeKind == psymb.PTypeKind.Generic)
-			{
-				if( this.compareObjectAgainstGeneric(appliedParam, requiredParam, symbolContext, callContext, perfectMatch) )
-					continue;
-				else
-					return false;
-			}
+			// if( requiredParam.typeKind == psymb.PTypeKind.Generic)
+			// {
+			// 	let genericResolvedType = callContext.getResolvedGeneric(requiredParam.name);
+			// 	if(genericResolvedType)
+			// 		requiredParam = genericResolvedType;
+			// 	else
+			// 	{
+			// 		if( this.compareObjectAgainstGeneric(appliedParam, requiredParam, symbolContext, callContext, perfectMatch) )
+			// 		{
+			// 			callContext.defineGeneric(requiredParam.name, psymb.PType.createFromIType(appliedParam))
+			// 			continue;
+			// 		}
+			// 		else
+			// 			return false;
+			// 	}
+			// }
 
-			this.tryFixComponentType(requiredParam, symbolContext);
-			if( perfectMatch && requiredParam.typeKind == psymb.PTypeKind.Class && psymb.PType.isDefaultObjectPath(requiredParam.name) )
+			this.tryFixComponentType(requiredParam, symbolContext, callContext.symbol);
+			if( perfectMatch && 
+				(appliedParam.typeKind == psymb.PTypeKind.Primitive || 
+					 appliedParam.typeKind == psymb.PTypeKind.Class ||
+					 appliedParam.typeKind == psymb.PTypeKind.Interface ||
+					 appliedParam.typeKind == psymb.PTypeKind.String ||
+					 appliedParam.typeKind == psymb.PTypeKind.Null ||
+					 appliedParam.typeKind == psymb.PTypeKind.Array ||
+					 appliedParam.typeKind == psymb.PTypeKind.Enum )
+				 	 && psymb.PType.isDefaultObjectPath(requiredParam.name) )
 				continue;
 
-			if( !this.compareObjectAgainstRequired(appliedParam, requiredParam, symbolContext, perfectMatch))
+			if( !this.compareObjectAgainstRequired(callContext, appliedParam, requiredParam, symbolContext, perfectMatch))
 				return false;
 		}
 		return userParams.length <= requiredParams.length || lastIsVarg;
+	}
+
+	tryCompareGenericTypes(caller : psymb.CallContext, sourceType: psymb.PType, appliedType: psymb.IPType) : boolean
+	{
+		for(let i=0; i < sourceType.genericTypes.length; i++)
+		{
+			let requiredType : psymb.PType | undefined;
+			let wildcardType = sourceType.genericTypes[i];
+			if(wildcardType.typeKind == psymb.PTypeKind.GenericDecl)
+				requiredType = wildcardType.extendType;
+			else
+				requiredType = wildcardType;
+
+			if(requiredType)
+			{
+				if(requiredType.typeKind == psymb.PTypeKind.Generic)
+				{
+					let resolvedType = caller.getResolvedGeneric(requiredType.name);
+					if(!resolvedType)
+					{
+						if(i < appliedType.genericTypes.length)
+						{
+							resolvedType = psymb.PType.createFromIType(appliedType.genericTypes[i]);
+							caller.defineGeneric(requiredType.name, resolvedType);
+						}
+					}
+				}
+				else if( i < appliedType.genericTypes.length )
+				{
+					this.tryFixComponentType(appliedType.genericTypes[i], caller.symbol);
+					this.tryFixComponentType(requiredType, caller.symbol);
+					if( !this.compareObjectAgainstRequired(caller, appliedType.genericTypes[i], requiredType, caller.symbol, true))
+						return false;
+				}
+			}
+		}
+		return true;
 	}
 
 	compareObjectAgainstGeneric(objectType : psymb.IPType | undefined, requiredGenericType : psymb.IPType | undefined, symbolContext : symb.ScopedSymbol, callContext : psymb.CallContext, perfectMatch:boolean=false) : boolean
@@ -913,7 +1011,7 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 						{
 							for(let implementingType of objectType.implementTypes)
 							{
-								if(this.compareObjectAgainstRequired(implementingType, extendType, symbolContext, perfectMatch))
+								if(this.compareObjectAgainstRequired(callContext, implementingType, extendType, symbolContext, perfectMatch))
 									return true;
 							}
 							return false;
@@ -921,7 +1019,7 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 						else
 						{
 							this.tryFixComponentType(extendType, symbolContext);
-							if(this.compareObjectAgainstRequired(objectType, extendType, symbolContext, perfectMatch))
+							if(this.compareObjectAgainstRequired(callContext, objectType, extendType, symbolContext, perfectMatch))
 								return true;
 						}
 					}
@@ -931,7 +1029,7 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 					if( callContext.type.genericTypes.length >= i )
 					{
 						this.tryFixComponentType(callContext.type.genericTypes[i], symbolContext);
-						return this.compareObjectAgainstRequired(objectType, callContext.type.genericTypes[i], symbolContext, perfectMatch);
+						return this.compareObjectAgainstRequired(callContext, objectType, callContext.type.genericTypes[i], symbolContext, perfectMatch);
 					}
 				}
 			}
@@ -941,56 +1039,69 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 		console.error("Unable to resolve generic type: "+requiredGenericType.name);
 	}
 
-	compareObjectAgainstRequired(objectType : psymb.IPType | undefined, requiredType : psymb.IPType | undefined, symbolContext : symb.ScopedSymbol, perfectMatch:boolean=false) : boolean
+	compareObjectAgainstRequired(callContext : psymb.CallContext, appliedType : psymb.IPType | undefined, requiredType : psymb.IPType | undefined, symbolContext : symb.ScopedSymbol, perfectMatch:boolean=false) : boolean
 	{
-		if(requiredType===undefined || objectType === undefined)
+		if(requiredType===undefined || appliedType === undefined)
 			return false;
 
-		let comparingInterfaces = objectType.typeKind == psymb.PTypeKind.Interface || requiredType.typeKind == psymb.PTypeKind.Interface;
-		let comparingClasses = objectType.typeKind == psymb.PTypeKind.Class || requiredType.typeKind == psymb.PTypeKind.Class;
+		let comparingInterfaces = appliedType.typeKind == psymb.PTypeKind.Interface || requiredType.typeKind == psymb.PTypeKind.Interface;
+		let comparingClasses = appliedType.typeKind == psymb.PTypeKind.Class || requiredType.typeKind == psymb.PTypeKind.Class;
 		
-		let comparingArray = objectType.typeKind == psymb.PTypeKind.Array || requiredType.typeKind == psymb.PTypeKind.Array;
-		let comparingNull = objectType.name == "null" || requiredType.name == "null";
-		let comparingPrimitive = objectType.typeKind == psymb.PTypeKind.Primitive || requiredType.typeKind == psymb.PTypeKind.Primitive;
-		let comparingSameType = objectType.typeKind == requiredType.typeKind;
+		let comparingArray = appliedType.typeKind == psymb.PTypeKind.Array || requiredType.typeKind == psymb.PTypeKind.Array;
+		let comparingPrimitive = appliedType.typeKind == psymb.PTypeKind.Primitive || requiredType.typeKind == psymb.PTypeKind.Primitive;
+		let comparingSameType = appliedType.typeKind == requiredType.typeKind;
 
-		if((comparingInterfaces || comparingClasses || comparingArray) && comparingNull)
+		if(appliedType.typeKind == psymb.PTypeKind.Null && psymb.PType.isNullableType(requiredType) )
 			return true;
 
+		if(requiredType.typeKind == psymb.PTypeKind.Generic)
+		{
+			let genericType = callContext.getResolvedGeneric(requiredType.name);
+			let resolvedType : psymb.PType | undefined;
+			if( appliedType.typeKind == psymb.PTypeKind.Primitive && appliedType instanceof psymb.PType)
+				resolvedType = psymb.PType.getBoxedPrimitiveType(appliedType.primitiveKind);
+			else
+				resolvedType = psymb.PType.createFromIType(appliedType);
+
+			if(resolvedType)
+			{
+				if(genericType)
+					return resolvedType.name == genericType.name;
+				else
+				{
+					callContext.defineGeneric(requiredType.name, resolvedType);
+					return true;
+				}
+			}
+			else
+				return false;
+		}
+
+	
 		if(comparingClasses && comparingPrimitive)
 		{
-			let primitive = objectType.typeKind == psymb.PTypeKind.Primitive ? objectType : requiredType;
-			let classType = objectType.typeKind == psymb.PTypeKind.Class ? objectType : requiredType;
+			let primitive = appliedType.typeKind == psymb.PTypeKind.Primitive ? appliedType : requiredType;
+			let classType = appliedType.typeKind == psymb.PTypeKind.Class ? appliedType : requiredType;
 
 			let primKind = primitive instanceof psymb.PType ? primitive.primitiveKind : psymb.PPrimitiveKind.Unknown;
 			
 			return psymb.PType.canClassBeBoxedOrAutoboxed(classType, primKind);
-			// if(classType.name == "Object" || psymb.PType.isDefaultObjectPath(classType.name))
-			// 	return true;
-
-			// let classSymb = psymb.PUtils.resolveSymbolFromTypeSync(symbolContext, classType);
-			// if(!classSymb)
-			// 	return false;
-			// let callContext = psymb.PUtils.resolveSymbolSync(classSymb, psymb.PMethodSymbol, primitive.name+"Value", true );
-			// return callContext !== undefined;
 		}
 		if(comparingArray && comparingClasses)
 			return true;
 
 		if(comparingSameType && comparingPrimitive)
-			return this.comparePrimitiveNames(objectType.name, requiredType.name);
+			return this.comparePrimitiveNames(appliedType.name, requiredType.name);
 
 		if(comparingSameType && comparingArray)
-		{
-			if( requiredType.arrayType.typeKind == psymb.PTypeKind.Generic )
-				return this.compareObjectAgainstGeneric(objectType.arrayType, requiredType.arrayType, symbolContext, new psymb.CallContext(psymb.PType.createFromIType(objectType.arrayType), symbolContext), perfectMatch )
-			return this.compareObjectAgainstRequired(objectType.arrayType, requiredType.arrayType, symbolContext, perfectMatch);
-		}
+			return this.compareObjectAgainstRequired(callContext, appliedType.arrayType, requiredType.arrayType, symbolContext, perfectMatch);
 
 		if(requiredType.typeKind == psymb.PTypeKind.Class || requiredType.typeKind == psymb.PTypeKind.Interface )
-			return this.compareClassTypes(requiredType, objectType, symbolContext, perfectMatch);
-		// else
-		// 	return this.comparePrimitiveNames(objectType.name, requiredType.name, perfectMatch);
+			return this.compareClassTypes(requiredType, appliedType, symbolContext, perfectMatch);
+
+		if( !this.tryCompareGenericTypes(callContext, psymb.PType.createFromIType(requiredType), appliedType) )
+			return false;
+
 		return false;
 	}
 
@@ -1270,19 +1381,16 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 			else
 			{
 				let typeSymbol = psymb.PUtils.resolveComponentSyncFromPType(scope, PComponentSymbol, type);
-				if(typeSymbol instanceof psymb.PClassSymbol)
+				if(typeSymbol instanceof psymb.PEnumSymbol)
+					type.typeKind = psymb.PTypeKind.Enum;
+				else if(typeSymbol instanceof psymb.PClassSymbol)
 					type.typeKind = psymb.PTypeKind.Class;
 				else if(typeSymbol instanceof psymb.PInterfaceSymbol)
 					type.typeKind = psymb.PTypeKind.Interface;
-				else if(typeSymbol instanceof psymb.PEnumSymbol)
-					type.typeKind = psymb.PTypeKind.Enum;
 				else if( callerScope )
 					this.tryFixComponentType(type, callerScope);
 				else
-				{
 					console.error(`Unable to fix component type: ${type.name} at ...`);
-				}
-//					type.typeKind = psymb.PTypeKind.Unknown;
 			}
 		}
 		else if(type.typeKind == psymb.PTypeKind.Array)

@@ -78,6 +78,16 @@ let primitiveWrapperNames = [
     ""
 ]
 
+let nullableTypes : PTypeKind[] = [
+    PTypeKind.String,
+    PTypeKind.Class,
+    PTypeKind.Interface,
+    PTypeKind.Array,
+    PTypeKind.Enum,
+    PTypeKind.Component,
+    PTypeKind.Generic,
+]
+
 const defaultPAppletClassName = "processing.core.PApplet";
 const defaultStringClass = "java.lang.String"
 const defaultObjectClass = "java.lang.Object"
@@ -90,7 +100,7 @@ const defaultNullName = "null"
 export class PType implements IPType 
 {
     public static getPrimitiveTypeName(kind:PPrimitiveKind) { return primitiveKindNames[kind]; }
-	public static isDefaultObjectPath(path: string) {return path == defaultObjectClass; }
+	public static isDefaultObjectPath(path: string) {return path == defaultObjectClass || path == "Object"; }
 	public static isDefaultStringPath(path: string) {return path == defaultStringClass; }
     
     name: string;
@@ -115,7 +125,24 @@ export class PType implements IPType
         this.implementTypes = [];
 	}
 
+    public static isNullableType(type:IPType) : boolean { return PType.checkIsAnyTypeKind(type, nullableTypes); }
 
+    public static checkIsAnyTypeKind(type:IPType, kinds:PTypeKind[]) : boolean
+    {
+        for(let kind of kinds)
+        {
+            if(kind == type.typeKind)
+                return true;
+        }
+    }
+
+    public static getBoxedPrimitiveType(primKind : PPrimitiveKind ) : PType | undefined
+    {
+        let primWrapperName = primitiveWrapperNames[primKind];
+        if(primWrapperName == "")
+            return;
+        return PType.createClassType("java.lang."+primWrapperName);
+    }
 
     public hasGenericParams() { return this.genericTypes.length > 0; }
 
