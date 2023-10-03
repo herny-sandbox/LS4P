@@ -328,6 +328,8 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 				let result = this.visitAndRegisterExpression(expressions[i], currentScope);
 				if(!result)
 					result = psymb.PType.createUnknownType();
+				if(result instanceof psymb.PType)
+					this.tryFixComponentType(result, currentScope);
 				results.push(result);
 			}
 
@@ -838,6 +840,7 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 		{
 			let compSymbol : psymb.PEnumMemberSymbol | undefined = psymb.PUtils.resolveSymbolSync(varScope, psymb.PEnumMemberSymbol, varName, localOnly );
 			this.pdeInfo.registerDefinition(identifier, compSymbol);
+			return varScope;
 		}
 		else
 		{
@@ -846,12 +849,13 @@ export class UsageVisitor extends AbstractParseTreeVisitor<psymb.IPType | undefi
 
 			if(compSymbol instanceof psymb.PNamespaceSymbol)
 				return psymb.PType.createNamespaceType(compSymbol.qualifiedName(psymb.PNamespaceSymbol.delimiter, true, false));
-			if(compSymbol instanceof psymb.PClassSymbol )
+			else if(compSymbol instanceof psymb.PEnumSymbol )
+				return compSymbol;
+			else if(compSymbol instanceof psymb.PClassSymbol )
 				return compSymbol;
 			else if(compSymbol instanceof psymb.PInterfaceSymbol )
 				return compSymbol;
-			else if(compSymbol instanceof psymb.PEnumSymbol )
-				return compSymbol;
+
 		}
 	}
 

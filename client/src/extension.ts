@@ -27,7 +27,8 @@ export function activate(context: vscode.ExtensionContext)
 		}
 	};
 
-	const config = vscode.workspace.getConfiguration('vscode-processing-ls');
+	const config : vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration();
+	//config.inspect
 	const userProcessingPath: string = config.get('processing.path', "");
 	console.log(`Processing path: ${userProcessingPath}`)
 	
