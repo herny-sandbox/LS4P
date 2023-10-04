@@ -35,6 +35,7 @@ import * as reference from './references';
 import * as log from './scripts/syslogs';
 import * as sketch from './sketch';
 import * as path from 'path';
+import * as vscode from 'vscode';
 
 export let connection = createConnection(ProposedFeatures.all);
 //const processingSketch = new ProcessingSketch();
@@ -117,9 +118,6 @@ connection.onInitialized(() => {
 	  });
 
 	if (hasWorkspaceFolderCapability) {
-
-
-
 		connection.workspace.onDidChangeWorkspaceFolders(_event => {
 			log.write('Workspace folder change event received.', log.severity.EVENT);
 		});
@@ -133,50 +131,10 @@ connection.onInitialized(() => {
 // Settings Section
 // -----------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------
-interface ExampleSettings {
-	maxNumberOfProblems: number;
-}
-
-const defaultSettings: ExampleSettings = { maxNumberOfProblems: 1000 };
-let globalSettings: ExampleSettings = defaultSettings;
-
-let documentSettings: Map<string, Thenable<ExampleSettings>> = new Map();
-
 connection.onDidChangeConfiguration(change => {
-	// log.write(`Config change event occured`, log.severity.EVENT);
-	// if (change.settings && change.settings.processing) {
-    //     const processingPath : string = change.settings.processing.path;
-	// 	const maxNumberOfProblems : number = change.settings.processing.maxNumberOfProblems;
-    //     // Now you can use mySettingValue in your server logic
-    //     // ...
-	// 	log.write(`Config change event occured, processingPath: ${processingPath}`, log.severity.EVENT);
-	// 	log.write(`Config change event occured, maxNumberOfProblems: ${maxNumberOfProblems}`, log.severity.EVENT);
-    // }
-	// if (hasConfigurationCapability) {
-	// 	documentSettings.clear();
-	// } else {
-	// 	globalSettings = <ExampleSettings>(
-	// 		(change.settings.processing || defaultSettings)
-	// 	);
-	// }
-
-	//documents.all().forEach(diagnostics.checkForRealtimeDiagnostics);
+	log.write(`Config change event occured`, log.severity.EVENT);
+	updateConfig();
 });
-
-// export function getDocumentSettings(resource: string): Thenable<ExampleSettings> {
-// 	if (!hasConfigurationCapability) {
-// 		return Promise.resolve(globalSettings);
-// 	}
-// 	let result = documentSettings.get(resource);
-// 	if (!result) {
-// 		result = connection.workspace.getConfiguration({
-// 			scopeUri: resource,
-// 			section: 'languageServerExample'
-// 		});
-// 		documentSettings.set(resource, result);
-// 	}
-// 	return result;
-// }
 
 // -----------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------
@@ -222,29 +180,6 @@ documents.onDidChangeContent((change: { document: TextDocument; }) => {
 
 // -----------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------
-
-
-// async function notifySketchChanged() 
-// {
-// 	log.write(`notifySketchChanged`, log.severity.EVENT)
-// 	sketchRefreshInProgress = true
-// 	await sleep(300);
-
-// 	sketch.rebuildReferences();
-// 	//sketch.startPreprocessing();
-// 	//diagnostics.checkForSyntaxDiagnostics(globalSettings.maxNumberOfProblems);
-// 	//try
-// 	//{
-// 		//sketch.build();
-// 		//diagnostics.checkForRealtimeDiagnostics(globalSettings.maxNumberOfProblems);
-// 	//}catch(Exception){}
-// 	sketchRefreshInProgress = false
-// }
-
-// function sleep(ms: number) {
-// 	return new Promise(resolve => setTimeout(resolve, ms));
-// }
-
 connection.onDidChangeWatchedFiles(_change => {
 	log.write('Files in workspace have changed', log.severity.EVENT);
 
@@ -424,4 +359,15 @@ async function waitForCodeRebuild(pdeInfo: sketch.PdeContentInfo) : Promise<void
 	while( pdeInfo.isBeingRebuilt() ) {
 		await new Promise(resolve => setTimeout(resolve, 100));
 	}
+}
+
+async function updateConfig() : Promise<void> {
+	const config : vscode.WorkspaceConfiguration = await connection.workspace.getConfiguration("processing");
+	
+	let newProcessingPath: string = "";
+	if(config)
+		newProcessingPath = config.path;
+	console.log(`New Processing path: ${newProcessingPath}`);
+	sketch.checkOnProcessingPathChanged(newProcessingPath);
+
 }

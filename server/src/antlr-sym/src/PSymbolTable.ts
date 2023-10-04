@@ -13,14 +13,19 @@ const fakeEmptyDependencies : Set<SymbolTable> = new Set<SymbolTable>();
 
 export class PSymbolTable extends SymbolTable 
 {
-	//protected imports : Set<string> = new Set<string>();
 	protected importDict : Map<string, string> = new Map<string, string>();
-
 	public dependencyTable : PLibraryTable = new PLibraryTable("", { allowDuplicateSymbols: true});
 
 	constructor(name: string, options: SymbolTableOptions)
 	{
 		super(name, options);
+	}
+
+	public clear()
+	{
+		this.importDict = new Map<string, string>();
+		this.dependencyTable = new PLibraryTable("", { allowDuplicateSymbols: true});
+		super.clear();
 	}
 
 	public addImport(importPath: string, allMembers: boolean, libTable?:PLibraryTable|undefined) 

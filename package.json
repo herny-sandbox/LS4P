@@ -4,7 +4,7 @@
   "description": "Processing language server",
   "author": "Processing Foundation",
   "license": "MIT",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "icon": "fileicons/images/processingImg.png",
   "repository": {
     "type": "git",

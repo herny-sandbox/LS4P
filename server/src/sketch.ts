@@ -19,10 +19,10 @@ import * as fs from 'fs';
 const pathM = require('path')
 const childProcess = require('child_process');
 
-let processingPath : string;
+let processingPath : string = '';
 
 let sketchInfo : Info;
-let initialized = false;
+let workspaceInitialized = false;
 let processingInitialized = false;
 let logPdeChanges : boolean = false;
 let recompiling : boolean = false;
@@ -36,7 +36,7 @@ let tokenArray: [ParseTree, ParseTree][];
 let jrePath:string = ''
 
 let symbolTableVisitor : SymbolTableVisitor;
-let mainSymbolTable : psymb.PSymbolTable;
+let mainSymbolTable : psymb.PSymbolTable = new psymb.PSymbolTable("", { allowDuplicateSymbols: true });
 let mainClass : psymb.PClassSymbol;
 
 /** 
@@ -268,6 +268,18 @@ export function getSymbolTable() { return symbolTableVisitor.symbolTable; }
 export function setProcessingPath(path: string)
 { 
 	processingPath = path;
+
+	tryInitializeProcessing(processingPath);
+}
+
+export function checkOnProcessingPathChanged(newProcessingPath : string)
+{
+	if(processingPath == newProcessingPath)
+		return;
+
+	setProcessingPath(newProcessingPath);
+	tryInitializeWorkspaceSketch();
+	tryRecompile(false);
 }
 
 /**
@@ -294,52 +306,59 @@ export function initialize(workspacePath: string)
 
 	jrePath = `${__dirname.substring(0,__dirname.length-11)}/jre/bin`;
 
-	mainSymbolTable = new psymb.PSymbolTable("", { allowDuplicateSymbols: true });
-
-	tryInitializeProcessing(processingPath);
-
-	// Loading custom libraries required by the user specific project
-	tryInitializeSketchCode(path);
-
 	// Now we can prepare the workspace sketch
-	mainClass = new psymb.PClassSymbol(name, psymb.PType.createAppletClassType());
-	mainSymbolTable.addSymbol(mainClass);
+	tryInitializeWorkspaceSketch();
 
-	symbolTableVisitor = new SymbolTableVisitor(mainSymbolTable, mainClass);
-	
-	let mainSketchFilename = sketchInfo.name+'.pde';
-	if(isPathValid(sketchInfo.path+mainSketchFilename))
-	{
-		tryAddPdeFile(mainSketchFilename)
-
-		if(isPathValid(sketchInfo.path))
-		{
-			let fileNames = fs.readdirSync(sketchInfo.path);
-			for(let fileName of fileNames)
-			{
-				if (fileName.endsWith('.pde') && !fileName.includes(sketchInfo.name))
-					tryAddPdeFile(fileName);
-			}
-		}
-	}
-	else
-		console.error('Something went wrong. The main sketch file must have the same name as the sketch folder.');
-
-	
-	cookPdeContentOffsets();
-	initialized = true
 	return true
 }
 
-function tryInitializeSketchCode(path: string) 
+function tryInitializeWorkspaceSketch() 
 {
-	if(!isPathValid(path))
+	workspaceInitialized = false;
+	if(!processingInitialized)
+	{
+		console.error("Unable to initialize sketch since processing wasn't correctly initialized");
 		return;
+	}
+	let mainSketchFilename = sketchInfo.name + '.pde';
+	if (!isPathValid(sketchInfo.path + mainSketchFilename)) 
+	{
+		console.error('Unable to initialize sketch. The main sketch file must have the same name as the sketch folder.');
+		return;
+	}
+	if (!isPathValid(sketchInfo.path))
+	{
+		console.error('Unable to initialize sketch. Seems that the sketch folder is not valid.');
+		return;
+	}
 
-	let codeDirectoryPath = path + "code/";
+	// Loading custom libraries required by the user specific project
+	tryInitializeSketchCode(sketchInfo.path+"code/");
+
+	console.log('Initializing workspace sketch...');
+	mainClass = new psymb.PClassSymbol(sketchInfo.name, psymb.PType.createAppletClassType());
+	mainSymbolTable.addSymbol(mainClass);
+
+	symbolTableVisitor = new SymbolTableVisitor(mainSymbolTable, mainClass);
+	tryAddPdeFile(mainSketchFilename);
+	
+	let fileNames = fs.readdirSync(sketchInfo.path);
+	for (let fileName of fileNames) 
+	{
+		if (fileName.endsWith('.pde') && !fileName.includes(sketchInfo.name))
+			tryAddPdeFile(fileName);
+	}
+
+	cookPdeContentOffsets();
+	workspaceInitialized = true
+}
+
+function tryInitializeSketchCode(codeDirectoryPath: string) 
+{
 	if(!isPathValid(codeDirectoryPath))
 		return;
 
+	console.log('Initializing workspace code...');
 	let loadedNamespaces : Set<string> = new Set<string>();
 	javaModules.loadJarsFromDirectory(codeDirectoryPath, mainSymbolTable.dependencyTable, loadedNamespaces);
 
@@ -364,6 +383,7 @@ function tryInitializeProcessing(processingPath:string)
 	if(!isPathValid(processingCoreDirectory))
 		return;
 
+	mainSymbolTable.dependencyTable.clear();
 	javaModules.loadJavaSymbolsFromFile(javaSymbolsFilename, mainSymbolTable.dependencyTable);
 	javaModules.loadJarsFromDirectory(processingCoreDirectory, mainSymbolTable.dependencyTable);
 
@@ -397,7 +417,7 @@ export function prepareSketch(sketchFolder : string)
 
 export async function tryRecompile(logOn:boolean)
 {
-	if(recompiling)
+	if(recompiling || !workspaceInitialized)
 		return;
 
 	recompiling = true;
@@ -497,7 +517,7 @@ export function build()
  */
 export function getPdeContentFromUri(uri : string) : string | undefined
 {
-	if (!initialized)
+	if (!workspaceInitialized)
 		return
 	
 	let tabName = pathM.basename(uri)
@@ -514,7 +534,7 @@ export function getPdeContentFromUri(uri : string) : string | undefined
  */
  export function addPdeToSketch(uri: string) 
  {
-	if (!initialized)
+	if (!workspaceInitialized)
 		return;
 
 	let fileName = pathM.basename(uri)
@@ -532,7 +552,7 @@ export function getPdeContentFromUri(uri : string) : string | undefined
  */
 export function removePdeFromSketch(uri: string) 
 {
-	if (!initialized)
+	if (!workspaceInitialized)
 		return;
 
 	let fileName = pathM.basename(uri)
@@ -548,7 +568,7 @@ export function removePdeFromSketch(uri: string)
  */
 export function UpdatePdeFromSketch(uri: string) 
 {
-   if (!initialized)
+   if (!workspaceInitialized)
 	   return;
 
    let fileName = pathM.basename(uri)
@@ -574,7 +594,7 @@ export function getInfo() : Info
  */
 export function getFullUnprocessedContent() : string
 {
-	if (!initialized)
+	if (!workspaceInitialized)
 		return '';
 	
 	let content = ''
@@ -597,7 +617,7 @@ export function getAllPdeInfos() : IterableIterator<PdeContentInfo>
  */
  export function getFileNames() : string[] | undefined
  {
-	if (!initialized)
+	if (!workspaceInitialized)
 		return;
 
 	let fileNames : string[] = new Array;
@@ -936,7 +956,7 @@ export function getPdeContentInfo(pdeName : string ) : PdeContentInfo | undefine
 
 export function updatePdeContent(pdeName : string, newContent : string, linesCount : number)
 {
-	if (!initialized)
+	if (!workspaceInitialized)
 		return false;
 
 	let offsetsChanged : boolean = true;
