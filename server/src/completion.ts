@@ -112,7 +112,11 @@ export async function collectCandidates(pdeInfo: sketch.PdeContentInfo, line: nu
 	let completions : lsp.CompletionItem[] = []; 
 	let symbols: symb.BaseSymbol[] = [];
 
-	if(candidates.tokens.has(ProcessingParser.IDENTIFIER))
+	let requiresIdentifier : boolean = false;
+	if( parseNode && parseNode instanceof TerminalNode && parseNode.symbol.type == ProcessingParser.DOT && contextType)
+		requiresIdentifier = true;
+
+	if(candidates.tokens.has(ProcessingParser.IDENTIFIER) || requiresIdentifier)
 	{
 		let members : lsp.CompletionItem[] = [];
 		if(contextType)
@@ -120,9 +124,9 @@ export async function collectCandidates(pdeInfo: sketch.PdeContentInfo, line: nu
 			// A very special built-in case
 			if(contextType.typeKind == psymb.PTypeKind.Array)
 				members = [{ label: "length", kind: lsp.CompletionItemKind.Field}];
-			else if(contextType.typeKind == psymb.PTypeKind.Class || contextType.typeKind == psymb.PTypeKind.Interface)
+			else
 			{
-				let callContext = scopeAtPos.resolveSync(contextType.name, false);
+				let callContext = psymb.PUtils.resolveComponentSyncFromPType(scopeAtPos, psymb.PClassSymbol, contextType );
 				if(callContext && callContext instanceof symb.ScopedSymbol)
 					members = await suggestMembers(callContext, contextType, true, symbols);
 			}

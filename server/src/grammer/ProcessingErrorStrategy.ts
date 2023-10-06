@@ -14,9 +14,10 @@ export class ProcessingErrorStrategy extends DefaultErrorStrategy
 
     constructor(reporter:IDiagnosticReporter|undefined) {
         super();
+		this.reporter=reporter;
     }
 
-	// recover(recognizer: ProcessingParser, e: RecognitionException): void {
+	recover(recognizer: ProcessingParser, e: RecognitionException): void {
     //     let input = recognizer.inputStream;
     //     let tokens = recognizer.getExpectedTokens();
 
@@ -28,9 +29,9 @@ export class ProcessingErrorStrategy extends DefaultErrorStrategy
     //         return;
     //     }
 
-    //     // Handle other syntax errors using the default recovery strategy
-    //     super.recover(recognizer, e);
-    // }
+        // Handle other syntax errors using the default recovery strategy
+        super.recover(recognizer, e);
+    }
 
 	// // Custom logic to check for missing semicolon error
 	// private isMissingSemicolonError(e: RecognitionException): boolean {
