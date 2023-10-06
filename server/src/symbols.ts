@@ -38,6 +38,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 
 	public visitPdeLinked(pdeInfo: PdeContentInfo) : symb.SymbolTable
 	{
+		this.scope = this.mainClass;
 		this.visitorRootSymbol = this.scope;
 		this.visitingSymbols = pdeInfo.symbols;
 		this.pdeInfo = pdeInfo;
