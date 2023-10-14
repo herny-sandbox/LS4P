@@ -66,12 +66,20 @@ export function scheduleHoverInfo(pdeInfo: sketch.PdeContentInfo, line: number, 
 	if(!parseNode)
 		return null;
 	
+	let accessByReference : boolean = false;
 	// We now filter out if the terminal node matches the symbolContainer
 	// (means is also a declaration of some kind since we only record declarations)
 	if(symbolContainer.context === parseNode.parent)
 		definition = symbolContainer;
 	else
-		definition = pdeInfo.findNodeSymbolDefinition(parseNode);
+	{
+		let qualifiedName = pdeInfo.findNodeSymbolDefinitionName(parseNode);
+		if(qualifiedName)
+		{
+			accessByReference = qualifiedName.indexOf('#') >= 0;
+			definition = pdeInfo.findSymbol(qualifiedName);
+		}
+	}
 	
 	let contextIType = pdeInfo.findNodeContextTypeDefinition(parseNode);
 
@@ -123,7 +131,10 @@ function formatHoverContent(baseSymbol : symb.BaseSymbol, callContext : psymb.Ca
 	if(baseSymbol instanceof psymb.PVariableSymbol)
 		result += typeTypeToString(baseSymbol.type) + " ";
 
-	result += baseSymbol.name;
+	if(baseSymbol instanceof psymb.PMethodSymbol)
+		result += psymb.PUtils.extractMethodName(baseSymbol.name);
+	else
+		result += baseSymbol.name;
 
 	if(baseSymbol instanceof psymb.PVariableSymbol && baseSymbol.value != null )
 		result += " = " + baseSymbol.value;

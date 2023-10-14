@@ -106,19 +106,42 @@ export class PUtils
 		else if(comp instanceof PNamespaceSymbol)
 			return PType.createNamespaceType(comp.name);
 	}
+
+	public static addIfNotRepeated<T extends BaseSymbol, Args extends unknown[]>(results: T[], candidates : T[])
+	{
+		for(let parentSymbol of candidates)
+		{
+			let found : boolean = false;
+			for(let resultSymbol of results)
+			{
+				if( resultSymbol.name == parentSymbol.name )
+				{
+					found = true;
+					break;
+				}
+			}
+			if(!found)
+				results.push(parentSymbol);
+		}
+	}
 	
 	public static getAllSymbolsSync<T extends BaseSymbol, Args extends unknown[]>(ctx: IScopedSymbol, t: SymbolConstructor<T, Args>, name?:string, localOnly?: boolean): T[] 
 	{
-        const result = [];
+        const results = [];
 
 		if(ctx instanceof ScopedSymbol)
 		{
 			for (const child of ctx.children) 
 			{
-				const isNameMatch = !name || (child.name == name);
+				let childName = child.name;
+				if(child instanceof PMethodSymbol)
+				{
+					childName = PUtils.extractMethodName(childName);
+				}
+				const isNameMatch = !name || (childName == name);
 				const isRightType = (child instanceof t );
 				if (isRightType && isNameMatch)
-					result.push(child);
+					results.push(child);
 			}
 		}
 		if(ctx instanceof PClassSymbol)
@@ -129,7 +152,7 @@ export class PUtils
 				if(extSymbol && extSymbol instanceof PClassSymbol)
 				{
 					const parentSymbols = PUtils.getAllSymbolsSync(extSymbol, t, name, true);
-					result.push(...parentSymbols);
+					PUtils.addIfNotRepeated(results, parentSymbols);
 				}
 			}
 		}
@@ -143,7 +166,7 @@ export class PUtils
 					if( extSymbol )
 					{
 						const parentSymbols = PUtils.getAllSymbolsSync(extSymbol, t, name, true);
-						result.push(...parentSymbols);
+						PUtils.addIfNotRepeated(results, parentSymbols);
 					}
 				}
 			}
@@ -151,21 +174,29 @@ export class PUtils
 		else if(ctx instanceof PSymbolTable)
 		{
 			let symbols = PUtils.getAllDirectChildSymbolSync(ctx, t, name)
-			result.push(...symbols);
+			results.push(...symbols);
 
-			if(name)
-				name = ctx.ensureIsFullPath(name);
+			// if(name)
+			// 	name = ctx.ensureIsFullPath(name);
 
-			symbols = PUtils.getAllDirectChildSymbolSync(ctx.dependencyTable, t, name)
-			result.push(...symbols);
+			// symbols = PUtils.getAllDirectChildSymbolSync(ctx.dependencyTable, t, name)
+			// results.push(...symbols);
 		}
 			
         if (!localOnly && ctx.parent) 
 		{
 			const parentSymbols = PUtils.getAllSymbolsSync(ctx.parent, t, name, false);
-			result.push(...parentSymbols);
+			results.push(...parentSymbols);
         }
-        return result;
+        return results;
+	}
+
+	public static extractMethodName(signature:string)
+	{
+		let genericIndex = signature.indexOf('<');
+		let paramIndex = signature.indexOf('(');
+		let nameEndIndex = genericIndex >= 0 && (genericIndex < paramIndex) ? genericIndex : paramIndex;
+		return signature.substring(0, nameEndIndex);
 	}
 
 	public static resolveChildSymbolSync<T extends BaseSymbol, Args extends unknown[]>(ctx: IScopedSymbol, t: SymbolConstructor<T, Args>, name?:string): T | undefined
@@ -427,18 +458,20 @@ export class PUtils
 		return;
 	}
 
-	public static comparePrimitiveKind(symbolType : IPType, primKind : PPrimitiveKind, scope: ScopedSymbol)
+	public static comparePrimitiveKind(symbolType : IPType, primKind : PPrimitiveKind, scope: ScopedSymbol) : boolean
 	{
 		if(symbolType.typeKind == PTypeKind.Primitive && symbolType instanceof PType)
 			return symbolType.primitiveKind == primKind;
-		else if(symbolType.typeKind == PTypeKind.Class || symbolType.typeKind == PTypeKind.Interface)
+		else if(symbolType.typeKind == PTypeKind.Class /*|| symbolType.typeKind == PTypeKind.Interface*/)
 		{
-			let classSymb = PUtils.resolveSymbolFromTypeSync(scope, symbolType);
-			if(!classSymb)
-				return false;
-			let callContext = PUtils.resolveSymbolSync(classSymb, PMethodSymbol, PType.getPrimitiveTypeName(primKind)+"Value", true );
-			return callContext !== undefined;
+			return PType.canClassBeBoxedOrAutoboxed(symbolType, primKind);
+			// let classSymb = PUtils.resolveSymbolFromTypeSync(scope, symbolType);
+			// if(!classSymb)
+			// 	return false;
+			// let callContext = PUtils.resolveSymbolSync(classSymb, PMethodSymbol, PType.getPrimitiveTypeName(primKind)+"Value", true );
+			// return callContext !== undefined;
 		}
+		return false;
 	}
 
 	public static convertSymbolTypeToString(symbolType : IPType | undefined, full:boolean=false) : string
@@ -494,15 +527,16 @@ export class PUtils
 		{
 			let primitive = left.typeKind == PTypeKind.Primitive ? left : right;
 			let classType = left.typeKind == PTypeKind.Class ? left : right;
+			let primitiveKind = primitive instanceof PType ? primitive.primitiveKind : PPrimitiveKind.Unknown;
+			return PType.canClassBeBoxedOrAutoboxed(classType, primitiveKind);
+			// if(classType.name == "Object" || PType.isDefaultObjectPath(classType.name))
+			// 	return true;
 
-			if(classType.name == "Object" || PType.isDefaultObjectPath(classType.name))
-				return true;
-
-			let classSymb = PUtils.resolveSymbolFromTypeSync(scope, classType);
-			if(!classSymb)
-				return false;
-			let callContext = PUtils.resolveSymbolSync(classSymb, PMethodSymbol, primitive.name+"Value", true );
-			return callContext !== undefined;
+			// let classSymb = PUtils.resolveSymbolFromTypeSync(scope, classType);
+			// if(!classSymb)
+			// 	return false;
+			// let callContext = PUtils.resolveSymbolSync(classSymb, PMethodSymbol, primitive.name+"Value", true );
+			// return callContext !== undefined;
 		}
 		if(comparingArray && comparingClasses)
 			return true;
@@ -518,7 +552,21 @@ export class PUtils
 	public static hasMethodLastVargs( method : PMethodSymbol)
 	{
 		return (method.methodFlags & MethodFlags.Virtual) != 0;
-	} 
+	}
+
+	public static extractSignature( symbol : BaseSymbol ) : string
+	{
+		let result : string;
+		if(symbol.parent && !(symbol.parent instanceof PSymbolTable) && !(symbol.parent instanceof PLibraryTable) )
+			result = PUtils.extractSignature(symbol.parent) + '.' + symbol.name;
+		else
+			result = symbol.name;
+
+		// if(symbol instanceof PMethodSymbol)
+		// 	result += PUtils.convertToSignature(symbol);
+		
+		return result;
+	}
 
 	public static convertToSignature( method : PMethodSymbol ) : string
 	{

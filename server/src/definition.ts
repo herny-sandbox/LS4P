@@ -2,18 +2,19 @@ import * as sketch from './sketch'
 import * as parseUtils from './astutils'
 import { Definition, LocationLink, Location, Range } from 'vscode-languageserver'
 import * as ast from 'antlr4ts/tree'
-import * as symbols from 'antlr4-c3'
 import { DocumentUri } from 'vscode-languageserver-textdocument'
 import * as pp from './grammer/ProcessingParser';
+import * as symb from 'antlr4-c3'
+import * as psymb from './antlr-sym';
 
 export async function scheduleLookUpDefinition(pdeInfo: sketch.PdeContentInfo, line: number, pos: number): Promise<Definition | null>
 {
 	if(!pdeInfo.syntaxTokens)
 		return null;
 
-	let definition : symbols.BaseSymbol | undefined;
+	let definition : symb.BaseSymbol | undefined;
 	// Finds for the symbol (block or scope) that contains our searched identifier
-	let scopeAtPos : symbols.ScopedSymbol | undefined =  parseUtils.findScopeAtPositionFromSymbols(pdeInfo.symbols, line, pos);
+	let scopeAtPos : symb.ScopedSymbol | undefined =  parseUtils.findScopeAtPositionFromSymbols(pdeInfo.symbols, line, pos);
 	if(!scopeAtPos || !scopeAtPos.context)
 		return null;
 	
@@ -22,13 +23,20 @@ export async function scheduleLookUpDefinition(pdeInfo: sketch.PdeContentInfo, l
 	if(!parseNode)
 		return null;
 	
+	let accessByReference : boolean = true;
 	// We now filter out if the terminal node matches the symbolContainer
 	// (means is also a declaration of some kind since we only record declarations)
 	if(scopeAtPos.context === parseNode.parent)
 		definition = scopeAtPos;
 	else
-		definition = pdeInfo.findNodeSymbolDefinition(parseNode);
-
+	{
+		let qualifiedName = pdeInfo.findNodeSymbolDefinitionName(parseNode);
+		if(qualifiedName)
+		{
+			accessByReference = qualifiedName.indexOf('#') >= 0;
+			definition = pdeInfo.findSymbol(qualifiedName);
+		}
+	}
 	if(!definition)
 	{
 		console.error(`Unable to find the symbol definition at ${pdeInfo.name}. (${(line)}:${pos})`);

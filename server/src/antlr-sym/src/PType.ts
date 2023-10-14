@@ -88,6 +88,16 @@ let nullableTypes : PTypeKind[] = [
     PTypeKind.Generic,
 ]
 
+let casteableToObjectTypes : PTypeKind[] = [
+    PTypeKind.Primitive,
+    PTypeKind.Class,
+    PTypeKind.Interface,
+    PTypeKind.String,
+    PTypeKind.Null,
+    PTypeKind.Array,
+    PTypeKind.Enum
+]
+
 const defaultPAppletClassName = "processing.core.PApplet";
 const defaultStringClass = "java.lang.String"
 const defaultObjectClass = "java.lang.Object"
@@ -126,6 +136,8 @@ export class PType implements IPType
 	}
 
     public static isNullableType(type:IPType) : boolean { return PType.checkIsAnyTypeKind(type, nullableTypes); }
+
+    public static isCasteableToObjectType(type:IPType) : boolean { return PType.checkIsAnyTypeKind(type, casteableToObjectTypes); }
 
     public static checkIsAnyTypeKind(type:IPType, kinds:PTypeKind[]) : boolean
     {

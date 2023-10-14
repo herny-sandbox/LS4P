@@ -108,7 +108,7 @@ export class JavaClassVisitor extends ClassVisitor
 		if( !isConstructor )
 			returnType = psymb.PType.createUnknownType();
 
-		let methodSymbol : psymb.PMethodSymbol = new psymb.PMethodSymbol(name, returnType);
+		let methodSymbol : psymb.PMethodSymbol = new psymb.PMethodSymbol(name+debugSignature, returnType);
 		if(hasVArgs)
 			psymb.PUtils.setMethodLastVargs(methodSymbol);
 

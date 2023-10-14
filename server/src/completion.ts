@@ -227,7 +227,8 @@ function createMethodCompletionItem(method : psymb.PMethodSymbol, i?:number ) : 
 {
 	let k = method.returnType ? lsp.CompletionItemKind.Method : lsp.CompletionItemKind.Constructor;
 	let itf = lsp.InsertTextFormat.Snippet;
-	let it : string = method.name;
+	let methodName :string = psymb.PUtils.extractMethodName(method.name);
+	let it : string = methodName;
 	it += "(";
 	let params = method.getNestedSymbolsOfTypeSync(psymb.PParameterSymbol);
 	for(let i=0; i < params.length; i++)
@@ -237,7 +238,7 @@ function createMethodCompletionItem(method : psymb.PMethodSymbol, i?:number ) : 
 		it += "${"+(i+1)+":"+params[i].name+"}"	
 	}
 	it += ")";
-	return { label: method.name, kind: k, insertTextFormat: itf, insertText: it, data: { refIndex: i } };
+	return { label: methodName, kind: k, insertTextFormat: itf, insertText: it, data: { refIndex: i } };
 }
 
 export function fillCompletionItemDetails(item: lsp.CompletionItem) : lsp.CompletionItem
@@ -287,7 +288,10 @@ export function fillCompletionItemDetails(item: lsp.CompletionItem) : lsp.Comple
 		detailText += "."
 	}
 	// then the label name
-	detailText += item.label;
+	if( symbol instanceof psymb.PMethodSymbol)
+		detailText += psymb.PUtils.extractMethodName(item.label);
+	else
+		detailText += item.label;
 
 	if(symbol instanceof psymb.PMethodSymbol)
 	{
@@ -317,8 +321,8 @@ export function fillCompletionItemDetails(item: lsp.CompletionItem) : lsp.Comple
 	// DOCUMENTATION
 
 	let documentation = "Declared at: \n";
-	if(symbol)
-		documentation += "\t\t" + symbol.qualifiedName(".", true, false);
+	if(symbol && symbol.parent)
+		documentation += "\t\t" + symbol.parent.qualifiedName(".", true, false);
 	documentation += "\n";
 
 

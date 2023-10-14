@@ -205,6 +205,11 @@ export class PdeContentInfo implements IDiagnosticReporter
 		//return mainSymbolTable.resolveSync(qualifiedName);
 	}
 
+	public findSymbol( qualifiedName : string )  : symb.BaseSymbol | undefined
+	{
+		return psymb.PUtils.resolveSymbolSync(mainSymbolTable, symb.BaseSymbol, qualifiedName);
+	}
+
 	public findNodeSymbolDefinitionName( node : TerminalNode )  : string | undefined
 	{
 		return this.definitionDict.get(node);
@@ -215,11 +220,11 @@ export class PdeContentInfo implements IDiagnosticReporter
 		return this.contextTypeDict.get(node);
 	}
 
-	public registerDefinition(node: TerminalNode, declaredSymbol : symb.BaseSymbol | undefined) : symb.BaseSymbol | undefined
+	public registerDefinition(node: TerminalNode, declaredSymbol : symb.BaseSymbol | undefined, isInstance:boolean=true) : symb.BaseSymbol | undefined
 	{
 		if(declaredSymbol !== undefined)
 		{
-			let qualifiedName = declaredSymbol.qualifiedName('.', true, false);
+			let qualifiedName : string = psymb.PUtils.extractSignature( declaredSymbol ) + (isInstance?"":"#");
 			this.definitionDict.set(node, qualifiedName);
 			let idText = node.text;
 			if(idText != "this" && idText != "super" )

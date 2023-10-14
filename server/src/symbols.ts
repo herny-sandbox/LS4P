@@ -238,7 +238,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		this.addChildSymbol(ctx, classSymbol);
 		this.scope = classSymbol;
 
-		this.pdeInfo?.registerDefinition(classIdentifier, classSymbol );
+		this.pdeInfo?.registerDefinition(classIdentifier, classSymbol, false );
 
 		if(genericParams)
 			this.tryDeclareGenericParams(genericParams, classSymbol);
@@ -268,7 +268,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		this.addChildSymbol(ctx, interfSymbol);
 		this.scope = interfSymbol;
 
-		this.pdeInfo?.registerDefinition(identifier, interfSymbol );
+		this.pdeInfo?.registerDefinition(identifier, interfSymbol, false );
 
 		if(typeParams)
 		{
@@ -327,14 +327,13 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 						visibility:symb.MemberVisibility, 
 						modifiers:symb.Modifier[]) : symb.SymbolTable
 	{
-		let signatureName : string = identif.text;
+		let methodName : string = identif.text;
 
-		let method : psymb.PMethodSymbol = new psymb.PMethodSymbol(signatureName, undefined);
+		let method : psymb.PMethodSymbol = new psymb.PMethodSymbol(methodName, undefined);
 		this.applyModifiers(method, visibility, modifiers);
 		this.addChildSymbol(identif.parent, method);
 		this.scope = method;
-
-		this.pdeInfo?.registerDefinition(identif, method );
+		this.pdeInfo?.registerDefinition(identif, method, false );
 
 		// if(!identif.parent)
 		// 	return this.defaultResult();
@@ -364,6 +363,10 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 				if(lastParam)
 					this.visitLastFormalParameter(lastParam);
 			}
+			
+			let signatureString = psymb.PUtils.convertToSignature(method);
+			method.name = methodName + signatureString;
+
 			if(exceptions) // The method symbol is a scope so no need to create another one, we move directly to the body childrens
 				this.visitChildren(exceptions);
 			if(body) // The method symbol is a scope so no need to create another one, we move directly to the body childrens
@@ -453,7 +456,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 		let enumSymbol = new psymb.PEnumSymbol(enumID.text, implementing)
 		this.addChildSymbol(ctx, enumSymbol);
 		this.scope = enumSymbol;
-		this.pdeInfo?.registerDefinition( enumID, enumSymbol );
+		this.pdeInfo?.registerDefinition( enumID, enumSymbol, false );
 
 		let enumContantArray = enumMembers.enumConstant();
 		for(let enumConstant of enumContantArray)
@@ -463,7 +466,7 @@ export class SymbolTableVisitor extends AbstractParseTreeVisitor<symb.SymbolTabl
 			let body = enumConstant.classBody();
 
 			let enumMemberSymbol = new psymb.PEnumMemberSymbol(enumMemberID.text, implementing)
-			this.pdeInfo?.registerDefinition( enumMemberID, enumMemberSymbol );
+			this.pdeInfo?.registerDefinition( enumMemberID, enumMemberSymbol, false );
 			this.addChildSymbol(ctx, enumMemberSymbol);
 
 			this.scope = enumMemberSymbol;
