@@ -4,7 +4,7 @@ import { ParserRuleContext, Token } from 'antlr4ts';
 import * as parseUtils from './astutils'
 import * as parser from './parser'
 import { ParseTree, TerminalNode } from 'antlr4ts/tree'
-import { ProcessingParser } from './grammer/ProcessingParser';
+import { ProcessingParser, MethodCallContext } from './grammer/ProcessingParser';
 import * as symb from 'antlr4-c3'
 import * as psymb from './antlr-sym'
 
@@ -73,7 +73,79 @@ let lastScopeAtPos : symb.ScopedSymbol | undefined;
 let lastContextType : psymb.IPType | undefined;
 let lastSymbols : symb.BaseSymbol [] = [];
 
-export async function collectCandidates(pdeInfo: sketch.PdeContentInfo, line: number, posInLine : number, context : lsp.CompletionTriggerKind): Promise<lsp.CompletionItem[]> 
+export async function collectSignatureHelp(pdeInfo: sketch.PdeContentInfo, line: number, posInLine : number, context : lsp.SignatureHelpContext): Promise<lsp.SignatureHelp | null> 
+{
+	if( !pdeInfo.syntaxTokens)
+		return null;
+
+	// Finds for the symbol (block or scope) that contains our searched identifier
+	let scopeAtPos : symb.ScopedSymbol | undefined =  parseUtils.findScopeAtPositionFromSymbols(pdeInfo.symbols, line, posInLine);
+	if(!scopeAtPos || !scopeAtPos.context)
+		return null;
+
+	// from our symbol container we can reach out the TerminalNode (it has to be a child of the symbol context) that we are searching for 
+	let parseNode : ParseTree | null = parseUtils.findParseTreeAtPosition(scopeAtPos.context, line, posInLine);
+	if(!parseNode)
+		return null;
+
+	let tokenIndex : number = 0;
+	if(parseNode instanceof TerminalNode)
+		tokenIndex = parseNode.symbol.tokenIndex;
+	else if(parseNode instanceof ParserRuleContext)
+		tokenIndex = parseNode.start.tokenIndex;
+
+	let signatures : lsp.SignatureInformation [] = [];
+	let activeSignature : number = 0;
+	let activeParam : number = 0;
+	let contextType = pdeInfo.findNodeContextTypeDefinition(parseNode);
+
+	//if(lastParseNodeAtPos)
+
+	let methodName : string | undefined;
+	if( parseNode.parent instanceof MethodCallContext )
+		methodName = parseNode.parent.IDENTIFIER().text;
+
+	if(!methodName)
+		return null;
+
+	if(contextType)
+	{
+		let callContext = psymb.PUtils.resolveComponentSyncFromPType(scopeAtPos, psymb.PClassSymbol, contextType );
+		let methods = psymb.PUtils.getAllSymbolsSync(callContext, psymb.PMethodSymbol, methodName, true );
+		for(let method of methods )
+		{
+			if(contextType.reference == symb.ReferenceKind.Reference && !method.modifiers.has(symb.Modifier.Static))
+				continue;
+
+			const parameters: lsp.ParameterInformation[] = [];
+			let methodParams = method.getNestedSymbolsOfTypeSync(psymb.PParameterSymbol);
+			for(let methodParam of methodParams)
+			{
+				let paramInfo = lsp.ParameterInformation.create(methodParam.name, methodParam.type.name);
+				parameters.push(paramInfo);
+			}
+
+			let methodName :string = psymb.PUtils.extractMethodName(method.name);
+			const signatureInformation = lsp.SignatureInformation.create(
+				methodName,
+				method.name,
+				...parameters
+			);
+			signatures.push(signatureInformation);
+		}
+	}
+	else
+	{
+		let methods = psymb.PUtils.getAllSymbolsSync(scopeAtPos, psymb.PMethodSymbol, methodName, true );
+	}
+	
+	lastPdeInfo = pdeInfo;
+	lastParseNodeAtPos = parseNode;
+
+	return {signatures:signatures, activeSignature:activeSignature, activeParameter: activeParam };
+}
+
+export async function collectCandidates(pdeInfo: sketch.PdeContentInfo, line: number, posInLine : number, context : lsp.CompletionContext): Promise<lsp.CompletionItem[]> 
 {
 	if( !pdeInfo.syntaxTokens)
 		return [];
@@ -128,12 +200,12 @@ export async function collectCandidates(pdeInfo: sketch.PdeContentInfo, line: nu
 			{
 				let callContext = psymb.PUtils.resolveComponentSyncFromPType(scopeAtPos, psymb.PClassSymbol, contextType );
 				if(callContext && callContext instanceof symb.ScopedSymbol)
-					members = await suggestMembers(callContext, contextType, true, symbols);
+					members = await suggestMembers(callContext, contextType, true, symbols, line, posInLine);
 			}
 		}
 		else
 		{
-			members = await suggestMembers(scopeAtPos, undefined, false, symbols);
+			members = await suggestMembers(scopeAtPos, undefined, false, symbols, line, posInLine);
 		}
 		for(let child of members )
 			completions.push(child);
@@ -169,7 +241,7 @@ export async function collectCandidates(pdeInfo: sketch.PdeContentInfo, line: nu
 	return completions;
 }
 
-async function suggestMembers(scopeAtPos: symb.ScopedSymbol, refType:psymb.IPType|undefined, localOnly:boolean=false, symbols: symb.BaseSymbol[]) : Promise<lsp.CompletionItem[]>
+async function suggestMembers(scopeAtPos: symb.ScopedSymbol, refType:psymb.IPType|undefined, localOnly:boolean=false, symbols: symb.BaseSymbol[], line:number, charPos:number) : Promise<lsp.CompletionItem[]>
 {
 	let completions : lsp.CompletionItem[] = [];
 
@@ -195,13 +267,41 @@ async function suggestMembers(scopeAtPos: symb.ScopedSymbol, refType:psymb.IPTyp
 		symbols.push(child);
 	}
 	let methods : psymb.PMethodSymbol [] = psymb.PUtils.getAllSymbolsSync(scopeAtPos, psymb.PMethodSymbol, undefined, localOnly);
+	let methodOverrides : Map<string, psymb.PMethodSymbol []> = new Map<string, psymb.PMethodSymbol []>();
 	for(let child of methods )
 	{
 		if(isAccessingByReference && !child.modifiers.has(symb.Modifier.Static))
 			continue;
-		completions.push(createMethodCompletionItem(child, symbols.length));
-		symbols.push(child);
+		// don't allow constructors when accessing by context
+		if(child.returnType == undefined)
+			continue;
+
+		let methodName :string = psymb.PUtils.extractMethodName(child.name);
+		if(!methodOverrides.has(methodName))
+			methodOverrides.set(methodName, [ child ]);
+		else
+			methodOverrides.get(methodName).push(child);
 	}
+
+	for(let [ key, methods ] of methodOverrides)
+	{
+		//let methods : psymb.PMethodSymbol [] = methodOverrides.get(key);
+		if(methods.length == 0)
+			continue;
+		if(methods.length == 1)
+		{
+			completions.push(createMethodCompletionItem(methods[0], symbols.length));
+			symbols.push(methods[0]);
+		}
+		else
+		{
+			completions.push(createMethodOverrideCompletionItem(methods, symbols.length, line, charPos));
+			for(let method of methods)
+				symbols.push(method);
+		}
+	}
+
+
 	let components : psymb.PComponentSymbol [] = psymb.PUtils.getAllSymbolsSync(scopeAtPos, psymb.PComponentSymbol, undefined, localOnly);
 	for(let comp of components )
 	{
@@ -228,17 +328,39 @@ function createMethodCompletionItem(method : psymb.PMethodSymbol, i?:number ) : 
 	let k = method.returnType ? lsp.CompletionItemKind.Method : lsp.CompletionItemKind.Constructor;
 	let itf = lsp.InsertTextFormat.Snippet;
 	let methodName :string = psymb.PUtils.extractMethodName(method.name);
+	let it : string = methodName + extractMethodParamsFormat(method);
+	return { label: methodName, kind: k, insertTextFormat: itf, insertText: it, data: { refIndex: i } };
+}
+
+function createMethodOverrideCompletionItem(methods : psymb.PMethodSymbol[], i:number, line:number, charPos:number ) : lsp.CompletionItem
+{
+	let k = methods[0].returnType ? lsp.CompletionItemKind.Method : lsp.CompletionItemKind.Constructor;
+	let itf = lsp.InsertTextFormat.Snippet;
+	let methodName :string = psymb.PUtils.extractMethodName(methods[0].name);
 	let it : string = methodName;
-	it += "(";
+
+	let result :lsp.CompletionItem = { label: methodName, kind: k, insertTextFormat: itf, insertText: it, data: { refIndex: i } };
+	// result.additionalTextEdits = [];
+	// for(let i=0; i < methods.length; i++)
+	// {
+	// 	let edit : lsp.TextEdit = lsp.TextEdit.insert(lsp.Position.create(line-1, charPos+methodName.length), extractMethodParamsFormat(methods[i]))
+	// 	result.additionalTextEdits.push(edit);
+	// }
+	
+	return result;
+}
+
+function extractMethodParamsFormat(method: psymb.PMethodSymbol) : string
+{
+	let it : string = "(";
 	let params = method.getNestedSymbolsOfTypeSync(psymb.PParameterSymbol);
-	for(let i=0; i < params.length; i++)
-	{
-		if(i>0)
-			it += ", "
-		it += "${"+(i+1)+":"+params[i].name+"}"	
+	for (let i = 0; i < params.length; i++) {
+		if (i > 0)
+			it += ", ";
+		it += "${" + (i + 1) + ":" + params[i].name + "}";
 	}
 	it += ")";
-	return { label: methodName, kind: k, insertTextFormat: itf, insertText: it, data: { refIndex: i } };
+	return it;
 }
 
 export function fillCompletionItemDetails(item: lsp.CompletionItem) : lsp.CompletionItem

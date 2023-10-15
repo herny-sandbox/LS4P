@@ -20,7 +20,9 @@ import {
 	DocumentSymbol,
 	TextDocuments,
 	TextDocumentSyncKind,
-
+	SignatureHelp,
+	SignatureHelpParams,
+	SignatureHelpContext,
 	InitializeResult
 } from 'vscode-languageserver/node';
 import { DidChangeWatchedFilesNotification, WatchKind } from 'vscode-languageserver-protocol';
@@ -81,6 +83,9 @@ connection.onInitialize((params: InitializeParams) => {
 			completionProvider: {
 				resolveProvider: true,
 				triggerCharacters: ['.']
+			},
+			signatureHelpProvider: {
+				triggerCharacters: ['(']
 			},
 		  	hoverProvider: true,
 			definitionProvider: true,
@@ -283,13 +288,28 @@ connection.onCompletion( async (params: CompletionParams): Promise<CompletionIte
 
 	await waitForCodeRebuild(pdeInfo);
 
-	return await completion.collectCandidates(pdeInfo, line+1, posInLine, context?.triggerKind??1)
+	return await completion.collectCandidates(pdeInfo, line+1, posInLine, context);
 });
 
 // Completion Resolved suspended for now -> TODO: Refactoring required with real data points
 connection.onCompletionResolve( async (item: CompletionItem): Promise<CompletionItem> => 
 {
 	return completion.fillCompletionItemDetails(item);
+});
+
+
+connection.onSignatureHelp( async (params : SignatureHelpParams) : Promise<SignatureHelp | null> =>
+{
+	const pdeName : string = path.basename(sketch.getPathFromUri(params.textDocument.uri));
+	const line : number = params.position.line;
+	const posInLine : number = params.position.character;
+	const context : SignatureHelpContext | undefined = params.context;
+
+	let pdeInfo : sketch.PdeContentInfo | undefined = sketch.getPdeContentInfo(pdeName);
+	if(!pdeInfo || !pdeInfo.syntaxTokens)
+		return null;
+
+	return completion.collectSignatureHelp(pdeInfo, line+1, posInLine, context);
 });
 
 
