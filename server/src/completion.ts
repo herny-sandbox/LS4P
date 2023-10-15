@@ -99,8 +99,6 @@ export async function collectSignatureHelp(pdeInfo: sketch.PdeContentInfo, line:
 	let activeParam : number = 0;
 	let contextType = pdeInfo.findNodeContextTypeDefinition(parseNode);
 
-	//if(lastParseNodeAtPos)
-
 	let methodName : string | undefined;
 	if( parseNode.parent instanceof MethodCallContext )
 		methodName = parseNode.parent.IDENTIFIER().text;
@@ -340,12 +338,6 @@ function createMethodOverrideCompletionItem(methods : psymb.PMethodSymbol[], i:n
 	let it : string = methodName;
 
 	let result :lsp.CompletionItem = { label: methodName, kind: k, insertTextFormat: itf, insertText: it, data: { refIndex: i } };
-	// result.additionalTextEdits = [];
-	// for(let i=0; i < methods.length; i++)
-	// {
-	// 	let edit : lsp.TextEdit = lsp.TextEdit.insert(lsp.Position.create(line-1, charPos+methodName.length), extractMethodParamsFormat(methods[i]))
-	// 	result.additionalTextEdits.push(edit);
-	// }
 	
 	return result;
 }
